@@ -52,8 +52,9 @@ Pick a runtime and a codec bridge:
 
 ```scala
 libraryDependencies ++= Seq(
-  "org.mongo4s" %% "mongo4s-cats"        % "0.1.0",
-  "org.mongo4s" %% "mongo4s-bson-medeia" % "0.1.0",
+  "org.mongo4s" %% "mongo4s-cats"         % "0.1.0",
+  "org.mongo4s" %% "mongo4s-bson-medeia"  % "0.1.0",
+  "org.mongo4s" %% "mongo4s-repositories" % "0.1.0", // if you need auto-generated CRUD repository ops for your model
 )
 ```
 
