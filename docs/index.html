@@ -143,8 +143,8 @@
   <h2 id="start">Quick start</h2>
   <p>Pick a runtime and a codec bridge:</p>
   <pre><code>libraryDependencies ++= Seq(
-  "org.mongo4s" %% "mongo4s-cats"        % "0.0.1",
-  "org.mongo4s" %% "mongo4s-bson-medeia" % "0.0.1",
+  "org.mongo4s" %% "mongo4s-cats"        % "0.1.0",
+  "org.mongo4s" %% "mongo4s-bson-medeia" % "0.1.0",
 )</code></pre>
   <pre><code>import cats.effect.{IO, IOApp}
 
@@ -300,7 +300,7 @@ BaseMongoRepository.objectId[F, S, E](db, "collection")      // WithId[ObjectId,
 
   <h2 id="modules">Modules</h2>
   <p>Published for Scala 3 under <code>org.mongo4s</code>:</p>
-  <pre><code>"org.mongo4s" %% "mongo4s-&lt;module&gt;" % "0.0.1"</code></pre>
+  <pre><code>"org.mongo4s" %% "mongo4s-&lt;module&gt;" % "0.1.0"</code></pre>
   <table>
     <tr><th>Kind</th><th>Module</th><th>Notes</th></tr>
     <tr><td>core</td><td><code>mongo4s-core</code></td><td>client/database/collection, Field/Filter/Update, PrimaryKey</td></tr>

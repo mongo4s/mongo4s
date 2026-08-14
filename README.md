@@ -52,8 +52,8 @@ Pick a runtime and a codec bridge:
 
 ```scala
 libraryDependencies ++= Seq(
-  "org.mongo4s" %% "mongo4s-cats"        % "0.0.1",
-  "org.mongo4s" %% "mongo4s-bson-medeia" % "0.0.1",
+  "org.mongo4s" %% "mongo4s-cats"        % "0.1.0",
+  "org.mongo4s" %% "mongo4s-bson-medeia" % "0.1.0",
 )
 ```
 
@@ -237,7 +237,7 @@ Each runtime module provides `given Effect[F]` (a minimal `pure`/`delay`/`map`/`
 Published for Scala 3 under `org.mongo4s`:
 
 ```scala
-"org.mongo4s" %% "mongo4s-<module>" % "0.0.1"
+"org.mongo4s" %% "mongo4s-<module>" % "0.1.0"
 ```
 
 | | Module | Notes |
