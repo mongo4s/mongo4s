@@ -145,12 +145,12 @@ Every codec ultimately produces a `mongo4s.bson.BsonDocumentCodec[A]` (entity �
 AST-free path below, a `WireCodec[A]`. Bring whichever backend fits — mongo4s never registers a global
 `CodecProvider`, so backends never collide inside one process.
 
-| Module | Backend | Notes |
-| --- | --- | --- |
-| `mongo4s-bson-medeia` | [medeia](https://github.com/megaera-io/medeia) | `derives BsonDocumentCodec` |
-| `mongo4s-bson-zio` | [zio-schema-bson](https://zio.dev/zio-schema/) | via `zio.schema.Schema` |
-| `mongo4s-bson-calypso` | [calypso](https://github.com/valdemargr/calypso) | hand-written `forProductN` codecs |
-| `mongo4s-bson-direct` | mongo4s itself | `WireCodec[A]`, AST-free — see below |
+| Module | Backend                                                                        | Notes |
+| --- |--------------------------------------------------------------------------------| --- |
+| `mongo4s-bson-medeia` | [medeia](https://github.com/medeia/medeia)                                     | `derives BsonDocumentCodec` |
+| `mongo4s-bson-zio` | [zio-schema-bson](https://github.com/zio/zio-bson)                             | via `zio.schema.Schema` |
+| `mongo4s-bson-calypso` | [calypso](https://github.com/m2-oss/calypso)                                   | hand-written `forProductN` codecs |
+| `mongo4s-bson-direct` | [mongo4s itself](https://github.com/mongo4s/mongo4s/tree/main/bson/direct/src) | `WireCodec[A]`, AST-free — see below |
 
 ### `bson-direct` — AST-free `WireCodec`
 
