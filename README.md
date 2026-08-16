@@ -53,10 +53,10 @@ third-party codec library, no extra dependency beyond `mongo4s-core` itself:
 
 ```scala
 libraryDependencies ++= Seq(
-  "org.mongo4s" %% "mongo4s-cats"           % "0.2.0", // mongo4s-core + cats-effect integration
-  "org.mongo4s" %% "mongo4s-bson-direct"    % "0.2.0", // ast-free bson codecs
-  "org.mongo4s" %% "mongo4s-bson-cats-data" % "0.2.0", // if you need NonEmptyList etc. codec instances
-  "org.mongo4s" %% "mongo4s-repositories"   % "0.2.0", // if you need auto-generated CRUD repository ops for your model
+  "org.mongo4s" %% "mongo4s-cats"           % "0.3.0", // mongo4s-core + cats-effect integration
+  "org.mongo4s" %% "mongo4s-bson-direct"    % "0.3.0", // ast-free bson codecs
+  "org.mongo4s" %% "mongo4s-bson-cats-data" % "0.3.0", // if you need NonEmptyList etc. codec instances
+  "org.mongo4s" %% "mongo4s-repositories"   % "0.3.0", // if you need auto-generated CRUD repository ops for your model
 )
 ```
 
@@ -371,6 +371,57 @@ own `naming` parameter too, so `Filter`/`Update`/`Field` queries render the same
 string instead of a `{"_type": "..."}` document — only safe when that case is nested inside another document, not
 when it's the root type of a collection (BSON's root value must always be a document).
 
+#### Hand-writing a codec: `contramap`/`map`/`emap`/`imap`
+
+Most types don't need `derives WireCodec` at all — `WireCodec[A]` is just `WireEncoder[A] with WireDecoder[A]`, and
+both halves compose the same way `BsonEncoder`/`BsonDecoder` already do elsewhere in mongo4s:
+
+```scala
+import mongo4s.bson.direct.WireCodec
+
+enum Provider(val value: String):
+  case Stripe extends Provider("stripe")
+  case Adyen  extends Provider("adyen")
+
+object Provider:
+  def from(value: String): Option[Provider] = Provider.values.find(_.value == value)
+
+  given WireCodec[Provider] =
+    WireCodec[String].iemap(raw => from(raw).toRight(s"Unsupported provider: $raw"))(_.value)
+```
+
+`imap` (total in both directions) and `iemap` (decode can fail — reported as `BsonError.InvalidValue`) replace a
+hand-rolled `WireCodec.instance(...)` for the common case of one type wrapping another: no `BsonWriter`/`BsonReader`
+calls to write by hand, and the wrap/unwrap logic lives in exactly one place instead of being duplicated across the
+encode and decode sides.
+
+#### `ScalarWireCodec` — reusing a `WireCodec` as a `BsonEncoder`
+
+An opaque type over a primitive (`opaque type UserId = String`) typically needs a `WireCodec[UserId]` for
+`getDirectCollection` *and* a `BsonEncoder[UserId]` for `Field.of[...].equalTo`/`PrimaryKey.make` — two
+typeclasses, normally two independently hand-written codecs. `ScalarWireCodec[A]` — the type every primitive in
+`WirePrimitiveInstances` actually has — closes that gap:
+
+```scala
+import mongo4s.bson.direct.ScalarWireCodec
+import mongo4s.bson.BsonEncoder
+
+opaque type UserId = String
+
+object UserId:
+  def apply(value: String): UserId = value
+  extension (id: UserId) def value: String = id
+
+  given ScalarWireCodec[UserId] = ScalarWireCodec[String].imap(UserId.apply)(_.value)
+  given BsonEncoder[UserId]     = summon[ScalarWireCodec[UserId]].toBsonEncoder
+```
+
+`toBsonEncoder` builds one `BsonValue` per call — cheap on the query-construction path `BsonEncoder` actually runs
+on, unlike materializing one for every field of every document, which is exactly what `WireCodec` exists to avoid
+in the first place. `ScalarWireCodec` is deliberately narrower than `WireCodec`: a derived case class or sum type
+(`derives WireCodec`) is genuinely document-shaped, so it's never typed as `ScalarWireCodec` — asking for one
+(`ScalarWireCodec[SomeCaseClass]`) fails to compile instead of misbehaving at runtime.
+
 ### `bson-cats-data` — `cats.data` support
 
 `NonEmptyList`/`Chain`/`NonEmptyVector`/`NonEmptySet`/`NonEmptyMap` get `BsonEncoder`/`BsonDecoder` and `WireCodec`
@@ -441,7 +492,7 @@ on the roadmap.)
 Published for Scala 3 under `org.mongo4s`:
 
 ```scala
-"org.mongo4s" %% "mongo4s-<module>" % "0.2.0"
+"org.mongo4s" %% "mongo4s-<module>" % "0.3.0"
 ```
 
 | | Module | Notes |

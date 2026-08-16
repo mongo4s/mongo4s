@@ -307,10 +307,10 @@
     <p>Pick a runtime. The default codec (<code>bson-direct</code>) derives straight from your case class — AST-free, no
         third-party codec library, no extra dependency beyond <code>mongo4s-core</code> itself:</p>
     <pre><code>libraryDependencies ++= Seq(
-    "org.mongo4s" %% "mongo4s-cats"           % "0.2.0", // mongo4s-core + cats-effect integration
-    "org.mongo4s" %% "mongo4s-bson-direct"    % "0.2.0", // ast-free bson codecs
-    "org.mongo4s" %% "mongo4s-bson-cats-data" % "0.2.0", // if you need NonEmptyList etc. codec instances
-    "org.mongo4s" %% "mongo4s-repositories"   % "0.2.0", // if you need auto-generated CRUD repository ops for your model
+    "org.mongo4s" %% "mongo4s-cats"           % "0.3.0", // mongo4s-core + cats-effect integration
+    "org.mongo4s" %% "mongo4s-bson-direct"    % "0.3.0", // ast-free bson codecs
+    "org.mongo4s" %% "mongo4s-bson-cats-data" % "0.3.0", // if you need NonEmptyList etc. codec instances
+    "org.mongo4s" %% "mongo4s-repositories"   % "0.3.0", // if you need auto-generated CRUD repository ops for your model
 )</code></pre>
     <pre><code>import cats.effect.{IO, IOApp}
 
@@ -617,6 +617,60 @@ final case class Person(firstName: String, lastName: String) derives WireCodec /
         <code>{"_type": "..."}</code> document — only safe when nested inside another document, not at the root.
     </p>
 
+    <h4>Hand-writing a codec: contramap/map/emap/imap</h4>
+    <p>
+        Most types don't need <code>derives WireCodec</code> at all — <code>WireCodec[A]</code> is just
+        <code>WireEncoder[A] with WireDecoder[A]</code>, and both halves compose the same way
+        <code>BsonEncoder</code>/<code>BsonDecoder</code> already do elsewhere in mongo4s:
+    </p>
+    <pre><code>import mongo4s.bson.direct.WireCodec
+
+enum Provider(val value: String):
+  case Stripe extends Provider("stripe")
+  case Adyen  extends Provider("adyen")
+
+object Provider:
+  def from(value: String): Option[Provider] = Provider.values.find(_.value == value)
+
+  given WireCodec[Provider] =
+    WireCodec[String].iemap(raw => from(raw).toRight(s"Unsupported provider: $raw"))(_.value)</code></pre>
+    <p class="muted">
+        <code>imap</code> (total in both directions) and <code>iemap</code> (decode can fail — reported as
+        <code>BsonError.InvalidValue</code>) replace a hand-rolled <code>WireCodec.instance(...)</code> for the
+        common case of one type wrapping another: no <code>BsonWriter</code>/<code>BsonReader</code> calls to write
+        by hand, and the wrap/unwrap logic lives in exactly one place instead of being duplicated across the encode
+        and decode sides.
+    </p>
+
+    <h4>ScalarWireCodec — reusing a WireCodec as a BsonEncoder</h4>
+    <p>
+        An opaque type over a primitive (<code>opaque type UserId = String</code>) typically needs a
+        <code>WireCodec[UserId]</code> for <code>getDirectCollection</code> <em>and</em> a
+        <code>BsonEncoder[UserId]</code> for <code>Field.of[...].equalTo</code>/<code>PrimaryKey.make</code> — two
+        typeclasses, normally two independently hand-written codecs. <code>ScalarWireCodec[A]</code> — the type
+        every primitive in <code>WirePrimitiveInstances</code> actually has — closes that gap:
+    </p>
+    <pre><code>import mongo4s.bson.direct.ScalarWireCodec
+import mongo4s.bson.BsonEncoder
+
+opaque type UserId = String
+
+object UserId:
+  def apply(value: String): UserId = value
+  extension (id: UserId) def value: String = id
+
+  given ScalarWireCodec[UserId] = ScalarWireCodec[String].imap(UserId.apply)(_.value)
+  given BsonEncoder[UserId]     = summon[ScalarWireCodec[UserId]].toBsonEncoder</code></pre>
+    <p class="muted">
+        <code>toBsonEncoder</code> builds one <code>BsonValue</code> per call — cheap on the query-construction path
+        <code>BsonEncoder</code> actually runs on, unlike materializing one for every field of every document, which
+        is exactly what <code>WireCodec</code> exists to avoid in the first place. <code>ScalarWireCodec</code> is
+        deliberately narrower than <code>WireCodec</code>: a derived case class or sum type
+        (<code>derives WireCodec</code>) is genuinely document-shaped, so it's never typed as
+        <code>ScalarWireCodec</code> — asking for one (<code>ScalarWireCodec[SomeCaseClass]</code>) fails to compile
+        instead of misbehaving at runtime.
+    </p>
+
     <h3>bson-cats-data — <code>cats.data</code> support</h3>
     <p>
         <code>NonEmptyList</code>/<code>Chain</code>/<code>NonEmptyVector</code>/<code>NonEmptySet</code>/<code>NonEmptyMap</code>
@@ -713,7 +767,7 @@ MongoClientResource.fromConnectionString[IO]("mongodb://localhost:27017").use: c
 
     <h2 id="modules">Modules</h2>
     <p>Published for Scala 3 under <code>org.mongo4s</code>:</p>
-    <pre><code>"org.mongo4s" %% "mongo4s-&lt;module&gt;" % "0.2.0"</code></pre>
+    <pre><code>"org.mongo4s" %% "mongo4s-&lt;module&gt;" % "0.3.0"</code></pre>
     <table>
         <tr>
             <th>Kind</th>

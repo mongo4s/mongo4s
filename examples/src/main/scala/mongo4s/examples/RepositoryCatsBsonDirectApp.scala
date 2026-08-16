@@ -7,7 +7,7 @@ import org.bson.types.ObjectId
 
 import mongo4s.cats.CatsStream
 import mongo4s.bson.BsonDocumentCodec
-import mongo4s.{MongoClient, PrimaryKey, WithId}
+import mongo4s.{Field, MongoClient, PrimaryKey, WithId}
 import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec}
 import mongo4s.repositories.BaseMongoRepository
 
@@ -51,10 +51,16 @@ object RepositoryCatsBsonDirectApp extends IOApp.Simple:
                             List("vip"),
                             active = true,
                             Instant.now(),
+                            userRole = UserRole.Admin,
                           )
         _              <- users.insertOne(alice)
         foundUser      <- users.findOne(UserId("1"))
         _              <- IO.println(s"user: $foundUser")
+
+        // UserRole is an enum with a stored `value: String` (not just `derives WireCodec`) — its
+        // ScalarWireCodec.imap/iemap-derived BsonEncoder (see domain.scala) is what makes this query work
+        admins         <- users.findBy(Field.of[User, UserRole](_.userRole), UserRole.Admin)
+        _              <- IO.println(s"admins: ${admins.map(_.name)}")
 
         // 2. id: ObjectId
         tokens     <- BaseMongoRepository.identified[IO, S, ApiToken, ObjectId](db, "repo_direct_tokens")
