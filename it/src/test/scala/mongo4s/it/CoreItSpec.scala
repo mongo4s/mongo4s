@@ -6,6 +6,7 @@ import mongo4s.bson.*
 import mongo4s.bson.BsonInstances.given
 import mongo4s.cats.CatsInstances.given
 import mongo4s.cats.CatsStream
+import mongo4s.operations.{Sort, Stage}
 import mongo4s.{Field, MongoClient}
 import org.bson.{BsonDocument, BsonInt32, BsonString}
 import org.scalatest.BeforeAndAfterAll
@@ -52,18 +53,27 @@ final class CoreItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAf
           collection <- database.getCollection[Person]("people")
           _          <- collection.insertOne(Person("bob", 30))
           _          <- collection.insertOne(Person("alice", 25))
-          count      <- collection.count
-          all        <- collection.find.all
+          count      <- collection.count()
+          all        <- collection.find().all
           bob        <- collection.find(Field.of[Person, String](_.name).equalTo("bob")).first
-          streamed   <- collection.find.stream.compile.toList
+          streamed   <- collection.find().stream.compile.toList
+          aggregated <- collection
+                          .aggregate[Person](
+                            Seq(
+                              Stage.matching(Field.of[Person, Int](_.age).gte(28)),
+                              Stage.sortBy(Sort.asc(Field.of[Person, String](_.name))),
+                            )
+                          )
+                          .all
           _          <- client.close
-        yield (count, all, bob, streamed)
+        yield (count, all, bob, streamed, aggregated)
 
-      program.timeout(30.seconds).asserting { case (count, all, bob, streamed) =>
+      program.timeout(30.seconds).asserting { case (count, all, bob, streamed, aggregated) =>
         count shouldBe 2L
         all.map(_.name) should contain allOf ("bob", "alice")
         bob shouldBe Some(Person("bob", 30))
         streamed.map(_.name) should contain allOf ("bob", "alice")
+        aggregated shouldBe List(Person("bob", 30))
       }
     }
 
@@ -74,7 +84,7 @@ final class CoreItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAf
           database   <- client.getDatabase("broken")
           collection <- database.getCollection[Person]("people")
           _          <- collection.underlying.insertOne(BsonDocument().append("name", BsonString("no-age"))).pure0
-          result     <- collection.find.all.attempt
+          result     <- collection.find().all.attempt
           _          <- client.close
         yield result
 

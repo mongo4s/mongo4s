@@ -1,22 +1,23 @@
 package mongo4s.it
 
-import cats.effect.IO
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.wordspec.AsyncWordSpec
+import org.scalatest.matchers.should.Matchers
 import cats.effect.testing.scalatest.AsyncIOSpec
-import mongo4s.bson.BsonInstances.given
+import org.testcontainers.containers.MongoDBContainer
+
+import cats.effect.IO
+import org.bson.types.ObjectId
 import mongo4s.bson.medeia.MedeiaDocumentCodec
-import mongo4s.bson.medeia.MedeiaInstances.given
-import mongo4s.cats.CatsInstances.given
 import mongo4s.cats.CatsStream
 import mongo4s.operations.{Update, WriteCommand}
 import mongo4s.repositories.BaseMongoRepository
 import mongo4s.{Field, MongoClient, PrimaryKey, WithId}
-import org.bson.types.ObjectId
-import org.scalatest.BeforeAndAfterAll
-import org.scalatest.matchers.should.Matchers
-import org.scalatest.wordspec.AsyncWordSpec
-import org.testcontainers.containers.MongoDBContainer
 
-import scala.concurrent.duration.*
+import scala.concurrent.duration.given
+import mongo4s.bson.BsonInstances.given
+import mongo4s.cats.CatsInstances.given
+import mongo4s.bson.medeia.MedeiaInstances.given
 
 object RepositoryItSpec:
 
@@ -141,7 +142,7 @@ final class RepositoryItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befor
         _              <- repo.insertMany(List(Person("1", "a", 1), Person("2", "b", 2), Person("3", "c", 3)))
         _              <- repo.deleteOne("1")
         _              <- repo.deleteMany(List("2", "3"))
-        remaining      <- repo.count
+        remaining      <- repo.count()
         _              <- client.close
       yield remaining).timeout(30.seconds).asserting(_ shouldBe 0L)
     }

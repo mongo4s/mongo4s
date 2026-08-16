@@ -1,25 +1,23 @@
 package mongo4s.internal
 
+import scala.reflect.ClassTag
+
 import org.bson.BsonDocument
 import org.bson.codecs.configuration.CodecRegistries
 import com.mongodb.client.model.*
-import com.mongodb.reactivestreams.client.MongoCollection as RSMongoCollection
+import com.mongodb.client.model.changestream.FullDocument
+import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
-import mongo4s.operations.{Filter, Update, WriteCommand}
 import mongo4s.{Effect, Field, MongoCollection, RsBridge, Streamable}
+import mongo4s.changestream.ChangeEvent
+import mongo4s.operations.{Filter, Stage, Update, WriteCommand}
 import mongo4s.results.{InsertManyResult, InsertOneResult}
 import mongo4s.queries.{AggregateQuery, DistinctQuery, FindQuery}
 import mongo4s.bson.{BsonDecoder, BsonDocumentCodec, FieldNaming}
 import mongo4s.bson.direct.{DocumentCodecBridge, DriverCodecBridge, WireCodec}
 
 import scala.jdk.CollectionConverters.given
-import scala.reflect.ClassTag
 
-/** `MongoCollection[F, S, A]` backed by a native `org.bson.codecs.Codec[A]` (derived from `WireCodec[A]`) instead of `mongo4s.bson.BsonDocumentCodec[A]`. Holds two views
-  * of the same driver collection: `underlying` (`BsonDocument`-typed, for the parts of the public API that must stay AST-shaped - `watch`, `aggregate[B]`, `distinct[B]`,
-  * and a lazily-bridged `codec` for API compatibility) and `typedCollection` (registered with the native codec, used for every hot-path CRUD operation - the driver
-  * decodes straight to `A`, no `BsonDocument` involved).
-  */
 private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
     val underlying: RSMongoCollection[BsonDocument],
     val naming: FieldNaming,
@@ -37,47 +35,90 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
 
   def name: String = underlying.getNamespace.getCollectionName
 
-  def insertOne(document: A): F[InsertOneResult] =
-    F.map(rs.one(typedCollection.insertOne(document)))(result => InsertOneResult(Option(result.getInsertedId)))
+  def insertOne(document: A)(using session: Option[ClientSession]): F[InsertOneResult] =
+    val publisher = session match
+      case Some(s) => typedCollection.insertOne(s, document)
+      case None    => typedCollection.insertOne(document)
+    F.map(rs.one(publisher))(result => InsertOneResult(Option(result.getInsertedId)))
 
-  def insertMany(documents: Seq[A]): F[InsertManyResult] =
-    F.map(rs.one(typedCollection.insertMany(documents.asJava)))(result => InsertManyResult(result.getInsertedIds.values.asScala.toList))
+  def insertMany(documents: Seq[A])(using session: Option[ClientSession]): F[InsertManyResult] =
+    val documentsList = documents.asJava
+    val publisher     = session match
+      case Some(s) => typedCollection.insertMany(s, documentsList)
+      case None    => typedCollection.insertMany(documentsList)
+    F.map(rs.one(publisher))(result => InsertManyResult(result.getInsertedIds.values.asScala.toList))
 
-  def find: FindQuery[F, S, A]                    = query(Filter.all)
-  def find(filter: Filter[A]): FindQuery[F, S, A] = query(filter)
+  def find(filter: Filter[A])(using session: Option[ClientSession]): FindQuery[F, S, A] = query(filter, session)
 
-  def replaceOne(filter: Filter[A], replacement: A, upsert: Boolean): F[Long] =
-    F.map(rs.one(typedCollection.replaceOne(filter.toBson(naming), replacement, ReplaceOptions().upsert(upsert))))(_.getModifiedCount)
+  def replaceOne(filter: Filter[A], replacement: A, upsert: Boolean)(using session: Option[ClientSession]): F[Long] =
+    val options   = ReplaceOptions().upsert(upsert)
+    val publisher = session match
+      case Some(s) => typedCollection.replaceOne(s, filter.toBson(naming), replacement, options)
+      case None    => typedCollection.replaceOne(filter.toBson(naming), replacement, options)
+    F.map(rs.one(publisher))(_.getModifiedCount)
 
-  def updateOne(filter: Filter[A], update: Update[A], upsert: Boolean): F[Long] =
-    F.map(rs.one(typedCollection.updateOne(filter.toBson(naming), update.toBson(naming), UpdateOptions().upsert(upsert))))(_.getModifiedCount)
+  def updateOne(filter: Filter[A], update: Update[A], upsert: Boolean)(using session: Option[ClientSession]): F[Long] =
+    val options   = UpdateOptions().upsert(upsert)
+    val publisher = session match
+      case Some(s) => typedCollection.updateOne(s, filter.toBson(naming), update.toBson(naming), options)
+      case None    => typedCollection.updateOne(filter.toBson(naming), update.toBson(naming), options)
+    F.map(rs.one(publisher))(_.getModifiedCount)
 
-  def updateMany(filter: Filter[A], update: Update[A], upsert: Boolean): F[Long] =
-    F.map(rs.one(typedCollection.updateMany(filter.toBson(naming), update.toBson(naming), UpdateOptions().upsert(upsert))))(_.getModifiedCount)
+  def updateMany(filter: Filter[A], update: Update[A], upsert: Boolean)(using session: Option[ClientSession]): F[Long] =
+    val options   = UpdateOptions().upsert(upsert)
+    val publisher = session match
+      case Some(s) => typedCollection.updateMany(s, filter.toBson(naming), update.toBson(naming), options)
+      case None    => typedCollection.updateMany(filter.toBson(naming), update.toBson(naming), options)
+    F.map(rs.one(publisher))(_.getModifiedCount)
 
-  def deleteOne(filter: Filter[A]): F[Long] =
-    F.map(rs.one(typedCollection.deleteOne(filter.toBson(naming))))(_.getDeletedCount)
+  def deleteOne(filter: Filter[A])(using session: Option[ClientSession]): F[Long] =
+    val publisher = session match
+      case Some(s) => typedCollection.deleteOne(s, filter.toBson(naming))
+      case None    => typedCollection.deleteOne(filter.toBson(naming))
+    F.map(rs.one(publisher))(_.getDeletedCount)
 
-  def deleteMany(filter: Filter[A]): F[Long] =
-    F.map(rs.one(typedCollection.deleteMany(filter.toBson(naming))))(_.getDeletedCount)
+  def deleteMany(filter: Filter[A])(using session: Option[ClientSession]): F[Long] =
+    val publisher = session match
+      case Some(s) => typedCollection.deleteMany(s, filter.toBson(naming))
+      case None    => typedCollection.deleteMany(filter.toBson(naming))
+    F.map(rs.one(publisher))(_.getDeletedCount)
 
-  def count: F[Long]                    = F.map(rs.one(underlying.countDocuments()))(_.longValue)
-  def count(filter: Filter[A]): F[Long] = F.map(rs.one(underlying.countDocuments(filter.toBson(naming))))(_.longValue)
+  def count(filter: Filter[A])(using session: Option[ClientSession]): F[Long] =
+    val bson      = filter.toBson(naming)
+    val publisher = session match
+      case Some(s) => underlying.countDocuments(s, bson)
+      case None    => underlying.countDocuments(bson)
+    F.map(rs.one(publisher))(_.longValue)
 
-  def bulkWrite(commands: Seq[WriteCommand[A]]): F[Unit] =
-    rs.unit(typedCollection.bulkWrite(commands.iterator.map(toModel).toList.asJava))
+  def bulkWrite(commands: Seq[WriteCommand[A]])(using session: Option[ClientSession]): F[Unit] =
+    val models    = commands.iterator.map(toModel).toList.asJava
+    val publisher = session match
+      case Some(s) => typedCollection.bulkWrite(s, models)
+      case None    => typedCollection.bulkWrite(models)
+    rs.unit(publisher)
 
-  def aggregate[B](pipeline: Seq[BsonDocument])(using codec: BsonDocumentCodec[B]): AggregateQuery[F, S, B] =
-    AggregateQueryImpl(underlying, pipeline, codec, None)
+  def aggregate[B](pipeline: Seq[Stage[A]])(using session: Option[ClientSession])(using codec: BsonDocumentCodec[B]): AggregateQuery[F, S, B] =
+    AggregateQueryImpl(underlying, pipeline.map(_.toBson(naming)), codec, None, session)
 
-  def distinct[C, B](field: Field[A, C], filter: Filter[A])(using decoder: BsonDecoder[B]): DistinctQuery[F, S, B] =
-    DistinctQueryImpl(underlying, field.path.render(naming), filter.toBson(naming), decoder)
+  def distinct[C, B](field: Field[A, C], filter: Filter[A])(using session: Option[ClientSession])(using decoder: BsonDecoder[B]): DistinctQuery[F, S, B] =
+    DistinctQueryImpl(underlying, field.path.render(naming), filter.toBson(naming), decoder, session)
 
-  def watch(using Streamable[S, BsonDocument]): S[BsonDocument] =
-    rs.stream(MappingPublisher(underlying.watch(classOf[BsonDocument]), _.getFullDocument))
+  def watch(pipeline: Seq[BsonDocument], fullDocument: FullDocument)(using
+      session: Option[ClientSession]
+  )(using Streamable[S, ChangeEvent[A]]): S[ChangeEvent[A]] =
+    val base =
+      if pipeline.isEmpty then
+        session match
+          case Some(s) => underlying.watch(s, classOf[BsonDocument])
+          case None    => underlying.watch(classOf[BsonDocument])
+      else
+        session match
+          case Some(s) => underlying.watch(s, pipeline.asJava, classOf[BsonDocument])
+          case None    => underlying.watch(pipeline.asJava, classOf[BsonDocument])
+    rs.stream(DecodingPublisher(base.fullDocument(fullDocument), doc => ChangeEvent.fromDriver(doc, codec.decodeDocument)))
 
-  private def query(filter: Filter[A]): FindQuery[F, S, A] =
-    DirectFindQueryImpl(typedCollection, naming, filter, mongo4s.operations.Sort.empty, mongo4s.operations.Projection.empty, None, None)
+  private def query(filter: Filter[A], session: Option[ClientSession]): FindQuery[F, S, A] =
+    DirectFindQueryImpl(typedCollection, naming, filter, mongo4s.operations.Sort.empty, mongo4s.operations.Projection.empty, None, None, session)
 
   private def toModel(command: WriteCommand[A]): WriteModel[A] = command match
     case WriteCommand.InsertOne(document)            => InsertOneModel(document)

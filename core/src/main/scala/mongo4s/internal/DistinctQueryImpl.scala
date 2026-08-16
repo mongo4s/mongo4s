@@ -2,18 +2,19 @@ package mongo4s.internal
 
 import org.bson.conversions.Bson
 import org.bson.{BsonDocument, BsonValue}
-import com.mongodb.reactivestreams.client.MongoCollection as RSMongoCollection
 import org.reactivestreams.{Publisher, Subscriber, Subscription}
+import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
 import mongo4s.{RsBridge, Streamable}
-import mongo4s.bson.{BsonDecoder, BsonError}
 import mongo4s.queries.DistinctQuery
+import mongo4s.bson.{BsonDecoder, BsonError}
 
 private[mongo4s] final class DistinctQueryImpl[F[*], S[*], A](
     collection: RSMongoCollection[BsonDocument],
     field: String,
     filter: Bson,
     decoder: BsonDecoder[A],
+    session: Option[ClientSession],
 )(using rs: RsBridge[F, S])
     extends DistinctQuery[F, S, A]:
 
@@ -21,7 +22,9 @@ private[mongo4s] final class DistinctQueryImpl[F[*], S[*], A](
   def stream(using Streamable[S, A]): S[A] = rs.stream(publisher)
 
   private def publisher: Publisher[A] =
-    val distinct = collection.distinct(field, filter, classOf[BsonValue])
+    val distinct = session match
+      case Some(s) => collection.distinct(s, field, filter, classOf[BsonValue])
+      case None    => collection.distinct(field, filter, classOf[BsonValue])
     (downstream: Subscriber[? >: A]) =>
       distinct.subscribe(
         new Subscriber[BsonValue]:

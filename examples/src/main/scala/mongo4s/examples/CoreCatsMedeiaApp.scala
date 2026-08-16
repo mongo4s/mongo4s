@@ -2,25 +2,21 @@ package mongo4s.examples
 
 import java.time.Instant
 
-import cats.effect.{IO, IOApp, Resource}
+import cats.effect.{IO, IOApp}
 
-import mongo4s.cats.CatsStream
-import mongo4s.{Field, MongoClient}
+import mongo4s.Field
+import mongo4s.cats.{CatsStream, MongoClientResource}
 
 import mongo4s.bson.BsonInstances.given
 import mongo4s.bson.medeia.MedeiaInstances.given
-import mongo4s.cats.CatsInstances.given
 import medeiaCodecs.given
 
 object CoreCatsMedeiaApp extends IOApp.Simple:
 
   type S[A] = CatsStream[IO][A]
 
-  private def mongoClient(connectionString: String): Resource[IO, MongoClient[IO, S]] =
-    Resource.make(MongoClient.fromConnectionString[IO, S](connectionString))(_.close)
-
   def run: IO[Unit] =
-    mongoClient("mongodb://localhost:27018").use: client =>
+    MongoClientResource.fromConnectionString[IO]("mongodb://localhost:27018").use: client =>
       for
         db     <- client.getDatabase("mongo4s_examples")
         users  <- db.getCollection[User]("core_cats_medeia_users")

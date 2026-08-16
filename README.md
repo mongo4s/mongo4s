@@ -48,54 +48,69 @@ flowchart LR
 
 ## Quick start
 
-Pick a runtime and a codec bridge:
+Pick a runtime. The default codec (`bson-direct`) derives straight from your case class — AST-free, no
+third-party codec library, no extra dependency beyond `mongo4s-core` itself:
 
 ```scala
 libraryDependencies ++= Seq(
-  "org.mongo4s" %% "mongo4s-cats"         % "0.1.0",
-  "org.mongo4s" %% "mongo4s-bson-medeia"  % "0.1.0",
-  "org.mongo4s" %% "mongo4s-repositories" % "0.1.0", // if you need auto-generated CRUD repository ops for your model
+  "org.mongo4s" %% "mongo4s-cats"           % "0.2.0", // mongo4s-core + cats-effect integration
+  "org.mongo4s" %% "mongo4s-bson-direct"    % "0.2.0", // ast-free bson codecs
+  "org.mongo4s" %% "mongo4s-bson-cats-data" % "0.2.0", // if you need NonEmptyList etc. codec instances
+  "org.mongo4s" %% "mongo4s-repositories"   % "0.2.0", // if you need auto-generated CRUD repository ops for your model
 )
 ```
 
 ```scala
 import cats.effect.{IO, IOApp}
 
-import mongo4s.{Field, MongoClient, PrimaryKey}
-import mongo4s.bson.BsonInstances.given
-import mongo4s.bson.medeia.MedeiaDocumentCodec
-import mongo4s.bson.medeia.MedeiaInstances.given
-import mongo4s.cats.CatsInstances.given
 import mongo4s.cats.CatsStream
+import mongo4s.bson.direct.WireCodec
+import mongo4s.{Field, MongoClient, PrimaryKey}
 import mongo4s.repositories.BaseMongoRepository
 
-final case class User(id: String, name: String, age: Int) derives MedeiaDocumentCodec
+import mongo4s.cats.CatsInstances.given
+
+final case class User(id: String, name: String, age: Int) derives WireCodec
 
 object User:
   given PrimaryKey[User, String] = PrimaryKey.single("id")(_.id)
 
 object Main extends IOApp.Simple:
-  type S[A] = CatsStream[IO][A]
-
   def run: IO[Unit] =
     for
-      client <- MongoClient.fromConnectionString[IO, S]("mongodb://localhost:27017")
-      db     <- client.getDatabase("myapp")
-      users  <- BaseMongoRepository.create[IO, S, User, String](db, "users")
-      _      <- users.insertOne(User("1", "Alice", 30))
-      alice  <- users.findOne("1")
-      adults <- users.findByFilter(Field.of[User, Int](_.age).gte(18))
-      _      <- client.close
+      client     <- MongoClient.fromConnectionString[IO, CatsStream[IO][A]]("mongodb://localhost:27017")
+      db         <- client.getDatabase("myapp")
+      collection <- db.getDirectCollection[User]("users")
+      users       = BaseMongoRepository(collection)
+      _          <- users.insertOne(User("1", "Alice", 30))
+      alice      <- users.findOne("1")
+      adults     <- users.findByFilter(Field.of[User, Int](_.age).gte(18))
+      _          <- client.close
     yield ()
 ```
 
 Swap `mongo4s-cats` for `mongo4s-zio` / `mongo4s-kyo` / `mongo4s-rapid` and the matching `*Instances.given` import to
-change runtime — nothing else in this snippet changes.
+change runtime — nothing else in this snippet changes. `BsonEncoder`/`BsonDecoder` for built-in types (`String`,
+`Int`, `Option`, `List`, `Vector`, `Set`, `Seq`, …) resolve with no import at all — no
+`mongo4s.bson.BsonInstances.given` needed unless you're summoning one directly.
+
+Already have a model on medeia, zio-schema, or calypso? Swap `derives WireCodec` + `getDirectCollection` for
+`derives MedeiaDocumentCodec`/etc. + `getCollection` (and `BaseMongoRepository.create(db, "users")` instead of
+constructing it from a collection directly) — see [BSON codecs](#bson-codecs) below for all four backends.
+
+Already have a `MongoClientSettings` built elsewhere (connection pool tuning, a custom `CodecRegistry`, …)? Use
+`MongoClient.fromSettings` instead of `fromConnectionString`:
+
+```scala
+val settings = MongoClientSettings.builder().applyConnectionString(ConnectionString("mongodb://localhost:27017")).build()
+client <- MongoClient.fromSettings[IO, S](settings)
+```
 
 For more examples see: [examples/src/main/scala/mongo4s/examples](examples/src/main/scala/mongo4s/examples) — a
 shared domain model (opaque types, enums, nested case classes) run through every runtime/codec combination
-(cats+medeia, ZIO+zio-bson, kyo+medeia, rapid+calypso) plus a repository example covering all three
-`BaseMongoRepository` construction styles against bson-direct.
+(cats+medeia, ZIO+zio-bson, kyo+medeia, rapid+calypso), a repository example covering all three
+`BaseMongoRepository` construction styles against bson-direct, and a sessions/transactions + typed aggregation
+pipeline example on cats+medeia.
 
 ## Core concepts
 
@@ -104,14 +119,17 @@ your effect `F[_]` and stream type `S[_]`:
 
 ```scala
 trait MongoCollection[F[*], S[*], A]:
-  def insertOne(document: A): F[InsertOneResult]
-  def find(filter: Filter[A]): FindQuery[F, S, A]
-  def updateOne(filter: Filter[A], update: Update[A], upsert: Boolean = false): F[Long]
-  def deleteOne(filter: Filter[A]): F[Long]
-  def aggregate[B](pipeline: Seq[BsonDocument])(using BsonDocumentCodec[B]): AggregateQuery[F, S, B]
-  def distinct[C, B](field: Field[A, C], filter: Filter[A])(using BsonDecoder[B]): DistinctQuery[F, S, B]
+  def insertOne(document: A)(using session: Option[ClientSession] = None): F[InsertOneResult]
+  def find(filter: Filter[A] = Filter.all)(using session: Option[ClientSession] = None): FindQuery[F, S, A]
+  def updateOne(filter: Filter[A], update: Update[A], upsert: Boolean = false)(using session: Option[ClientSession] = None): F[Long]
+  def deleteOne(filter: Filter[A])(using session: Option[ClientSession] = None): F[Long]
+  def aggregate[B](pipeline: Seq[Stage[A]])(using session: Option[ClientSession] = None)(using BsonDocumentCodec[B]): AggregateQuery[F, S, B]
+  def distinct[C, B](field: Field[A, C], filter: Filter[A])(using session: Option[ClientSession] = None)(using BsonDecoder[B]): DistinctQuery[F, S, B]
   // count, insertMany, updateMany, deleteMany, bulkWrite, watch, ...
 ```
+
+Every method takes an optional `ClientSession` — see [Sessions & transactions](#sessions--transactions) — and defaults
+to `None`, so none of this is visible until you opt in.
 
 `Field.of[E, A](_.someField)` is a macro that reads a field selector at compile time — no strings, no reflection —
 and gives you a typed path to build filters, updates, and sorts:
@@ -139,6 +157,133 @@ ready-made `PrimaryKey` — no `given` needed.
 list always produces `Filter.none`, so `findMany(Nil)`/`deleteMany(Nil)` are safe no-ops instead of matching every
 document.
 
+### Sessions & transactions
+
+`client.startSession` is fully manual — mongo4s hands you the driver `ClientSession` and steps back. You own the
+whole lifecycle yourself: start the transaction, pass the session explicitly with `(using Some(session))` at each
+call site you want inside it, commit or abort, and close the session when you're done — nothing here happens
+automatically:
+
+```scala
+import mongo4s.MongoSession
+
+for
+  session <- client.startSession
+  _       <- MongoSession.startTransaction[IO](session)
+  _       <- users.insertOne(User("2", "Bob", 41))(using Some(session))
+  _       <- MongoSession.commitTransaction[IO, S](session) // or abortTransaction to roll back
+  _       <- IO.delay(session.close())
+yield ()
+```
+
+Every `MongoClient`/`MongoDatabase`/`MongoCollection`/`Repository` method accepts the same `(using session:
+Option[ClientSession] = None)`, so a `BaseMongoRepository` call can join an existing transaction the same way a raw
+`collection` call can.
+
+The manual dance above never aborts on failure either — if the body throws, the transaction is just left open until
+it times out server-side. `client.withTransaction` does the whole thing automatically instead: starts a session,
+commits on success or aborts (then re-raises) on failure, and closes the session either way — you don't manage any
+part of the lifecycle yourself, and the session is given implicitly to everything inside the body, so no
+`(using Some(session))` at each call site:
+
+```scala
+client.withTransaction {
+  users.insertOne(User("2", "Bob", 41)) // Option[ClientSession] is already given here
+}
+```
+
+`withTransaction` is built entirely from `Effect[F]`'s own minimal vocabulary (`flatMap`/`handleErrorWith`), so it
+works identically on every runtime. That also means it only covers the "body raised an error" path — on cats-effect
+specifically, a hard cancellation of the surrounding fiber won't trigger the abort/close, since `Effect[F]` has no
+notion of cancellation the way `cats.effect.MonadCancel` does. Reach for `MongoClientResource` (see
+[Runtime backends](#runtime-backends)) combined with your own `Resource`-based cleanup if that stronger guarantee
+matters for a specific call site.
+
+`MongoClient.withTransaction` is itself built on a lower-level `ClientSession.withTransaction`: same automatic
+commit-on-success/abort-on-failure behavior, but manual again about the session's own lifecycle — it doesn't close
+the session, since (like the fully manual path above) it doesn't own one you got from `startSession` yourself. Reach
+for it directly if you're reusing one already-open session across more than one transaction:
+
+```scala
+for
+  session <- client.startSession
+  _       <- session.withTransaction(users.insertOne(User("2", "Bob", 41)))
+  _       <- session.withTransaction(users.insertOne(User("3", "Carol", 29))) // same session, second transaction
+  _       <- IO.delay(session.close())
+yield ()
+```
+
+### Aggregation pipelines
+
+`aggregate` takes a `Seq[Stage[A]]` — a typed pipeline-stage AST, mirroring `Filter`/`Update`/`Sort`, instead of raw
+`BsonDocument`s — built with the same `Field.of` selectors:
+
+```scala
+import mongo4s.operations.{Sort, Stage}
+
+val pipeline = Seq(
+  Stage.matching(Field.of[User, Int](_.age).gte(18)),
+  Stage.sortBy(Sort.asc(Field.of[User, String](_.name))),
+  Stage.limit(10),
+)
+val adults: IO[List[User]] = users.aggregate[User](pipeline).all
+```
+
+`Stage` covers `$match`/`$project`/`$sort`/`$limit`/`$skip`/`$count`/`$unwind`/`$lookup`, plus `Stage.raw(document)`
+as an escape hatch for anything else (`$group` included, for now — see the type's own doc comment). Field references
+inside a `Stage` are always typed against the pipeline's *starting* document type `A`, the same way `aggregate[B]`'s
+own output type `B` is specified manually rather than inferred stage-by-stage.
+
+### Change streams
+
+`watch` exists at all three levels, matching the driver's own scope hierarchy — `MongoClient.watch` (the whole
+deployment, needs a replica set/sharded cluster), `MongoDatabase.watch` (one database), and `MongoCollection.watch`
+(one collection):
+
+```scala
+val events: S[ChangeEvent[Person]] = people.watch()
+```
+
+Every event is a `ChangeEvent[A]`, not a bare `BsonDocument`:
+
+```scala
+final case class ChangeEvent[A](
+  operationType: OperationType,                    // com.mongodb's own enum — INSERT/UPDATE/DELETE/...
+  documentKey: Option[BsonDocument],
+  fullDocument: Option[A],
+  fullDocumentBeforeChange: Option[A],
+  updateDescription: Option[UpdateDescription],     // updated/removed field paths, for UPDATE events
+  resumeToken: BsonDocument,
+  clusterTime: Option[BsonTimestamp],
+)
+```
+
+`fullDocument` defaults to populated on **both** insert and update events (`FullDocument.UPDATE_LOOKUP`) — MongoDB's
+own default only fills it in for inserts/replaces, leaving it `None` for the far more common "what does the document
+look like now" update case unless you ask for the lookup explicitly. It's always `None` for deletes (there's no
+document left to look up); override via `watch(fullDocument = FullDocument.DEFAULT)` if you want the driver's
+original behavior instead.
+
+`MongoCollection.watch` decodes through the collection's own codec, so `fullDocument`/`fullDocumentBeforeChange` come
+back as `Option[A]`. `MongoClient.watch`/`MongoDatabase.watch` span more than one document shape, so they default to
+`ChangeEvent[BsonDocument]` — use `watchAs[A]` instead if you know the events you'll see (e.g. because `pipeline`
+already filters down to one namespace) all decode the same way:
+
+```scala
+val typed: S[ChangeEvent[Person]] = database.watchAs[Person](pipeline = onlyPeopleCollection)
+```
+
+The optional `pipeline: Seq[BsonDocument]` filters the change stream itself — and it matches against the **change
+event's own shape** (`{operationType, fullDocument, ns, ...}`), not the collection's document shape, so it stays raw
+`BsonDocument`, not a typed `Stage[A]`: a `Stage`-built `Field.of[Person, Int](_.age)` filter would render the path
+`"age"`, but the change event needs `"fullDocument.age"` to reach the same field. A common case — filtering to one
+operation type — needs no field-path awareness at all:
+
+```scala
+val insertsOnly = Seq(BsonDocument("$match", BsonDocument("operationType", BsonString("insert"))))
+val events: S[ChangeEvent[Person]] = people.watch(pipeline = insertsOnly)
+```
+
 ## BSON codecs
 
 Every codec ultimately produces a `mongo4s.bson.BsonDocumentCodec[A]` (entity ⇄ `org.bson.BsonDocument`) or, for the
@@ -151,6 +296,7 @@ AST-free path below, a `WireCodec[A]`. Bring whichever backend fits — mongo4s 
 | `mongo4s-bson-zio` | [zio-schema-bson](https://github.com/zio/zio-bson)                             | via `zio.schema.Schema` |
 | `mongo4s-bson-calypso` | [calypso](https://github.com/m2-oss/calypso)                                   | hand-written `forProductN` codecs |
 | `mongo4s-bson-direct` | [mongo4s itself](https://github.com/mongo4s/mongo4s/tree/main/bson/direct/src) | `WireCodec[A]`, AST-free — see below |
+| `mongo4s-bson-cats-data` | [cats-core](https://typelevel.org/cats/) | `BsonEncoder`/`BsonDecoder`/`WireCodec` for `NonEmptyList`/`Chain`/`NonEmptyVector`/`NonEmptySet`/`NonEmptyMap` |
 
 ### `bson-direct` — AST-free `WireCodec`
 
@@ -192,7 +338,7 @@ object Person:
 for
   db         <- client.getDatabase("myapp")
   collection <- db.getDirectCollection[Person]("people")
-  repo        = new BaseMongoRepository(collection)
+  repo        = BaseMongoRepository(collection)
   _          <- repo.insertOne(Person("1", "bob", 30))
 yield ()
 ```
@@ -200,6 +346,46 @@ yield ()
 `aggregate`/`distinct` still go through `BsonDocumentCodec`/`BsonDecoder` on a direct collection (they're not the hot
 path); everything else — `Filter`/`Update`/`Field` construction — is identical regardless of which codec backs the
 collection.
+
+#### Field naming
+
+By default `derives WireCodec` writes field and discriminator names exactly as they appear in the Scala source. To
+match an existing collection's naming convention (`snake_case`, say), bring a `WireCodecConfig` into scope before
+deriving — it reuses the same `mongo4s.bson.FieldNaming` the query layer (`Filter`/`Update`/`Sort`) already uses,
+rather than a second, independent naming mechanism:
+
+```scala
+import mongo4s.bson.direct.WireCodecConfig
+
+given WireCodecConfig = WireCodecConfig.SnakeCase
+
+final case class Person(firstName: String, lastName: String) derives WireCodec // writes "first_name"/"last_name"
+```
+
+Field naming and discriminator naming (the `_type` value for sealed traits/enums) are independently configurable via
+`WireCodecConfig(fieldNaming = ..., discriminatorNaming = ...)`. `WireCodecConfig` only affects how `WireCodec`
+derives — pass the matching `FieldNaming` (e.g. `WireCodecConfig.SnakeCase.fieldNaming`) to `getDirectCollection`'s
+own `naming` parameter too, so `Filter`/`Update`/`Field` queries render the same field names the codec wrote.
+
+`encodeEmptyCasesAsString = true` writes a parameterless case (`case object`/empty `case class`) as a bare BSON
+string instead of a `{"_type": "..."}` document — only safe when that case is nested inside another document, not
+when it's the root type of a collection (BSON's root value must always be a document).
+
+### `bson-cats-data` — `cats.data` support
+
+`NonEmptyList`/`Chain`/`NonEmptyVector`/`NonEmptySet`/`NonEmptyMap` get `BsonEncoder`/`BsonDecoder` and `WireCodec`
+instances from `mongo4s-bson-cats-data`, delegating to the already-existing `List`/`Vector`/`Set`/`Map` instances
+rather than reimplementing BSON encoding:
+
+```scala
+import mongo4s.bson.catsdata.CatsDataBsonInstances.given // or CatsDataWireInstances.given for bson-direct
+import cats.data.NonEmptyList
+
+final case class Team(members: NonEmptyList[String]) derives BsonDocumentCodec // via medeia/zio-bson/calypso
+```
+
+`NonEmptySet`/`NonEmptyMap` additionally need a `cats.Order` for their element/key type — the same `Order` you'd
+already need to construct one of these types directly.
 
 ## Repositories
 
@@ -214,6 +400,9 @@ BaseMongoRepository.objectId[F, S, E](db, "collection")      // WithId[ObjectId,
 
 `WithId[Id, E]` wraps an entity with a separately-typed id (`type Oid[E] = WithId[ObjectId, E]`) and ships its own
 `PrimaryKey`/`BsonDocumentCodec` instances, for entities that don't carry their own id field.
+
+Like `MongoCollection`, every `Repository` method takes `(using session: Option[ClientSession] = None)` — a
+repository call can join a [transaction](#sessions--transactions) the same way a raw `collection` call can.
 
 For unit tests, `FakeMongoCollection` (in `mongo4s-repositories`' test sources, reusable via
 `% "test->test;test->compile"`) implements `MongoCollection` in memory — the exact same `Filter`/`Update`/`Field` AST
@@ -233,12 +422,26 @@ Each runtime module provides `given Effect[F]` (a minimal `pure`/`delay`/`map`/`
 | `mongo4s-kyo` | `kyo.IO` | `kyo.Stream` | via `kyo-reactive-streams` |
 | `mongo4s-rapid` | `rapid.Task` | `rapid.Stream` | |
 
+`MongoClient.fromClient`/`fromSettings`/`fromConnectionString` return a bare `F[MongoClient[F, S]]` — you own calling
+`.close`. On `mongo4s-cats`, `MongoClientResource` mirrors the same three constructor names, wrapped as a
+`cats.effect.Resource` so `.close` runs on release automatically:
+
+```scala
+import mongo4s.cats.MongoClientResource
+
+MongoClientResource.fromConnectionString[IO]("mongodb://localhost:27017").use: client =>
+  ...
+```
+
+(zio/kyo/rapid equivalents, using each runtime's own resource-safety idiom instead of copying `Resource` as-is, are
+on the roadmap.)
+
 ## Modules
 
 Published for Scala 3 under `org.mongo4s`:
 
 ```scala
-"org.mongo4s" %% "mongo4s-<module>" % "0.1.0"
+"org.mongo4s" %% "mongo4s-<module>" % "0.2.0"
 ```
 
 | | Module | Notes |
@@ -246,6 +449,7 @@ Published for Scala 3 under `org.mongo4s`:
 | core | `mongo4s-core` | `MongoClient`/`MongoDatabase`/`MongoCollection`, `Field`/`Filter`/`Update`, `PrimaryKey`; depends on `bson-core` + `bson-direct` only |
 | bson | `mongo4s-bson-core` | `BsonEncoder`/`BsonDecoder`/`BsonDocumentCodec` — the scalar + document codec seam |
 | | `mongo4s-bson-direct` | `WireCodec[A]` — AST-free product/sum derivation, no third-party dependency |
+| | `mongo4s-bson-cats-data` | `cats.data` (`NonEmptyList`/`Chain`/`NonEmptyVector`/`NonEmptySet`/`NonEmptyMap`) instances |
 | | `mongo4s-bson-medeia` | bridges `medeia`'s `derives BsonDocumentCodec` |
 | | `mongo4s-bson-zio` | bridges `zio-schema-bson` |
 | | `mongo4s-bson-calypso` | bridges `calypso`'s `forProductN` |

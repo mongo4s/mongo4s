@@ -11,5 +11,6 @@ trait TaskToEffectInstance:
     def map[A, B](fa: Task[A])(f: A => B): Task[B]           = fa.map(f)
     def flatMap[A, B](fa: Task[A])(f: A => Task[B]): Task[B] = fa.flatMap(f)
     def raiseError[A](error: Throwable): Task[A]             = Task.error(error)
+    def handleErrorWith[A](fa: Task[A])(f: Throwable => Task[A]): Task[A] = fa.handleError(f)
 
 object TaskToEffectInstance extends TaskToEffectInstance

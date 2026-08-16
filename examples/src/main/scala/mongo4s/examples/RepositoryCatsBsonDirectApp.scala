@@ -13,7 +13,6 @@ import mongo4s.repositories.BaseMongoRepository
 
 import mongo4s.bson.BsonInstances.given
 import mongo4s.cats.CatsInstances.given
-
 import bsonDirectCodecs.given
 
 final case class ApiToken(_id: ObjectId, owner: UserId, label: String, issuedAt: Instant) derives WireCodec
@@ -41,7 +40,7 @@ object RepositoryCatsBsonDirectApp extends IOApp.Simple:
 
         // 1. regular model
         userCollection <- db.getDirectCollection[User]("repo_direct_users")
-        users           = new BaseMongoRepository(userCollection)
+        users           = BaseMongoRepository(userCollection)
         alice           = User(
                             UserId("1"),
                             "Alice",

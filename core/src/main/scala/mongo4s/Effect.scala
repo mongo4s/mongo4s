@@ -8,6 +8,7 @@ trait Effect[F[*]]:
   def map[A, B](fa: F[A])(f: A => B): F[B]
   def flatMap[A, B](fa: F[A])(f: A => F[B]): F[B]
   def raiseError[A](error: Throwable): F[A]
+  def handleErrorWith[A](fa: F[A])(f: Throwable => F[A]): F[A]
 
 object Effect:
   inline def apply[F[*]](using F: Effect[F]): F.type = F
@@ -27,6 +28,7 @@ object Effect:
     if condition then action else F.pure(())
 
   extension [F[*], A](fa: F[A])(using F: Effect[F])
-    def mapF[B](f: A => B): F[B]        = F.map(fa)(f)
-    def flatMapF[B](f: A => F[B]): F[B] = F.flatMap(fa)(f)
-    def voidF: F[Unit]                  = F.map(fa)(_ => ())
+    def mapF[B](f: A => B): F[B]                     = F.map(fa)(f)
+    def flatMapF[B](f: A => F[B]): F[B]              = F.flatMap(fa)(f)
+    def voidF: F[Unit]                               = F.map(fa)(_ => ())
+    def handleErrorWithF(f: Throwable => F[A]): F[A] = F.handleErrorWith(fa)(f)

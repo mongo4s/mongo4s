@@ -5,7 +5,7 @@ lazy val commonSettings = Seq(
   organizationName       := "Mongo4s",
   homepage               := Some(uri("https://mongo4s.org/")),
   description            := "Mongo client, bson-codecs and repositories for Scala 3",
-  version                := "0.1.0",
+  version                := "0.2.0",
   versionScheme          := Some("semver-spec"),
   scalaVersion           := Versions.scalaLTS,
   parallelExecution      := true,
@@ -82,6 +82,15 @@ lazy val bsonDirect = project
   )
   .dependsOn(bsonCore)
 
+lazy val bsonCatsData = project
+  .in(file("bson/cats-data"))
+  .settings(commonSettings)
+  .settings(
+    name := "mongo4s-bson-cats-data",
+    libraryDependencies += Dependencies.Cats.catsCore,
+  )
+  .dependsOn(bsonCore, bsonDirect)
+
 lazy val bson = project
   .in(file("bson"))
   .settings(commonSettings)
@@ -94,6 +103,7 @@ lazy val bson = project
     bsonZio,
     bsonCalypso,
     bsonDirect,
+    bsonCatsData,
   )
 
 lazy val core = project

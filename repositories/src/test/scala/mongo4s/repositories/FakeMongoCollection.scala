@@ -3,13 +3,15 @@ package mongo4s.repositories
 import scala.collection.mutable
 
 import org.bson.{BsonDocument, BsonValue}
-import com.mongodb.reactivestreams.client.MongoCollection as RSMongoCollection
+import com.mongodb.client.model.changestream.FullDocument
+import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
 import mongo4s.{Effect, Field, MongoCollection, Streamable}
 import mongo4s.bson.{BsonDocumentCodec, FieldNaming}
+import mongo4s.changestream.ChangeEvent
 import mongo4s.results.{InsertManyResult, InsertOneResult}
 import mongo4s.queries.{AggregateQuery, DistinctQuery, FindQuery}
-import mongo4s.operations.{Filter, Projection, Sort, Update, WriteCommand}
+import mongo4s.operations.{Filter, Projection, Sort, Stage, Update, WriteCommand}
 
 import scala.jdk.CollectionConverters.given
 
@@ -25,22 +27,21 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   def snapshot: List[E] = storage.flatMap(codec.decodeDocument(_).toOption).toList
 
-  def insertOne(document: E): F[InsertOneResult] = F.delay {
+  def insertOne(document: E)(using session: Option[ClientSession]): F[InsertOneResult] = F.delay {
     val encoded = codec.encodeDocument(document)
     storage += encoded
     InsertOneResult(Option(encoded.get("_id")))
   }
 
-  def insertMany(documents: Seq[E]): F[InsertManyResult] = F.delay {
+  def insertMany(documents: Seq[E])(using session: Option[ClientSession]): F[InsertManyResult] = F.delay {
     val encoded = documents.map(codec.encodeDocument)
     storage ++= encoded
     InsertManyResult(encoded.flatMap(d => Option(d.get("_id"))).toList)
   }
 
-  def find: FindQuery[F, S, E]                    = FakeFindQuery(Filter.all)
-  def find(filter: Filter[E]): FindQuery[F, S, E] = FakeFindQuery(filter)
+  def find(filter: Filter[E])(using session: Option[ClientSession]): FindQuery[F, S, E] = FakeFindQuery(filter)
 
-  def replaceOne(filter: Filter[E], replacement: E, upsert: Boolean): F[Long] = F.delay {
+  def replaceOne(filter: Filter[E], replacement: E, upsert: Boolean)(using session: Option[ClientSession]): F[Long] = F.delay {
     matching(filter).headOption match
       case Some(existing) =>
         storage(storage.indexOf(existing)) = codec.encodeDocument(replacement)
@@ -51,7 +52,7 @@ final class FakeMongoCollection[F[*], S[*], E](
       case None           => 0L
   }
 
-  def updateOne(filter: Filter[E], update: Update[E], upsert: Boolean): F[Long] = F.delay {
+  def updateOne(filter: Filter[E], update: Update[E], upsert: Boolean)(using session: Option[ClientSession]): F[Long] = F.delay {
     matching(filter).headOption match
       case Some(existing) =>
         storage(storage.indexOf(existing)) = applyUpdate(existing, update)
@@ -61,29 +62,28 @@ final class FakeMongoCollection[F[*], S[*], E](
       case None           => 0L
   }
 
-  def updateMany(filter: Filter[E], update: Update[E], upsert: Boolean): F[Long] = F.delay {
+  def updateMany(filter: Filter[E], update: Update[E], upsert: Boolean)(using session: Option[ClientSession]): F[Long] = F.delay {
     val matches = matching(filter)
     matches.foreach(doc => storage(storage.indexOf(doc)) = applyUpdate(doc, update))
     if matches.isEmpty && upsert then throw UnsupportedOperationException("FakeMongoCollection: updateMany(upsert = true) is not simulated")
     matches.size.toLong
   }
 
-  def deleteOne(filter: Filter[E]): F[Long] = F.delay {
+  def deleteOne(filter: Filter[E])(using session: Option[ClientSession]): F[Long] = F.delay {
     matching(filter).headOption match
       case Some(existing) => storage -= existing; 1L
       case None           => 0L
   }
 
-  def deleteMany(filter: Filter[E]): F[Long] = F.delay {
+  def deleteMany(filter: Filter[E])(using session: Option[ClientSession]): F[Long] = F.delay {
     val matches = matching(filter)
     storage --= matches
     matches.size.toLong
   }
 
-  def count: F[Long]                    = F.delay(storage.size.toLong)
-  def count(filter: Filter[E]): F[Long] = F.delay(matching(filter).size.toLong)
+  def count(filter: Filter[E])(using session: Option[ClientSession]): F[Long] = F.delay(matching(filter).size.toLong)
 
-  def bulkWrite(commands: Seq[WriteCommand[E]]): F[Unit] = F.delay {
+  def bulkWrite(commands: Seq[WriteCommand[E]])(using session: Option[ClientSession]): F[Unit] = F.delay {
     commands.foreach {
       case WriteCommand.InsertOne(document)           => storage += codec.encodeDocument(document)
       case WriteCommand.ReplaceOne(filter, value, up) =>
@@ -100,13 +100,16 @@ final class FakeMongoCollection[F[*], S[*], E](
     }
   }
 
-  def aggregate[B](pipeline: Seq[BsonDocument])(using BsonDocumentCodec[B]): AggregateQuery[F, S, B] =
+  def aggregate[B](pipeline: Seq[Stage[E]])(using session: Option[ClientSession])(using BsonDocumentCodec[B]): AggregateQuery[F, S, B] =
     throw UnsupportedOperationException("FakeMongoCollection: aggregate is not simulated")
 
-  def distinct[C, B](field: Field[E, C], filter: Filter[E])(using mongo4s.bson.BsonDecoder[B]): DistinctQuery[F, S, B] =
+  def distinct[C, B](field: Field[E, C], filter: Filter[E])(using session: Option[ClientSession])(using mongo4s.bson.BsonDecoder[B]): DistinctQuery[F, S, B] =
     throw UnsupportedOperationException("FakeMongoCollection: distinct is not simulated")
 
-  def watch(using Streamable[S, BsonDocument]): S[BsonDocument] = throw UnsupportedOperationException("FakeMongoCollection: watch is not simulated")
+  def watch(pipeline: Seq[BsonDocument], fullDocument: FullDocument)(
+      using session: Option[ClientSession]
+  )(using Streamable[S, ChangeEvent[E]]): S[ChangeEvent[E]] =
+    throw UnsupportedOperationException("FakeMongoCollection: watch is not simulated")
 
   def underlying: RSMongoCollection[BsonDocument] =
     throw UnsupportedOperationException("FakeMongoCollection: no real driver collection behind this fake")

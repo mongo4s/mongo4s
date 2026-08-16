@@ -47,7 +47,7 @@ final class BaseMongoRepositorySpec extends AsyncWordSpec, AsyncIOSpec, Matchers
 
   private def repo(batchSize: Int = 500): (FakeMongoCollection[IO, S, Person], BaseMongoRepository[IO, S, Person, String]) =
     val collection = FakeMongoCollection[IO, S, Person](summon[BsonDocumentCodec[Person]], list => fs2.Stream.emits(list))
-    (collection, new BaseMongoRepository(collection, batchSize))
+    (collection, BaseMongoRepository(collection, batchSize))
 
   "findOne" should {
     "return the entity matching the key" in {
@@ -186,7 +186,7 @@ final class BaseMongoRepositorySpec extends AsyncWordSpec, AsyncIOSpec, Matchers
       val (collection, repository) = repo()
       for
         _        <- collection.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 25)))
-        total    <- repository.count
+        total    <- repository.count()
         filtered <- repository.count(Field.of[Person, Int](_.age).gt(26))
       yield
         total shouldBe 2L

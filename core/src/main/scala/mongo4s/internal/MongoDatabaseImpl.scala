@@ -3,11 +3,15 @@ package mongo4s.internal
 import scala.reflect.ClassTag
 
 import org.bson.BsonDocument
-import com.mongodb.reactivestreams.client.MongoDatabase as RSMongoDatabase
+import com.mongodb.client.model.changestream.FullDocument
+import com.mongodb.reactivestreams.client.{ChangeStreamPublisher, ClientSession, MongoDatabase as RSMongoDatabase}
 
 import mongo4s.bson.direct.WireCodec
-import mongo4s.bson.{BsonDocumentCodec, FieldNaming}
+import mongo4s.bson.{BsonDocumentCodec, BsonDocumentDecoder, FieldNaming}
+import mongo4s.changestream.ChangeEvent
 import mongo4s.{Effect, MongoCollection, MongoDatabase, RsBridge, Streamable}
+
+import scala.jdk.CollectionConverters.given
 
 private[mongo4s] final class MongoDatabaseImpl[F[*], S[*]](
     val underlying: RSMongoDatabase,
@@ -28,8 +32,56 @@ private[mongo4s] final class MongoDatabaseImpl[F[*], S[*]](
   )(using WireCodec[A], ClassTag[A]): F[MongoCollection[F, S, A]] =
     F.delay(DirectMongoCollectionImpl(underlying.getCollection(collectionName, classOf[BsonDocument]), naming))
 
-  def listCollectionNames(using Streamable[S, String]): S[String]         = rs.stream(underlying.listCollectionNames())
-  def listCollections(using Streamable[S, BsonDocument]): S[BsonDocument] = rs.stream(underlying.listCollections(classOf[BsonDocument]))
-  def createCollection(name: String): F[Unit]                             = rs.unit(underlying.createCollection(name))
-  def runCommand(command: BsonDocument): F[BsonDocument]                  = rs.one(underlying.runCommand(command, classOf[BsonDocument]))
-  def drop: F[Unit]                                                       = rs.unit(underlying.drop())
+  def listCollectionNames(using session: Option[ClientSession])(using Streamable[S, String]): S[String] =
+    val publisher = session match
+      case Some(s) => underlying.listCollectionNames(s)
+      case None    => underlying.listCollectionNames()
+    rs.stream(publisher)
+
+  def listCollections(using session: Option[ClientSession])(using Streamable[S, BsonDocument]): S[BsonDocument] =
+    val publisher = session match
+      case Some(s) => underlying.listCollections(s, classOf[BsonDocument])
+      case None    => underlying.listCollections(classOf[BsonDocument])
+    rs.stream(publisher)
+
+  def createCollection(name: String)(using session: Option[ClientSession]): F[Unit] =
+    val publisher = session match
+      case Some(s) => underlying.createCollection(s, name)
+      case None    => underlying.createCollection(name)
+    rs.unit(publisher)
+
+  def runCommand(command: BsonDocument)(using session: Option[ClientSession]): F[BsonDocument] =
+    val publisher = session match
+      case Some(s) => underlying.runCommand(s, command, classOf[BsonDocument])
+      case None    => underlying.runCommand(command, classOf[BsonDocument])
+    rs.one(publisher)
+
+  def drop(using session: Option[ClientSession]): F[Unit] =
+    val publisher = session match
+      case Some(s) => underlying.drop(s)
+      case None    => underlying.drop()
+    rs.unit(publisher)
+
+  def watch(pipeline: Seq[BsonDocument], fullDocument: FullDocument)(using
+      session: Option[ClientSession]
+  )(using Streamable[S, ChangeEvent[BsonDocument]]): S[ChangeEvent[BsonDocument]] =
+    rs.stream(DecodingPublisher(changeStreamPublisher(pipeline, fullDocument), doc => ChangeEvent.fromDriver(doc, Right(_))))
+
+  def watchAs[A](pipeline: Seq[BsonDocument], fullDocument: FullDocument)(using
+      session: Option[ClientSession]
+  )(using decoder: BsonDocumentDecoder[A])(using Streamable[S, ChangeEvent[A]]): S[ChangeEvent[A]] =
+    rs.stream(DecodingPublisher(changeStreamPublisher(pipeline, fullDocument), doc => ChangeEvent.fromDriver(doc, decoder.decodeDocument)))
+
+  private def changeStreamPublisher(pipeline: Seq[BsonDocument], fullDocument: FullDocument)(using
+      session: Option[ClientSession]
+  ): ChangeStreamPublisher[BsonDocument] =
+    val base =
+      if pipeline.isEmpty then
+        session match
+          case Some(s) => underlying.watch(s, classOf[BsonDocument])
+          case None    => underlying.watch(classOf[BsonDocument])
+      else
+        session match
+          case Some(s) => underlying.watch(s, pipeline.asJava, classOf[BsonDocument])
+          case None    => underlying.watch(pipeline.asJava, classOf[BsonDocument])
+    base.fullDocument(fullDocument)

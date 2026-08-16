@@ -11,5 +11,5 @@ trait BsonDecoder[A]:
   final def emap[B](f: A => Either[BsonError, B]): BsonDecoder[B] =
     (bson: BsonValue) => decode(bson).flatMap(f)
 
-object BsonDecoder:
+object BsonDecoder extends DefaultBsonDecoderInstances:
   inline def apply[A](using instance: BsonDecoder[A]): BsonDecoder[A] = instance

@@ -15,4 +15,6 @@ trait KyoEffectInstance:
 
     def raiseError[A](error: Throwable): KIO[A] = Abort.fail(error)
 
+    def handleErrorWith[A](fa: KIO[A])(f: Throwable => KIO[A]): KIO[A] = Abort.recover[Throwable](f, f)(fa)
+
 object KyoEffectInstance extends KyoEffectInstance

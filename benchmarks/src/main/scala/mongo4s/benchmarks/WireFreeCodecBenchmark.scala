@@ -1,46 +1,26 @@
 package mongo4s.benchmarks
 
-import org.bson.*
-import org.bson.codecs.{BsonDocumentCodec as DriverBsonDocumentCodec, DecoderContext, EncoderContext}
-import org.bson.io.{BasicOutputBuffer, ByteBufferBsonInput}
-import org.openjdk.jmh.annotations.*
-
 import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
 
+import org.openjdk.jmh.annotations.*
+
+import org.bson.*
+import org.bson.codecs.{BsonDocumentCodec as DriverBsonDocumentCodec, DecoderContext, EncoderContext}
+import org.bson.io.{BasicOutputBuffer, ByteBufferBsonInput}
+
 import mongo4s.bson.medeia.MedeiaDocumentCodec
 
-// Research: is a hand-written, direct-to-BsonWriter/BsonReader codec (jsoniter-scala's whole
-// premise, applied to BSON instead of JSON) actually faster than going through org.bson.BsonValue
-// as an intermediate AST, the way medeia/calypso/zio-bson (and mongo4s itself) do today?
-//
-// org.bson's own Codec[T] interface (encode(BsonWriter, T, EncoderContext) / decode(BsonReader,
-// DecoderContext)) is *already* AST-free and streaming - BsonWriter.writeInt32(name, value) writes
-// straight to the output buffer, no BsonInt32 wrapper object, no BsonDocument (a LinkedHashMap-like
-// structure) ever built. Both paths below go the full case-class-to-bytes distance so the
-// comparison is fair (medeia's own codec benchmark numbers stop at BsonDocument, one step short of
-// wire bytes):
-//
-//   medeiaFull*  - Person <-> BsonDocument (medeia's derived codec) <-> bytes (driver's own
-//                  BsonDocumentCodec against a real BsonBinaryWriter/Reader)
-//   direct*      - Person <-> bytes directly, hand-written against BsonWriter/BsonReader, no
-//                  BsonDocument ever constructed
-//
-// Run with `-prof gc` for gc.alloc.rate.norm (bytes/op):
-//   sbt "benchmarks/Jmh/run -prof gc WireFreeCodecBenchmark"
 object WireFreeCodecBenchmark:
 
   final case class Address(city: String, zip: String) derives MedeiaDocumentCodec
-  final case class Person(id: String, name: String, age: Int, score: Double, active: Boolean, tags: List[String], address: Address)
-      derives MedeiaDocumentCodec
+  final case class Person(id: String, name: String, age: Int, score: Double, active: Boolean, tags: List[String], address: Address) derives MedeiaDocumentCodec
 
   private val driverDocCodec = DriverBsonDocumentCodec()
 
   private def medeiaCodec: mongo4s.bson.BsonDocumentCodec[Person] =
     import mongo4s.bson.medeia.MedeiaInstances.given
     summon[mongo4s.bson.BsonDocumentCodec[Person]]
-
-  // ---- direct-to-wire: hand-written against the streaming BsonWriter/BsonReader API ----
 
   private def encodeDirect(writer: BsonWriter, p: Person): Unit =
     writer.writeStartDocument()
@@ -70,12 +50,12 @@ object WireFreeCodecBenchmark:
     var zip    = ""
     while reader.readBsonType() != BsonType.END_OF_DOCUMENT do
       reader.readName() match
-        case "id"     => id = reader.readString()
-        case "name"   => name = reader.readString()
-        case "age"    => age = reader.readInt32()
-        case "score"  => score = reader.readDouble()
-        case "active" => active = reader.readBoolean()
-        case "tags"   =>
+        case "id"      => id = reader.readString()
+        case "name"    => name = reader.readString()
+        case "age"     => age = reader.readInt32()
+        case "score"   => score = reader.readDouble()
+        case "active"  => active = reader.readBoolean()
+        case "tags"    =>
           reader.readStartArray()
           val builder = List.newBuilder[String]
           while reader.readBsonType() != BsonType.END_OF_DOCUMENT do builder += reader.readString()
@@ -88,7 +68,7 @@ object WireFreeCodecBenchmark:
               case "city" => city = reader.readString()
               case "zip"  => zip = reader.readString()
           reader.readEndDocument()
-        case _ => reader.skipValue()
+        case _         => reader.skipValue()
     reader.readEndDocument()
     Person(id, name, age, score, active, tags, Address(city, zip))
 
@@ -102,7 +82,7 @@ object WireFreeCodecBenchmark:
   private def readerOf(bytes: Array[Byte]): BsonReader =
     BsonBinaryReader(ByteBufferBsonInput(ByteBufNIO(ByteBuffer.wrap(bytes))))
 
-  def encodeDirectFull(p: Person): Array[Byte] = toBytes(w => encodeDirect(w, p))
+  def encodeDirectFull(p: Person): Array[Byte]     = toBytes(w => encodeDirect(w, p))
   def decodeDirectFull(bytes: Array[Byte]): Person = decodeDirect(readerOf(bytes))
 
   def encodeMedeiaFull(p: Person): Array[Byte] =

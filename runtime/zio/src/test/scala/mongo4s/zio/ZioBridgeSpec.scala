@@ -1,11 +1,15 @@
 package mongo4s.zio
 
-import zio.{Runtime, Task, Unsafe}
-import mongo4s.zio.ZioInstances.given
-import mongo4s.{Effect, RsBridge}
-import org.reactivestreams.{Publisher, Subscriber, Subscription}
-import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.matchers.should.Matchers
+
+import zio.{Runtime, Task, Unsafe}
+import org.reactivestreams.{Publisher, Subscriber, Subscription}
+
+import mongo4s.{Effect, RsBridge, RsBridgeConfig, RsBridgeError}
+
+import scala.concurrent.duration.given
+import mongo4s.zio.ZioInstances.given
 
 object ZioBridgeSpec:
   final class ListPublisher[A](items: List[A]) extends Publisher[A]:
@@ -24,8 +28,16 @@ object ZioBridgeSpec:
           def cancel(): Unit         = cancelled = true
       )
 
+  final class NeverPublisher[A]() extends Publisher[A]:
+    def subscribe(subscriber: Subscriber[? >: A]): Unit =
+      subscriber.onSubscribe(
+        new Subscription:
+          def request(n: Long): Unit = ()
+          def cancel(): Unit         = ()
+      )
+
 final class ZioBridgeSpec extends AnyWordSpec, Matchers:
-  import ZioBridgeSpec.ListPublisher
+  import ZioBridgeSpec.{ListPublisher, NeverPublisher}
 
   private val bridge = summon[RsBridge[Task, ZioStream]]
   private val effect = summon[Effect[Task]]
@@ -48,6 +60,33 @@ final class ZioBridgeSpec extends AnyWordSpec, Matchers:
     }
     "expose a stream" in {
       run(bridge.stream(ListPublisher(List(1, 2, 3))).runCollect).toList shouldBe List(1, 2, 3)
+    }
+  }
+
+  "zio RsBridge with strictSingleResult" should {
+    given RsBridgeConfig = RsBridgeConfig.Default.copy(strictSingleResult = true)
+    val strictBridge     = summon[RsBridge[Task, ZioStream]]
+
+    "fail one with TooManyResults for a 2-element publisher" in {
+      run(strictBridge.one(ListPublisher(List(1, 2))).either) shouldBe Left(RsBridgeError.TooManyResults(2))
+    }
+    "fail one with EmptyResult for an empty publisher" in {
+      run(strictBridge.one(ListPublisher(List.empty[Int])).either) shouldBe Left(RsBridgeError.EmptyResult())
+    }
+  }
+
+  "zio RsBridge with strictSingleResult disabled (default)" should {
+    "still return the first element for a 2-element publisher (regression guard)" in {
+      run(bridge.one(ListPublisher(List(1, 2)))) shouldBe 1
+    }
+  }
+
+  "zio RsBridge with a timeout" should {
+    given RsBridgeConfig = RsBridgeConfig.Default.copy(timeout = Some(50.millis))
+    val timeoutBridge    = summon[RsBridge[Task, ZioStream]]
+
+    "fail with RsBridgeError.Timeout when the publisher never completes" in {
+      run(timeoutBridge.list(NeverPublisher[Int]()).either) shouldBe Left(RsBridgeError.Timeout(50.millis))
     }
   }
 

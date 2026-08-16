@@ -3,8 +3,6 @@ package mongo4s.benchmarks
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
-import scala.concurrent.duration.*
-
 import org.openjdk.jmh.annotations.*
 
 import kyo.{AllowUnsafe, Duration as KyoDuration, KyoApp, Sync as KyoSync}
@@ -25,6 +23,7 @@ import mongo4s.rapid.RapidStream
 import mongo4s.{Field, MongoClient as Mongo4sClient, Streamable}
 import mongo4s.benchmarks.CodecBenchmark.{Address, Person}
 
+import scala.concurrent.duration.given
 import io.circe.generic.auto.given
 import mongo4s.zio.ZioInstances.given
 import mongo4s.bson.BsonInstances.given
@@ -48,9 +47,6 @@ private object RuntimeBenchmark:
   )
 
   private type PolyRun[F[*]]         = [A] => F[A] => A
-  // Fixed to `Person`, not generic `[A] => S[A] => F[List[A]]` - every call site only ever drains a
-  // `Person` stream, and keeping it concrete lets the kyo backend derive its `Tag[Emit[Chunk[Person]]]`
-  // (a truly generic `[A]` implementation couldn't - see mongo4s.Streamable / KyoBridgeInstance).
   private type PolyDrain[F[*], S[*]] = S[Person] => F[List[Person]]
 
 @State(Scope.Benchmark)
@@ -148,9 +144,6 @@ class RuntimeBenchmark:
       count = () => run(readC.count(activeFilterM4s)),
     )
 
-  // Same shape as buildMongo4sOps, but through getDirectCollection (WireCodec, no BsonDocument on the
-  // hot path) instead of getCollection (BsonDocumentCodec/medeia) - isolates the codec choice's effect
-  // against real MongoDB, holding the runtime (cats-effect) constant.
   private def buildMongo4sDirectOps[F[*], S[*]](
       client: Mongo4sClient[F, S],
       run: PolyRun[F],
@@ -185,9 +178,6 @@ class RuntimeBenchmark:
       count = () => run(readC.count(activeFilterM4s)),
     )
 
-  // `codecProvider` is an explicit `using` parameter (not resolved from the class-level
-  // `personCodecProvider` given fixed at this function's own definition site) so each call site can
-  // supply a different codec (circe vs zio-json) without the two ever being simultaneously ambiguous.
   private def buildMongo4catsOps[F[*], S[*], R[*]](
       client: GenericMongoClient[F, S, R],
       run: PolyRun[F],
@@ -230,14 +220,14 @@ class RuntimeBenchmark:
 
   private var closers: List[() => Unit] = Nil
 
-  private var catsOps: Ops             = scala.compiletime.uninitialized
-  private var catsDirectOps: Ops       = scala.compiletime.uninitialized
-  private var zioOps: Ops              = scala.compiletime.uninitialized
-  private var rapidOps: Ops            = scala.compiletime.uninitialized
-  private var kyoOps: Ops              = scala.compiletime.uninitialized
-  private var m4cCatsOps: Ops          = scala.compiletime.uninitialized
-  private var m4cCatsZioJsonOps: Ops   = scala.compiletime.uninitialized
-  private var m4cZioOps: Ops           = scala.compiletime.uninitialized
+  private var catsOps: Ops           = scala.compiletime.uninitialized
+  private var catsDirectOps: Ops     = scala.compiletime.uninitialized
+  private var zioOps: Ops            = scala.compiletime.uninitialized
+  private var rapidOps: Ops          = scala.compiletime.uninitialized
+  private var kyoOps: Ops            = scala.compiletime.uninitialized
+  private var m4cCatsOps: Ops        = scala.compiletime.uninitialized
+  private var m4cCatsZioJsonOps: Ops = scala.compiletime.uninitialized
+  private var m4cZioOps: Ops         = scala.compiletime.uninitialized
 
   @Setup(Level.Trial)
   def setup(): Unit =
@@ -262,8 +252,7 @@ class RuntimeBenchmark:
     val (m4cCatsClient, closeM4cCats) = M4CClient.fromConnectionString[IO](connectionString).allocated.unsafeRunSync()
     closers ::= (() => closeM4cCats.unsafeRunSync())
     m4cCatsOps = buildMongo4catsOps(m4cCatsClient, polyCatsRun, polyMongo4catsCatsDrain, "m4c_cats")
-    m4cCatsZioJsonOps =
-      buildMongo4catsOps(m4cCatsClient, polyCatsRun, polyMongo4catsCatsDrain, "m4c_cats_ziojson")(using zioJsonCodecProvider)
+    m4cCatsZioJsonOps = buildMongo4catsOps(m4cCatsClient, polyCatsRun, polyMongo4catsCatsDrain, "m4c_cats_ziojson")(using zioJsonCodecProvider)
 
     val zScope  = zioRun(ZScope.make)
     val zClient = zioRun(zScope.extend(ZMongoClient.fromConnectionString(connectionString)))

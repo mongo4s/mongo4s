@@ -4,8 +4,8 @@ import kyo.*
 import kyo.interop.reactivestreams.fromPublisher
 import org.reactivestreams.Publisher
 
-import mongo4s.internal.PublisherCollector
-import mongo4s.{RsBridge, RsBridgeConfig, Streamable}
+import mongo4s.internal.{PublisherCollector, RsBridgeSupport}
+import mongo4s.{RsBridge, RsBridgeConfig, RsBridgeError, Streamable}
 
 trait KyoBridgeInstance:
 
@@ -13,12 +13,24 @@ trait KyoBridgeInstance:
     KyoBridgeInstance.KyoStreamable(emitTag, pollTag)
 
   given (config: RsBridgeConfig) => RsBridge[KIO, KStream] = new RsBridge[KIO, KStream]:
-    def list[A](publisher: => Publisher[A]): KIO[List[A]] =
-      Abort.catching(Async.fromCompletableFuture(PublisherCollector.collect(publisher)))
+    private def liftEither[A](either: Either[RsBridgeError, A]): KIO[A] = either match
+      case Right(a)    => a
+      case Left(error) => Abort.fail[Throwable](error)
 
-    def one[A](publisher: => Publisher[A]): KIO[A]            = list(publisher).map(_.head)
-    def option[A](publisher: => Publisher[A]): KIO[Option[A]] = list(publisher).map(_.headOption)
-    def unit[A](publisher: => Publisher[A]): KIO[Unit]        = list(publisher).map(_ => ())
+    private def withTimeout[A](kio: KIO[A]): KIO[A] = config.timeout match
+      case Some(d) => Async.timeoutWithError(Duration.fromScala(d), Result.Failure(RsBridgeError.Timeout(d)))(kio)
+      case None    => kio
+
+    def list[A](publisher: => Publisher[A]): KIO[List[A]] =
+      withTimeout(Abort.catching(Async.fromCompletableFuture(PublisherCollector.collect(publisher))))
+
+    def one[A](publisher: => Publisher[A]): KIO[A] =
+      list(publisher).flatMap(xs => liftEither(RsBridgeSupport.selectOne(xs, config.strictSingleResult)))
+
+    def option[A](publisher: => Publisher[A]): KIO[Option[A]] =
+      list(publisher).flatMap(xs => liftEither(RsBridgeSupport.selectOption(xs, config.strictSingleResult)))
+
+    def unit[A](publisher: => Publisher[A]): KIO[Unit] = list(publisher).map(_ => ())
 
     def stream[A](publisher: => Publisher[A])(using ev: Streamable[KStream, A]): KStream[A] =
       val streamable            = ev.asInstanceOf[KyoBridgeInstance.KyoStreamable[A]]

@@ -35,3 +35,42 @@ trait WirePrimitiveInstances extends WireFallbackInstances:
       while reader.readBsonType() != BsonType.END_OF_DOCUMENT do builder += inner.decode(reader)
       reader.readEndArray()
       builder.result()
+
+  given vectorWireCodec[A](using inner: WireCodec[A]): WireCodec[Vector[A]] with
+    def encode(writer: BsonWriter, values: Vector[A]): Unit =
+      writer.writeStartArray()
+      values.foreach(inner.encode(writer, _))
+      writer.writeEndArray()
+
+    def decode(reader: BsonReader): Vector[A] =
+      reader.readStartArray()
+      val builder = Vector.newBuilder[A]
+      while reader.readBsonType() != BsonType.END_OF_DOCUMENT do builder += inner.decode(reader)
+      reader.readEndArray()
+      builder.result()
+
+  given seqWireCodec[A](using inner: WireCodec[A]): WireCodec[Seq[A]] with
+    def encode(writer: BsonWriter, values: Seq[A]): Unit =
+      writer.writeStartArray()
+      values.foreach(inner.encode(writer, _))
+      writer.writeEndArray()
+
+    def decode(reader: BsonReader): Seq[A] =
+      reader.readStartArray()
+      val builder = Seq.newBuilder[A]
+      while reader.readBsonType() != BsonType.END_OF_DOCUMENT do builder += inner.decode(reader)
+      reader.readEndArray()
+      builder.result()
+
+  given setWireCodec[A](using inner: WireCodec[A]): WireCodec[Set[A]] with
+    def encode(writer: BsonWriter, values: Set[A]): Unit =
+      writer.writeStartArray()
+      values.foreach(inner.encode(writer, _))
+      writer.writeEndArray()
+
+    def decode(reader: BsonReader): Set[A] =
+      reader.readStartArray()
+      val builder = Set.newBuilder[A]
+      while reader.readBsonType() != BsonType.END_OF_DOCUMENT do builder += inner.decode(reader)
+      reader.readEndArray()
+      builder.result()

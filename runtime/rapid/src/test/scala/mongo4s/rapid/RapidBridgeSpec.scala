@@ -1,11 +1,15 @@
 package mongo4s.rapid
 
-import rapid.Task
-import mongo4s.rapid.RapidInstances.given
-import mongo4s.{Effect, RsBridge}
-import org.reactivestreams.{Publisher, Subscriber, Subscription}
-import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.matchers.should.Matchers
+
+import rapid.Task
+import org.reactivestreams.{Publisher, Subscriber, Subscription}
+
+import mongo4s.{Effect, RsBridge, RsBridgeConfig, RsBridgeError}
+
+import scala.concurrent.duration.given
+import mongo4s.rapid.RapidInstances.given
 
 object RapidBridgeSpec:
   final class ListPublisher[A](items: List[A]) extends Publisher[A]:
@@ -24,8 +28,16 @@ object RapidBridgeSpec:
           def cancel(): Unit         = cancelled = true
       )
 
+  final class NeverPublisher[A] extends Publisher[A]:
+    def subscribe(subscriber: Subscriber[? >: A]): Unit =
+      subscriber.onSubscribe(
+        new Subscription:
+          def request(n: Long): Unit = ()
+          def cancel(): Unit         = ()
+      )
+
 final class RapidBridgeSpec extends AnyWordSpec, Matchers:
-  import RapidBridgeSpec.ListPublisher
+  import RapidBridgeSpec.{ListPublisher, NeverPublisher}
 
   private val bridge = summon[RsBridge[Task, RapidStream]]
   private val effect = summon[Effect[Task]]
@@ -45,6 +57,33 @@ final class RapidBridgeSpec extends AnyWordSpec, Matchers:
     }
     "expose a stream" in {
       bridge.stream(ListPublisher(List(1, 2, 3))).toList.sync() shouldBe List(1, 2, 3)
+    }
+  }
+
+  "rapid RsBridge with strictSingleResult" should {
+    given RsBridgeConfig = RsBridgeConfig.Default.copy(strictSingleResult = true)
+    val strictBridge     = summon[RsBridge[Task, RapidStream]]
+
+    "fail one with TooManyResults for a 2-element publisher" in {
+      intercept[RsBridgeError.TooManyResults](strictBridge.one(ListPublisher(List(1, 2))).sync()) shouldBe RsBridgeError.TooManyResults(2)
+    }
+    "fail one with EmptyResult for an empty publisher" in {
+      intercept[RsBridgeError.EmptyResult](strictBridge.one(ListPublisher(List.empty[Int])).sync()) shouldBe RsBridgeError.EmptyResult()
+    }
+  }
+
+  "rapid RsBridge with strictSingleResult disabled (default)" should {
+    "still return the first element for a 2-element publisher (regression guard)" in {
+      bridge.one(ListPublisher(List(1, 2))).sync() shouldBe 1
+    }
+  }
+
+  "rapid RsBridge with a timeout" should {
+    given RsBridgeConfig = RsBridgeConfig.Default.copy(timeout = Some(50.millis))
+    val timeoutBridge    = summon[RsBridge[Task, RapidStream]]
+
+    "fail with RsBridgeError.Timeout when the publisher never completes" in {
+      intercept[RsBridgeError.Timeout](timeoutBridge.list(NeverPublisher[Int]()).sync()) shouldBe RsBridgeError.Timeout(50.millis)
     }
   }
 

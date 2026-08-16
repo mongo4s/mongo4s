@@ -1,238 +1,563 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>mongo4s — effect-agnostic MongoDB client for Scala 3</title>
-<meta name="description" content="Effect-agnostic MongoDB client and repository layer for Scala 3 — any runtime, any BSON codec, AST-free by default."/>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8D%83%3C/text%3E%3C/svg%3E"/>
-<style>
-  :root {
-    --bg: #ffffff;
-    --fg: #1f2328;
-    --muted: #57606a;
-    --accent: #116329;
-    --code-bg: #f6f8fa;
-    --border: #d0d7de;
-    --good: #1a7f37;
-    --bad: #cf222e;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0d1117;
-      --fg: #e6edf3;
-      --muted: #9198a1;
-      --accent: #4ac26b;
-      --code-bg: #161b22;
-      --border: #30363d;
-      --good: #3fb950;
-      --bad: #f85149;
-    }
-  }
-  * { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--fg);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    line-height: 1.65;
-    font-size: 17px;
-  }
-  .wrap { max-width: 820px; margin: 0 auto; padding: 0 24px 96px; }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  header.hero { text-align: center; padding: 64px 0 24px; }
-  header.hero .glyph { font-size: 72px; line-height: 1; display: block; }
-  header.hero .logo { width: 160px; height: auto; display: block; margin: 0 auto; }
-  h1 { font-size: 2.6rem; margin: 16px 0 4px; letter-spacing: -0.02em; }
-  .tagline { color: var(--muted); font-size: 1.15rem; margin: 0 auto; max-width: 560px; }
-  .badges { text-align: center; margin: 16px 0 0; }
-  .badges img { height: 20px; margin: 2px 4px; vertical-align: middle; }
-  nav.links { text-align: center; margin: 22px 0 8px; }
-  nav.links a { display: inline-block; margin: 0 10px; font-weight: 600; }
-  nav.jump {
-    text-align: center; font-size: 0.92rem; padding: 16px 0;
-    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-    margin: 24px 0 40px; color: var(--muted);
-  }
-  nav.jump a { margin: 0 8px; white-space: nowrap; }
-  h2 { font-size: 1.6rem; margin: 56px 0 12px; padding-top: 8px; letter-spacing: -0.01em; }
-  h3 { font-size: 1.15rem; margin: 28px 0 8px; }
-  p { margin: 12px 0; }
-  code {
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 0.88em;
-    background: var(--code-bg);
-    padding: 2px 6px;
-    border-radius: 5px;
-  }
-  pre {
-    background: var(--code-bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-    overflow-x: auto;
-    line-height: 1.5;
-  }
-  pre code { background: none; padding: 0; font-size: 0.86rem; }
-  .muted { color: var(--muted); }
-  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.92rem; display: block; overflow-x: auto; }
-  th, td { border: 1px solid var(--border); padding: 7px 12px; text-align: left; vertical-align: top; }
-  th { background: var(--code-bg); font-weight: 600; }
-  td code, th code { background: none; padding: 0; }
-  .lead { font-size: 1.1rem; }
-  ul { padding-left: 22px; }
-  li { margin: 6px 0; }
-  footer { text-align: center; color: var(--muted); font-size: 0.9rem; margin-top: 72px; padding-top: 24px; border-top: 1px solid var(--border); }
-  .num { text-align: right; font-variant-numeric: tabular-nums; }
-  .best { color: var(--good); }
-  .worst { color: var(--bad); }
-  @media (max-width: 600px) {
-    body { font-size: 16px; }
-    h1 { font-size: 2.1rem; }
-    .wrap { padding: 0 16px 64px; }
-  }
-</style>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>mongo4s — effect-agnostic MongoDB client for Scala 3</title>
+    <meta name="description"
+          content="Effect-agnostic MongoDB client and repository layer for Scala 3 — any runtime, any BSON codec, AST-free by default."/>
+    <link rel="icon"
+          href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8D%83%3C/text%3E%3C/svg%3E"/>
+    <style>
+        :root {
+            --bg: #ffffff;
+            --fg: #1f2328;
+            --muted: #57606a;
+            --accent: #116329;
+            --code-bg: #f6f8fa;
+            --border: #d0d7de;
+            --good: #1a7f37;
+            --bad: #cf222e;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0d1117;
+                --fg: #e6edf3;
+                --muted: #9198a1;
+                --accent: #4ac26b;
+                --code-bg: #161b22;
+                --border: #30363d;
+                --good: #3fb950;
+                --bad: #f85149;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            -webkit-text-size-adjust: 100%;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--fg);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            line-height: 1.65;
+            font-size: 17px;
+        }
+
+        .wrap {
+            max-width: 820px;
+            margin: 0 auto;
+            padding: 0 24px 96px;
+        }
+
+        a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        header.hero {
+            text-align: center;
+            padding: 64px 0 24px;
+        }
+
+        header.hero .glyph {
+            font-size: 72px;
+            line-height: 1;
+            display: block;
+        }
+
+        header.hero .logo {
+            width: 160px;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 2.6rem;
+            margin: 16px 0 4px;
+            letter-spacing: -0.02em;
+        }
+
+        .tagline {
+            color: var(--muted);
+            font-size: 1.15rem;
+            margin: 0 auto;
+            max-width: 560px;
+        }
+
+        .badges {
+            text-align: center;
+            margin: 16px 0 0;
+        }
+
+        .badges img {
+            height: 20px;
+            margin: 2px 4px;
+            vertical-align: middle;
+        }
+
+        nav.links {
+            text-align: center;
+            margin: 22px 0 8px;
+        }
+
+        nav.links a {
+            display: inline-block;
+            margin: 0 10px;
+            font-weight: 600;
+        }
+
+        nav.jump {
+            text-align: center;
+            font-size: 0.92rem;
+            padding: 16px 0;
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            margin: 24px 0 40px;
+            color: var(--muted);
+        }
+
+        nav.jump a {
+            margin: 0 8px;
+            white-space: nowrap;
+        }
+
+        h2 {
+            font-size: 1.6rem;
+            margin: 56px 0 12px;
+            padding-top: 8px;
+            letter-spacing: -0.01em;
+        }
+
+        h3 {
+            font-size: 1.15rem;
+            margin: 28px 0 8px;
+        }
+
+        p {
+            margin: 12px 0;
+        }
+
+        code {
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+            font-size: 0.88em;
+            background: var(--code-bg);
+            padding: 2px 6px;
+            border-radius: 5px;
+        }
+
+        pre {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+            line-height: 1.5;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            font-size: 0.86rem;
+        }
+
+        .muted {
+            color: var(--muted);
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 16px 0;
+            font-size: 0.92rem;
+            display: block;
+            overflow-x: auto;
+        }
+
+        th, td {
+            border: 1px solid var(--border);
+            padding: 7px 12px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            background: var(--code-bg);
+            font-weight: 600;
+        }
+
+        td code, th code {
+            background: none;
+            padding: 0;
+        }
+
+        .lead {
+            font-size: 1.1rem;
+        }
+
+        ul {
+            padding-left: 22px;
+        }
+
+        li {
+            margin: 6px 0;
+        }
+
+        footer {
+            text-align: center;
+            color: var(--muted);
+            font-size: 0.9rem;
+            margin-top: 72px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
+        }
+
+        .num {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .best {
+            color: var(--good);
+        }
+
+        .worst {
+            color: var(--bad);
+        }
+
+        @media (max-width: 600px) {
+            body {
+                font-size: 16px;
+            }
+
+            h1 {
+                font-size: 2.1rem;
+            }
+
+            .wrap {
+                padding: 0 16px 64px;
+            }
+        }
+    </style>
 </head>
 <body>
 <div class="wrap">
 
-  <header class="hero">
-    <img class="logo" src="mongo4s.png" alt="mongo4s logo"/>
-    <h1>mongo4s</h1>
-    <p class="tagline">Effect-agnostic MongoDB client and repository layer for Scala 3 — any runtime, any BSON codec, AST-free by default.</p>
-    <p class="badges">
-      <a href="https://github.com/mongo4s/mongo4s/actions/workflows/ci.yml"><img src="https://github.com/mongo4s/mongo4s/actions/workflows/ci.yml/badge.svg" alt="CI status"/></a>
-      <a href="https://central.sonatype.com/search?q=mongo4s"><img src="https://img.shields.io/maven-central/v/org.mongo4s/mongo4s-core_3?color=blue" alt="Maven Central version"/></a>
-      <a href="https://www.scala-lang.org/"><img src="https://img.shields.io/badge/Scala-3-blue" alt="Scala 3"/></a>
-      <a href="https://github.com/mongo4s/mongo4s/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="Apache 2.0 license"/></a>
-    </p>
-    <nav class="links">
-      <a href="https://github.com/mongo4s/mongo4s">GitHub</a>
-      <a href="https://central.sonatype.com/search?q=mongo4s">Maven Central</a>
-      <a href="https://github.com/mongo4s/mongo4s/blob/main/LICENSE">Apache 2.0</a>
+    <header class="hero">
+        <img class="logo" src="mongo4s.png" alt="mongo4s logo"/>
+        <h1>mongo4s</h1>
+        <p class="tagline">Effect-agnostic MongoDB client and repository layer for Scala 3 — any runtime, any BSON
+            codec, AST-free by default.</p>
+        <p class="badges">
+            <a href="https://github.com/mongo4s/mongo4s/actions/workflows/ci.yml"><img
+                    src="https://github.com/mongo4s/mongo4s/actions/workflows/ci.yml/badge.svg" alt="CI status"/></a>
+            <a href="https://central.sonatype.com/search?q=mongo4s"><img
+                    src="https://img.shields.io/maven-central/v/org.mongo4s/mongo4s-core_3?color=blue"
+                    alt="Maven Central version"/></a>
+            <a href="https://www.scala-lang.org/"><img src="https://img.shields.io/badge/Scala-3-blue"
+                                                       alt="Scala 3"/></a>
+            <a href="https://github.com/mongo4s/mongo4s/blob/main/LICENSE"><img
+                    src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="Apache 2.0 license"/></a>
+        </p>
+        <nav class="links">
+            <a href="https://github.com/mongo4s/mongo4s">GitHub</a>
+            <a href="https://central.sonatype.com/search?q=mongo4s">Maven Central</a>
+            <a href="https://github.com/mongo4s/mongo4s/blob/main/LICENSE">Apache 2.0</a>
+        </nav>
+    </header>
+
+    <nav class="jump">
+        <a href="#start">Quick start</a> ·
+        <a href="#core">Core concepts</a> ·
+        <a href="#codecs">BSON codecs</a> ·
+        <a href="#repositories">Repositories</a> ·
+        <a href="#runtime">Runtime</a> ·
+        <a href="#modules">Modules</a> ·
+        <a href="#benchmarks">Benchmarks</a> ·
+        <a href="#design">Design notes</a>
     </nav>
-  </header>
 
-  <nav class="jump">
-    <a href="#start">Quick start</a> ·
-    <a href="#core">Core concepts</a> ·
-    <a href="#codecs">BSON codecs</a> ·
-    <a href="#repositories">Repositories</a> ·
-    <a href="#runtime">Runtime</a> ·
-    <a href="#modules">Modules</a> ·
-    <a href="#benchmarks">Benchmarks</a> ·
-    <a href="#design">Design notes</a>
-  </nav>
+    <p class="lead">
+        No hardcoded <code>cats-effect</code> or <code>fs2</code>. The runtime (cats-effect / ZIO / Kyo / rapid) and the
+        BSON codec (your own derivation, or medeia / zio-bson / calypso) are independent modules, each wired in through
+        a
+        <code>given</code> import. <code>core</code> depends on neither.
+    </p>
+    <p>
+        mongo4s wraps the official <code>mongodb-driver-reactivestreams</code> directly — no <code>mongo4cats</code>
+        underneath. A type-safe <code>Field</code>/<code>Filter</code>/<code>Update</code> builder replaces string-keyed
+        queries, <code>PrimaryKey</code> turns an entity into single- or compound-key lookups, and
+        <code>BaseMongoRepository</code> gives you CRUD/batch operations over a collection for free. Every piece is
+        interpretable against a real MongoDB <strong>and</strong> an in-memory fake, so repositories are unit-testable
+        without a running database.
+    </p>
 
-  <p class="lead">
-    No hardcoded <code>cats-effect</code> or <code>fs2</code>. The runtime (cats-effect / ZIO / Kyo / rapid) and the
-    BSON codec (your own derivation, or medeia / zio-bson / calypso) are independent modules, each wired in through a
-    <code>given</code> import. <code>core</code> depends on neither.
-  </p>
-  <p>
-    mongo4s wraps the official <code>mongodb-driver-reactivestreams</code> directly — no <code>mongo4cats</code>
-    underneath. A type-safe <code>Field</code>/<code>Filter</code>/<code>Update</code> builder replaces string-keyed
-    queries, <code>PrimaryKey</code> turns an entity into single- or compound-key lookups, and
-    <code>BaseMongoRepository</code> gives you CRUD/batch operations over a collection for free. Every piece is
-    interpretable against a real MongoDB <strong>and</strong> an in-memory fake, so repositories are unit-testable
-    without a running database.
-  </p>
-
-  <h2 id="start">Quick start</h2>
-  <p>Pick a runtime and a codec bridge:</p>
-  <pre><code>libraryDependencies ++= Seq(
-  "org.mongo4s" %% "mongo4s-cats"         % "0.1.0",
-  "org.mongo4s" %% "mongo4s-bson-medeia"  % "0.1.0",
-  "org.mongo4s" %% "mongo4s-repositories" % "0.1.0", // if you need auto-generated CRUD repository ops for your model
+    <h2 id="start">Quick start</h2>
+    <p>Pick a runtime. The default codec (<code>bson-direct</code>) derives straight from your case class — AST-free, no
+        third-party codec library, no extra dependency beyond <code>mongo4s-core</code> itself:</p>
+    <pre><code>libraryDependencies ++= Seq(
+    "org.mongo4s" %% "mongo4s-cats"           % "0.2.0", // mongo4s-core + cats-effect integration
+    "org.mongo4s" %% "mongo4s-bson-direct"    % "0.2.0", // ast-free bson codecs
+    "org.mongo4s" %% "mongo4s-bson-cats-data" % "0.2.0", // if you need NonEmptyList etc. codec instances
+    "org.mongo4s" %% "mongo4s-repositories"   % "0.2.0", // if you need auto-generated CRUD repository ops for your model
 )</code></pre>
-  <pre><code>import cats.effect.{IO, IOApp}
+    <pre><code>import cats.effect.{IO, IOApp}
 
-import mongo4s.{Field, MongoClient, PrimaryKey}
-import mongo4s.bson.BsonInstances.given
-import mongo4s.bson.medeia.MedeiaDocumentCodec
-import mongo4s.bson.medeia.MedeiaInstances.given
-import mongo4s.cats.CatsInstances.given
 import mongo4s.cats.CatsStream
+import mongo4s.bson.direct.WireCodec
+import mongo4s.{Field, MongoClient, PrimaryKey}
 import mongo4s.repositories.BaseMongoRepository
 
-final case class User(id: String, name: String, age: Int) derives MedeiaDocumentCodec
+import mongo4s.cats.CatsInstances.given
+
+final case class User(id: String, name: String, age: Int) derives WireCodec
 
 object User:
   given PrimaryKey[User, String] = PrimaryKey.single("id")(_.id)
 
 object Main extends IOApp.Simple:
-  type S[A] = CatsStream[IO][A]
-
   def run: IO[Unit] =
     for
-      client <- MongoClient.fromConnectionString[IO, S]("mongodb://localhost:27017")
-      db     <- client.getDatabase("myapp")
-      users  <- BaseMongoRepository.create[IO, S, User, String](db, "users")
-      _      <- users.insertOne(User("1", "Alice", 30))
-      alice  <- users.findOne("1")
-      adults <- users.findByFilter(Field.of[User, Int](_.age).gte(18))
-      _      <- client.close
+      client     &lt;- MongoClient.fromConnectionString[IO, CatsStream[IO][A]]("mongodb://localhost:27017")
+      db         &lt;- client.getDatabase("myapp")
+      collection &lt;- db.getDirectCollection[User]("users")
+      users       = BaseMongoRepository(collection)
+      _          &lt;- users.insertOne(User("1", "Alice", 30))
+      alice      &lt;- users.findOne("1")
+      adults     &lt;- users.findByFilter(Field.of[User, Int](_.age).gte(18))
+      _          &lt;- client.close
     yield ()</code></pre>
-  <p>Swap <code>mongo4s-cats</code> for <code>mongo4s-zio</code> / <code>mongo4s-kyo</code> / <code>mongo4s-rapid</code> and the matching <code>*Instances.given</code> import to change runtime — nothing else changes.</p>
-  <p>
-    For more examples see:
-    <a href="https://github.com/mongo4s/mongo4s/tree/main/examples/src/main/scala/mongo4s/examples">examples/src/main/scala/mongo4s/examples</a>
-    — a shared domain model (opaque types, enums, nested case classes) run through every runtime/codec combination
-    (cats+medeia, ZIO+zio-bson, kyo+medeia, rapid+calypso) plus a repository example covering all three
-    <code>BaseMongoRepository</code> construction styles against bson-direct.
-  </p>
+    <p>Swap <code>mongo4s-cats</code> for <code>mongo4s-zio</code> / <code>mongo4s-kyo</code> /
+        <code>mongo4s-rapid</code> and the matching <code>*Instances.given</code> import to change runtime — nothing
+        else changes. <code>BsonEncoder</code>/<code>BsonDecoder</code> for built-in types (<code>String</code>, <code>Int</code>,
+        <code>Option</code>, <code>List</code>, <code>Vector</code>, <code>Set</code>, <code>Seq</code>, …) resolve with
+        no import at all.</p>
+    <p class="muted">
+        Already have a model on medeia, zio-schema, or calypso? Swap <code>derives WireCodec</code> +
+        <code>getDirectCollection</code> for <code>derives MedeiaDocumentCodec</code>/etc. + <code>getCollection</code>
+        (and <code>BaseMongoRepository.create(db, "users")</code> instead of constructing it from a collection
+        directly) — see <a href="#codecs">BSON codecs</a> below for all four backends.
+    </p>
+    <p>
+        Already have a <code>MongoClientSettings</code> built elsewhere (connection pool tuning, a custom <code>CodecRegistry</code>,
+        …)? Use <code>MongoClient.fromSettings</code> instead of <code>fromConnectionString</code>:
+    </p>
+    <pre><code>val settings = MongoClientSettings.builder().applyConnectionString(ConnectionString("mongodb://localhost:27017")).build()
+client &lt;- MongoClient.fromSettings[IO, S](settings)</code></pre>
+    <p>
+        For more examples see:
+        <a href="https://github.com/mongo4s/mongo4s/tree/main/examples/src/main/scala/mongo4s/examples">examples/src/main/scala/mongo4s/examples</a>
+        — a shared domain model (opaque types, enums, nested case classes) run through every runtime/codec combination
+        (cats+medeia, ZIO+zio-bson, kyo+medeia, rapid+calypso), a repository example covering all three
+        <code>BaseMongoRepository</code> construction styles against bson-direct, and a sessions/transactions + typed
+        aggregation pipeline example on cats+medeia.
+    </p>
 
-  <h2 id="core">Core concepts</h2>
-  <p>
-    <code>MongoClient[F, S]</code> → <code>MongoDatabase[F, S]</code> → <code>MongoCollection[F, S, A]</code> mirror the
-    driver's own hierarchy, wrapped in your effect <code>F[_]</code> and stream type <code>S[_]</code>.
-  </p>
-  <p>
-    <code>Field.of[E, A](_.someField)</code> is a macro that reads a field selector at compile time — no strings, no
-    reflection — and gives you a typed path to build filters, updates, and sorts:
-  </p>
-  <pre><code>val adults = Field.of[User, Int](_.age).gte(18)
+    <h2 id="core">Core concepts</h2>
+    <p>
+        <code>MongoClient[F, S]</code> → <code>MongoDatabase[F, S]</code> → <code>MongoCollection[F, S, A]</code> mirror
+        the
+        driver's own hierarchy, wrapped in your effect <code>F[_]</code> and stream type <code>S[_]</code>.
+    </p>
+    <p>
+        <code>Field.of[E, A](_.someField)</code> is a macro that reads a field selector at compile time — no strings, no
+        reflection — and gives you a typed path to build filters, updates, and sorts:
+    </p>
+    <pre><code>val adults = Field.of[User, Int](_.age).gte(18)
 val named  = Field.of[User, String](_.name).equalTo("Alice") && adults
 val setAge = Field.of[User, Int](_.age).set(31)
 val city   = Field.of[Order, String](_.address.city).equalTo("Berlin")  // dotted paths from nested selectors</code></pre>
-  <p>
-    <code>PrimaryKey[E, K]</code> turns an entity into a key-based filter — single field, a native <code>_id</code>
-    (<code>ObjectId</code> or your own encoder), or a compound key of up to four fields:
-  </p>
-  <pre><code>given PrimaryKey[User, String]         = PrimaryKey.single("id")(_.id)
+    <p>
+        <code>PrimaryKey[E, K]</code> turns an entity into a key-based filter — single field, a native <code>_id</code>
+        (<code>ObjectId</code> or your own encoder), or a compound key of up to four fields:
+    </p>
+    <pre><code>given PrimaryKey[User, String]         = PrimaryKey.single("id")(_.id)
 given PrimaryKey[Note, ObjectId]       = PrimaryKey.objectId(_.id)          // entity has its own ObjectId field
 given PrimaryKey[Order, (String, Int)] = PrimaryKey.make(o => (o.userId, o.seq), k => "user_id" -> k._1, k => "seq" -> k._2)</code></pre>
-  <p class="muted">
-    <code>inFilter</code> on a compound key produces an <code>$or</code> of <code>$and</code>s; on a single field it's
-    a plain <code>$in</code> — and an empty key list always produces <code>Filter.none</code>, so
-    <code>findMany(Nil)</code>/<code>deleteMany(Nil)</code> are safe no-ops instead of matching every document.
-  </p>
+    <p class="muted">
+        <code>inFilter</code> on a compound key produces an <code>$or</code> of <code>$and</code>s; on a single field
+        it's
+        a plain <code>$in</code> — and an empty key list always produces <code>Filter.none</code>, so
+        <code>findMany(Nil)</code>/<code>deleteMany(Nil)</code> are safe no-ops instead of matching every document.
+    </p>
 
-  <h2 id="codecs">BSON codecs</h2>
-  <p>
-    Every codec ultimately produces a <code>BsonDocumentCodec[A]</code> (entity ⇄ <code>org.bson.BsonDocument</code>)
-    or, for the AST-free path below, a <code>WireCodec[A]</code>. mongo4s never registers a global
-    <code>CodecProvider</code>, so backends never collide inside one process.
-  </p>
-  <table>
-    <tr><th>Module</th><th>Backend</th><th>Notes</th></tr>
-    <tr><td><code>mongo4s-bson-medeia</code></td><td>medeia</td><td><code>derives BsonDocumentCodec</code></td></tr>
-    <tr><td><code>mongo4s-bson-zio</code></td><td>zio-schema-bson</td><td>via <code>zio.schema.Schema</code></td></tr>
-    <tr><td><code>mongo4s-bson-calypso</code></td><td>calypso</td><td>hand-written <code>forProductN</code> codecs</td></tr>
-    <tr><td><code>mongo4s-bson-direct</code></td><td>mongo4s itself</td><td><code>WireCodec[A]</code>, AST-free — see below</td></tr>
-  </table>
+    <h3 id="sessions">Sessions &amp; transactions</h3>
+    <p>
+        <code>client.startSession</code> is fully manual — mongo4s hands you the driver <code>ClientSession</code>
+        and steps back. You own the whole lifecycle yourself: start the transaction, pass the session explicitly
+        with <code>(using Some(session))</code> at each call site you want inside it, commit or abort, and close
+        the session when you're done — nothing here happens automatically:
+    </p>
+    <pre><code>import mongo4s.MongoSession
 
-  <h3>bson-direct — AST-free <code>WireCodec</code></h3>
-  <p>
-    medeia/zio-bson/calypso all build an intermediate <code>org.bson.BsonValue</code> tree before it ever reaches the
-    driver. <code>WireCodec[A]</code> skips that: derived via <code>Mirror</code>, it writes straight to the driver's
-    own streaming <code>BsonWriter</code>/<code>BsonReader</code> — the same low-level SPI jsoniter-scala uses for
-    JSON — no <code>BsonDocument</code> is ever built, on either side. No third-party codec dependency needed;
-    <code>bson-direct</code> is transitively pulled in by <code>mongo4s-core</code>.
-  </p>
-  <pre><code>import mongo4s.bson.direct.WireCodec
+for
+  session &lt;- client.startSession
+  _       &lt;- MongoSession.startTransaction[IO](session)
+  _       &lt;- users.insertOne(User("2", "Bob", 41))(using Some(session))
+  _       &lt;- MongoSession.commitTransaction[IO, S](session) // or abortTransaction to roll back
+  _       &lt;- IO.delay(session.close())
+yield ()</code></pre>
+    <p class="muted">
+        Every <code>MongoClient</code>/<code>MongoDatabase</code>/<code>MongoCollection</code>/<code>Repository</code>
+        method
+        accepts the same <code>(using session: Option[ClientSession] = None)</code>, so a
+        <code>BaseMongoRepository</code>
+        call can join an existing transaction the same way a raw <code>collection</code> call can.
+    </p>
+    <p>
+        The manual dance above never aborts on failure either — if the body throws, the transaction is just left
+        open until it times out server-side. <code>client.withTransaction</code> does the whole thing automatically
+        instead: starts a session, commits on success or aborts (then re-raises) on failure, and closes the session
+        either way — you don't manage any part of the lifecycle yourself, and the session is given implicitly to
+        everything inside the body, so no <code>(using Some(session))</code> at each call site:
+    </p>
+    <pre><code>client.withTransaction {
+  users.insertOne(User("2", "Bob", 41)) // Option[ClientSession] is already given here
+}</code></pre>
+    <p class="muted">
+        <code>withTransaction</code> is built entirely from <code>Effect[F]</code>'s own minimal vocabulary
+        (<code>flatMap</code>/<code>handleErrorWith</code>), so it works identically on every runtime. That also
+        means it only covers the "body raised an error" path — on cats-effect specifically, a hard cancellation of
+        the surrounding fiber won't trigger the abort/close, since <code>Effect[F]</code> has no notion of
+        cancellation the way <code>cats.effect.MonadCancel</code> does. Reach for <code>MongoClientResource</code>
+        (see <a href="#runtime">Runtime backends</a>) combined with your own <code>Resource</code>-based cleanup if
+        that stronger guarantee matters for a specific call site.
+    </p>
+    <p>
+        <code>MongoClient.withTransaction</code> is itself built on a lower-level
+        <code>ClientSession.withTransaction</code>: same automatic commit-on-success/abort-on-failure behavior,
+        but manual again about the session's own lifecycle — it doesn't close the session, since (like the fully
+        manual path above) it doesn't own one you got from <code>startSession</code> yourself. Reach for it directly
+        if you're reusing one
+        already-open session across more than one transaction:
+    </p>
+    <pre><code>for
+  session &lt;- client.startSession
+  _       &lt;- session.withTransaction(users.insertOne(User("2", "Bob", 41)))
+  _       &lt;- session.withTransaction(users.insertOne(User("3", "Carol", 29))) // same session, second transaction
+  _       &lt;- IO.delay(session.close())
+yield ()</code></pre>
+
+    <h3 id="aggregation">Aggregation pipelines</h3>
+    <p>
+        <code>aggregate</code> takes a <code>Seq[Stage[A]]</code> — a typed pipeline-stage AST, mirroring
+        <code>Filter</code>/<code>Update</code>/<code>Sort</code>, instead of raw <code>BsonDocument</code>s — built
+        with
+        the same <code>Field.of</code> selectors:
+    </p>
+    <pre><code>import mongo4s.operations.{Sort, Stage}
+
+val pipeline = Seq(
+  Stage.matching(Field.of[User, Int](_.age).gte(18)),
+  Stage.sortBy(Sort.asc(Field.of[User, String](_.name))),
+  Stage.limit(10),
+)
+val adults: IO[List[User]] = users.aggregate[User](pipeline).all</code></pre>
+    <p class="muted">
+        <code>Stage</code> covers
+        <code>$match</code>/<code>$project</code>/<code>$sort</code>/<code>$limit</code>/<code>$skip</code>/<code>$count</code>/<code>$unwind</code>/<code>$lookup</code>,
+        plus <code>Stage.raw(document)</code> as an escape hatch for anything else (<code>$group</code> included, for
+        now). Field references inside a <code>Stage</code> are always typed against the pipeline's starting document
+        type
+        <code>A</code>, the same way <code>aggregate[B]</code>'s own output type <code>B</code> is specified manually.
+    </p>
+
+    <h3>Change streams</h3>
+    <p>
+        <code>watch</code> exists at all three levels, matching the driver's own scope hierarchy —
+        <code>MongoClient.watch</code> (the whole deployment, needs a replica set/sharded cluster),
+        <code>MongoDatabase.watch</code> (one database), and <code>MongoCollection.watch</code> (one collection).
+        Every event is a <code>ChangeEvent[A]</code>, not a bare <code>BsonDocument</code>:
+    </p>
+    <pre><code>final case class ChangeEvent[A](
+  operationType: OperationType,                // com.mongodb's own enum — INSERT/UPDATE/DELETE/...
+  documentKey: Option[BsonDocument],
+  fullDocument: Option[A],
+  fullDocumentBeforeChange: Option[A],
+  updateDescription: Option[UpdateDescription], // updated/removed field paths, for UPDATE events
+  resumeToken: BsonDocument,
+  clusterTime: Option[BsonTimestamp],
+)</code></pre>
+    <p class="muted">
+        <code>fullDocument</code> defaults to populated on <strong>both</strong> insert and update events
+        (<code>FullDocument.UPDATE_LOOKUP</code>) — MongoDB's own default only fills it in for inserts/replaces, leaving
+        it <code>None</code> for the far more common "what does the document look like now" update case unless asked
+        for explicitly. Always <code>None</code> for deletes. <code>MongoCollection.watch</code> decodes through the
+        collection's own codec (<code>ChangeEvent[A]</code>); <code>MongoClient</code>/<code>MongoDatabase.watch</code>
+        span more than one document shape so they default to <code>ChangeEvent[BsonDocument]</code> — use
+        <code>watchAs[A]</code> instead when you know the events will all decode the same way.
+    </p>
+    <p class="muted">
+        The optional <code>pipeline: Seq[BsonDocument]</code> matches against the <em>change event's own shape</em>
+        (<code>{operationType, fullDocument, ns, ...}</code>), not the collection's document shape, so it stays raw
+        <code>BsonDocument</code> rather than a typed <code>Stage[A]</code> — a <code>Stage</code>-built
+        <code>Field.of</code> filter would render the wrong path (<code>"age"</code> instead of
+        <code>"fullDocument.age"</code>).
+    </p>
+
+    <h2 id="codecs">BSON codecs</h2>
+    <p>
+        Every codec ultimately produces a <code>BsonDocumentCodec[A]</code> (entity ⇄ <code>org.bson.BsonDocument</code>)
+        or, for the AST-free path below, a <code>WireCodec[A]</code>. mongo4s never registers a global
+        <code>CodecProvider</code>, so backends never collide inside one process.
+    </p>
+    <table>
+        <tr>
+            <th>Module</th>
+            <th>Backend</th>
+            <th>Notes</th>
+        </tr>
+        <tr>
+            <td><code>mongo4s-bson-medeia</code></td>
+            <td>medeia</td>
+            <td><code>derives BsonDocumentCodec</code></td>
+        </tr>
+        <tr>
+            <td><code>mongo4s-bson-zio</code></td>
+            <td>zio-schema-bson</td>
+            <td>via <code>zio.schema.Schema</code></td>
+        </tr>
+        <tr>
+            <td><code>mongo4s-bson-calypso</code></td>
+            <td>calypso</td>
+            <td>hand-written <code>forProductN</code> codecs</td>
+        </tr>
+        <tr>
+            <td><code>mongo4s-bson-direct</code></td>
+            <td>mongo4s itself</td>
+            <td><code>WireCodec[A]</code>, AST-free — see below</td>
+        </tr>
+        <tr>
+            <td><code>mongo4s-bson-cats-data</code></td>
+            <td>cats-core</td>
+            <td><code>BsonEncoder</code>/<code>BsonDecoder</code>/<code>WireCodec</code> for
+                <code>NonEmptyList</code>/<code>Chain</code>/<code>NonEmptyVector</code>/<code>NonEmptySet</code>/<code>NonEmptyMap</code>
+            </td>
+        </tr>
+    </table>
+
+    <h3>bson-direct — AST-free <code>WireCodec</code></h3>
+    <p>
+        medeia/zio-bson/calypso all build an intermediate <code>org.bson.BsonValue</code> tree before it ever reaches
+        the
+        driver. <code>WireCodec[A]</code> skips that: derived via <code>Mirror</code>, it writes straight to the
+        driver's
+        own streaming <code>BsonWriter</code>/<code>BsonReader</code> — the same low-level SPI jsoniter-scala uses for
+        JSON — no <code>BsonDocument</code> is ever built, on either side. No third-party codec dependency needed;
+        <code>bson-direct</code> is transitively pulled in by <code>mongo4s-core</code>.
+    </p>
+    <pre><code>import mongo4s.bson.direct.WireCodec
 
 final case class Address(city: String, zip: String) derives WireCodec
 final case class Person(id: String, name: String, tags: List[String], address: Address) derives WireCodec
@@ -241,196 +566,564 @@ sealed trait Shape derives WireCodec
 object Shape:
   final case class Circle(radius: Double)                   extends Shape derives WireCodec
   final case class Rectangle(width: Double, height: Double) extends Shape derives WireCodec</code></pre>
-  <p>
-    Products, <code>Option</code>, <code>List</code>, nested case classes, sealed traits/enums (via a
-    <code>_type</code> discriminator field, written first), and self-/mutually-recursive types all derive directly —
-    recursive derivation defers behind a <code>lazy val</code> internally so a type's own <code>given</code> never
-    forces itself mid-construction. Anything with an existing <code>BsonEncoder</code>/<code>BsonDecoder</code>
-    bridges automatically, at the cost of one <code>BsonValue</code> per field instead of zero.
-  </p>
-  <p>
-    <code>getDirectCollection</code> registers the derived codec with the driver via
-    <code>CodecRegistries.fromCodecs(...)</code>, so insert/find/replace/update/delete/bulkWrite decode straight to
-    <code>A</code> — genuinely zero <code>BsonDocument</code> construction on the hot path, not just a thinner bridge:
-  </p>
-  <pre><code>final case class Person(id: String, name: String, age: Int) derives WireCodec
+    <p>
+        Products, <code>Option</code>, <code>List</code>, nested case classes, sealed traits/enums (via a
+        <code>_type</code> discriminator field, written first), and self-/mutually-recursive types all derive directly —
+        recursive derivation defers behind a <code>lazy val</code> internally so a type's own <code>given</code> never
+        forces itself mid-construction. Anything with an existing <code>BsonEncoder</code>/<code>BsonDecoder</code>
+        bridges automatically, at the cost of one <code>BsonValue</code> per field instead of zero.
+    </p>
+    <p>
+        <code>getDirectCollection</code> registers the derived codec with the driver via
+        <code>CodecRegistries.fromCodecs(...)</code>, so insert/find/replace/update/delete/bulkWrite decode straight to
+        <code>A</code> — genuinely zero <code>BsonDocument</code> construction on the hot path, not just a thinner
+        bridge:
+    </p>
+    <pre><code>final case class Person(id: String, name: String, age: Int) derives WireCodec
 object Person:
   given PrimaryKey[Person, String] = PrimaryKey.single("id")(_.id)
 
 for
   db         &lt;- client.getDatabase("myapp")
   collection &lt;- db.getDirectCollection[Person]("people")
-  repo        = new BaseMongoRepository(collection)
+  repo        = BaseMongoRepository(collection)
   _          &lt;- repo.insertOne(Person("1", "bob", 30))
 yield ()</code></pre>
-  <p class="muted">
-    <code>aggregate</code>/<code>distinct</code> still go through <code>BsonDocumentCodec</code>/<code>BsonDecoder</code>
-    on a direct collection (they're not the hot path); everything else — <code>Filter</code>/<code>Update</code>/
-    <code>Field</code> construction — is identical regardless of which codec backs the collection.
-  </p>
+    <p class="muted">
+        <code>aggregate</code>/<code>distinct</code> still go through
+        <code>BsonDocumentCodec</code>/<code>BsonDecoder</code>
+        on a direct collection (they're not the hot path); everything else — <code>Filter</code>/<code>Update</code>/
+        <code>Field</code> construction — is identical regardless of which codec backs the collection.
+    </p>
 
-  <h2 id="repositories">Repositories</h2>
-  <p>
-    <code>BaseMongoRepository[F, S, E, K]</code> implements count/find/insert/upsert/update/delete/bulkWrite, batched
-    by <code>batchSize</code> (default 500), over any <code>MongoCollection[F, S, E]</code>, from either codec path:
-  </p>
-  <pre><code>BaseMongoRepository.create[F, S, E, K](db, "collection")     // Projection.excludeId default
+    <h4>Field naming</h4>
+    <p>
+        By default <code>derives WireCodec</code> writes field and discriminator names exactly as they appear in the
+        Scala source. To match an existing collection's naming convention (<code>snake_case</code>, say), bring a
+        <code>WireCodecConfig</code> into scope before deriving — it reuses the same <code>FieldNaming</code> the query
+        layer already uses, rather than a second, independent naming mechanism:
+    </p>
+    <pre><code>import mongo4s.bson.direct.WireCodecConfig
+
+given WireCodecConfig = WireCodecConfig.SnakeCase
+
+final case class Person(firstName: String, lastName: String) derives WireCodec // writes "first_name"/"last_name"</code></pre>
+    <p class="muted">
+        Field naming and discriminator naming (the <code>_type</code> value for sealed traits/enums) are independently
+        configurable via <code>WireCodecConfig(fieldNaming = ..., discriminatorNaming = ...)</code>. Pass the matching
+        <code>FieldNaming</code> to <code>getDirectCollection</code>'s own <code>naming</code> parameter too, so
+        <code>Filter</code>/<code>Update</code>/<code>Field</code> queries render the same field names the codec wrote.
+        <code>encodeEmptyCasesAsString = true</code> writes a parameterless case as a bare BSON string instead of a
+        <code>{"_type": "..."}</code> document — only safe when nested inside another document, not at the root.
+    </p>
+
+    <h3>bson-cats-data — <code>cats.data</code> support</h3>
+    <p>
+        <code>NonEmptyList</code>/<code>Chain</code>/<code>NonEmptyVector</code>/<code>NonEmptySet</code>/<code>NonEmptyMap</code>
+        get <code>BsonEncoder</code>/<code>BsonDecoder</code> and <code>WireCodec</code> instances from
+        <code>mongo4s-bson-cats-data</code>, delegating to the already-existing
+        <code>List</code>/<code>Vector</code>/<code>Set</code>/<code>Map</code>
+        instances rather than reimplementing BSON encoding:
+    </p>
+    <pre><code>import mongo4s.bson.catsdata.CatsDataBsonInstances.given // or CatsDataWireInstances.given for bson-direct
+import cats.data.NonEmptyList
+
+final case class Team(members: NonEmptyList[String]) derives BsonDocumentCodec // via medeia/zio-bson/calypso</code></pre>
+    <p class="muted">
+        <code>NonEmptySet</code>/<code>NonEmptyMap</code> additionally need a <code>cats.Order</code> for their
+        element/key type — the same <code>Order</code> you'd already need to construct one of these types directly.
+    </p>
+
+    <h2 id="repositories">Repositories</h2>
+    <p>
+        <code>BaseMongoRepository[F, S, E, K]</code> implements count/find/insert/upsert/update/delete/bulkWrite,
+        batched
+        by <code>batchSize</code> (default 500), over any <code>MongoCollection[F, S, E]</code>, from either codec path:
+    </p>
+    <pre><code>BaseMongoRepository.create[F, S, E, K](db, "collection")     // Projection.excludeId default
 BaseMongoRepository.identified[F, S, E, K](db, "collection") // no projection — entities that store their own "_id"
 BaseMongoRepository.objectId[F, S, E](db, "collection")      // WithId[ObjectId, E], auto _id round-trip</code></pre>
-  <p>
-    <code>WithId[Id, E]</code> wraps an entity with a separately-typed id (<code>type Oid[E] = WithId[ObjectId, E]</code>)
-    and ships its own <code>PrimaryKey</code>/<code>BsonDocumentCodec</code> instances, for entities that don't carry
-    their own id field.
-  </p>
-  <p>
-    For unit tests, <code>FakeMongoCollection</code> implements <code>MongoCollection</code> in memory — the exact
-    same <code>Filter</code>/<code>Update</code>/<code>Field</code> AST the real driver interprets is interpreted
-    against a <code>TrieMap</code> instead, so repository logic is testable without <code>aggregate</code>/
-    <code>distinct</code>/<code>watch</code> and without a running MongoDB.
-  </p>
-
-  <h2 id="runtime">Runtime backends</h2>
-  <p>Each runtime module provides <code>given Effect[F]</code> and <code>given RsBridge[F, S]</code>:</p>
-  <table>
-    <tr><th>Module</th><th>Effect</th><th>Stream</th><th>Notes</th></tr>
-    <tr><td><code>mongo4s-cats</code></td><td>cats.effect.IO</td><td>fs2.Stream</td><td>via fs2.interop.reactivestreams</td></tr>
-    <tr><td><code>mongo4s-zio</code></td><td>zio.Task</td><td>zio.stream.ZStream</td><td>via zio-interop-reactivestreams</td></tr>
-    <tr><td><code>mongo4s-kyo</code></td><td>kyo.IO</td><td>kyo.Stream</td><td>via kyo-reactive-streams</td></tr>
-    <tr><td><code>mongo4s-rapid</code></td><td>rapid.Task</td><td>rapid.Stream</td><td></td></tr>
-  </table>
-
-  <h2 id="modules">Modules</h2>
-  <p>Published for Scala 3 under <code>org.mongo4s</code>:</p>
-  <pre><code>"org.mongo4s" %% "mongo4s-&lt;module&gt;" % "0.1.0"</code></pre>
-  <table>
-    <tr><th>Kind</th><th>Module</th><th>Notes</th></tr>
-    <tr><td>core</td><td><code>mongo4s-core</code></td><td>client/database/collection, Field/Filter/Update, PrimaryKey</td></tr>
-    <tr><td rowspan="5">bson</td><td><code>mongo4s-bson-core</code></td><td>the scalar + document codec seam</td></tr>
-    <tr><td><code>mongo4s-bson-direct</code></td><td>WireCodec — AST-free, no third-party dependency</td></tr>
-    <tr><td><code>mongo4s-bson-medeia</code></td><td>bridges medeia</td></tr>
-    <tr><td><code>mongo4s-bson-zio</code></td><td>bridges zio-schema-bson</td></tr>
-    <tr><td><code>mongo4s-bson-calypso</code></td><td>bridges calypso</td></tr>
-    <tr><td rowspan="4">runtime</td><td><code>mongo4s-cats</code></td><td>cats-effect 3 + fs2</td></tr>
-    <tr><td><code>mongo4s-zio</code></td><td>ZIO 2 + zio-streams</td></tr>
-    <tr><td><code>mongo4s-kyo</code></td><td>kyo 1.0.0-RC6</td></tr>
-    <tr><td><code>mongo4s-rapid</code></td><td>rapid</td></tr>
-    <tr><td>repositories</td><td><code>mongo4s-repositories</code></td><td>BaseMongoRepository, Repository, WithId</td></tr>
-  </table>
-
-  <h2 id="benchmarks">Benchmarks</h2>
-  <p>
-    Three separate JMH harnesses, one developer machine — directional ballparks, not hardware-independent
-    authorities. Run them on your own hardware before deciding on the numbers alone.
-  </p>
-  <h3>Codec backends — to <code>org.bson.BsonDocument</code></h3>
-  <table>
-    <tr><th>Codec</th><th class="num">Encode ops/s</th><th class="num">Decode ops/s</th></tr>
-    <tr><td>calypso (forProductN)</td><td class="num"><strong class="best">~3.36M</strong></td><td class="num">~3.24M</td></tr>
-    <tr><td>medeia (derives)</td><td class="num">~1.40M</td><td class="num"><strong class="best">~3.34M</strong></td></tr>
-    <tr><td>zio-bson (zio-schema derived)</td><td class="num">~992k</td><td class="num">~2.98M</td></tr>
-    <tr><td>mongo4cats-zio-json</td><td class="num">~1.03M</td><td class="num">~920k</td></tr>
-    <tr><td>mongo4cats-circe</td><td class="num"><span class="worst">~972k</span></td><td class="num"><span class="worst">~665k</span></td></tr>
-  </table>
-  <p class="muted">All three mongo4s codec bridges beat both mongo4cats codecs by 3–5× on decode — the cost of case class ↔ circe/zio-json ↔ mongo4cats.Bson ↔ org.Bson instead of straight to org.bson.</p>
-
-  <h3>AST-free wire codec — all the way to real bytes</h3>
-  <table>
-    <tr><th>Path</th><th class="num">Throughput</th><th class="num">Alloc</th></tr>
-    <tr><td>direct encode</td><td class="num"><strong class="best">~1.79M ops/s</strong></td><td class="num"><strong class="best">1792 B/op</strong></td></tr>
-    <tr><td>medeiaFull encode</td><td class="num"><span class="worst">~838k ops/s</span></td><td class="num"><span class="worst">4712 B/op</span></td></tr>
-    <tr><td>direct decode</td><td class="num"><strong class="best">~1.49M ops/s</strong></td><td class="num"><strong class="best">1088 B/op</strong></td></tr>
-    <tr><td>medeiaFull decode</td><td class="num"><span class="worst">~900k ops/s</span></td><td class="num"><span class="worst">3200 B/op</span></td></tr>
-  </table>
-  <p class="muted">
-    <code>WireCodec</code> is ~2.1× the throughput on encode, ~1.7× on decode, and allocates 2.6–2.9× less — avoiding
-    medeia's own intermediate AST <em>and</em> the driver's own <code>BsonDocument</code>. In typical CRUD the network
-    round trip dwarfs this; it matters for bulk-decode-heavy paths — large cursor streams, ETL, big aggregations.
-  </p>
-
-  <h3 id="runtime-overhead">Runtime overhead — real MongoDB, every backend</h3>
-  <table>
-    <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">Throughput — operations per second, higher is better</caption>
-    <tr><th>Operation</th><th class="num">cats</th><th class="num">zio</th><th class="num">rapid</th><th class="num">kyo</th><th class="num">mongo4cats-cats</th><th class="num">mongo4cats-zio</th></tr>
-    <tr><td>insertOne</td><td class="num"><span class="worst">2272</span></td><td class="num"><strong class="best">2562</strong></td><td class="num">2447</td><td class="num">2505</td><td class="num">2277</td><td class="num">2504</td></tr>
-    <tr><td>find(filter).all</td><td class="num">1432</td><td class="num">1585</td><td class="num">1551</td><td class="num"><strong class="best">1595</strong></td><td class="num"><span class="worst">1316</span></td><td class="num">1325</td></tr>
-    <tr><td>find(filter).stream</td><td class="num">1404</td><td class="num">1393</td><td class="num"><strong class="best">1557</strong></td><td class="num">1548</td><td class="num"><span class="worst">359</span></td><td class="num">1147</td></tr>
-    <tr><td>updateOne</td><td class="num"><span class="worst">2002</span></td><td class="num"><strong class="best">2222</strong></td><td class="num">2198</td><td class="num">2215</td><td class="num">2138</td><td class="num">2219</td></tr>
-    <tr><td>count(filter)</td><td class="num"><span class="worst">1804</span></td><td class="num"><strong class="best">2014</strong></td><td class="num">1996</td><td class="num">1975</td><td class="num">1905</td><td class="num">1990</td></tr>
-  </table>
-  <p class="muted">
-    With a clean database on every trial, all six columns land within the same band — the TCP round trip to MongoDB
-    dominates at this scale. The one real outlier is mongo4cats-cats' <code>find(filter).stream</code> (359 ops/s
-    against its own <code>.all</code>'s 1316) — it bridges through a hand-rolled <code>Queue</code>-backed
-    <code>Subscriber</code> instead of <code>fs2.interop.reactivestreams</code>, which every mongo4s
-    <code>.stream()</code> uses.
-  </p>
-
-  <h3>Codec choice under real MongoDB — mongo4s vs mongo4cats</h3>
-  <p>
-    The same harness isolates the codec dimension: four configs, all on cats-effect, against the same real MongoDB —
-    mongo4s with bson-medeia vs bson-direct, and mongo4cats with circe vs zio-json. Two separate runs, same four
-    stacks, two different questions.
-  </p>
-  <table>
-    <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">Throughput — operations per second, higher is better</caption>
-    <tr><th>Operation</th><th class="num">mongo4s+medeia</th><th class="num">mongo4s+bson-direct</th><th class="num">mongo4cats+circe</th><th class="num">mongo4cats+zio-json</th></tr>
-    <tr><td>insertOne</td><td class="num"><span class="worst">2321</span></td><td class="num">2323</td><td class="num">2381</td><td class="num"><strong class="best">2405</strong></td></tr>
-    <tr><td>insertMany (10 docs)</td><td class="num">2027</td><td class="num"><span class="worst">2012</span></td><td class="num"><strong class="best">2173</strong></td><td class="num">2115</td></tr>
-    <tr><td>findOneById</td><td class="num">2047</td><td class="num"><span class="worst">2031</span></td><td class="num"><strong class="best">2184</strong></td><td class="num">2122</td></tr>
-    <tr><td>findOneByFilter</td><td class="num">2117</td><td class="num"><span class="worst">2066</span></td><td class="num"><strong class="best">2270</strong></td><td class="num">2194</td></tr>
-    <tr><td>findAll (~100 docs)</td><td class="num">1415</td><td class="num"><strong class="best">1477</strong></td><td class="num"><span class="worst">1299</span></td><td class="num">1310</td></tr>
-    <tr><td>findStream (~100 docs)</td><td class="num">1426</td><td class="num"><strong class="best">1435</strong></td><td class="num"><span class="worst">386</span></td><td class="num">388</td></tr>
-    <tr><td>updateOne</td><td class="num">2026</td><td class="num"><span class="worst">1988</span></td><td class="num">2143</td><td class="num"><strong class="best">2159</strong></td></tr>
-    <tr><td>deleteOne</td><td class="num">1063</td><td class="num"><span class="worst">1062</span></td><td class="num"><strong class="best">1129</strong></td><td class="num">1108</td></tr>
-    <tr><td>count</td><td class="num">1852</td><td class="num"><span class="worst">1847</span></td><td class="num"><strong class="best">1958</strong></td><td class="num">1916</td></tr>
-  </table>
-  <p class="muted">
-    Same finding as the <a href="#runtime-overhead">runtime table above</a>: all four land within the same band on every
-    operation (differences within normal run-to-run noise, ~±5–10%) — the network round trip dominates regardless of
-    codec. The one outlier is mongo4cats' <code>find(filter).stream</code>, ~6× slower than everything else
-    <em>and independent of codec</em> (386 vs 388 ops/s for circe vs zio-json) — confirms it's the runtime's
-    <code>Queue</code>-backed <code>Subscriber</code> bridge, not the codec.
-  </p>
-  <table>
-    <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">Memory allocated per single call, in KB — lower is less garbage, not less work done</caption>
-    <tr><th>Operation</th><th class="num">mongo4s+medeia</th><th class="num">mongo4s+bson-direct</th><th class="num">mongo4cats+circe</th><th class="num">mongo4cats+zio-json</th></tr>
-    <tr><td>insertOne</td><td class="num"><span class="worst">49.0</span></td><td class="num">46.6</td><td class="num">25.3</td><td class="num"><strong class="best">24.6</strong></td></tr>
-    <tr><td>insertMany (10 docs)</td><td class="num"><span class="worst">89.9</span></td><td class="num"><strong class="best">66.5</strong></td><td class="num">80.9</td><td class="num">74.6</td></tr>
-    <tr><td>findOneById</td><td class="num"><span class="worst">60.6</span></td><td class="num">58.8</td><td class="num">39.5</td><td class="num"><strong class="best">36.6</strong></td></tr>
-    <tr><td>findOneByFilter</td><td class="num"><span class="worst">60.5</span></td><td class="num">58.7</td><td class="num">39.3</td><td class="num"><strong class="best">36.5</strong></td></tr>
-    <tr><td>findAll (~100 docs)</td><td class="num">419.4</td><td class="num"><strong class="best">241.9</strong></td><td class="num"><span class="worst">951.7</span></td><td class="num">674.8</td></tr>
-    <tr><td>findStream (~100 docs)</td><td class="num">427.5</td><td class="num"><strong class="best">240.3</strong></td><td class="num"><span class="worst">3027.2</span></td><td class="num">2746.2</td></tr>
-    <tr><td>updateOne</td><td class="num"><span class="worst">47.0</span></td><td class="num">46.9</td><td class="num"><strong class="best">22.4</strong></td><td class="num"><strong class="best">22.4</strong></td></tr>
-    <tr><td>deleteOne</td><td class="num"><span class="worst">94.2</span></td><td class="num">92.3</td><td class="num">45.3</td><td class="num"><strong class="best">44.8</strong></td></tr>
-    <tr><td>count</td><td class="num"><span class="worst">56.5</span></td><td class="num"><span class="worst">56.5</span></td><td class="num"><strong class="best">31.5</strong></td><td class="num"><strong class="best">31.5</strong></td></tr>
-  </table>
-  <p class="muted">
-    <strong>bson-direct allocates less than bson-medeia on every single operation</strong> — the AST-free advantage
-    measured in isolation above survives end-to-end through a real driver round trip, modestly on single-document ops
-    (~4–6%) and much more on bulk reads (~42–44% less). <strong>mongo4cats allocates less than mongo4s on
-    single-document ops, but far more on bulk reads</strong> (2–13× more on findAll/findStream) — its own
-    <code>mongo4cats.bson.BsonValue</code> wrapper adds a full extra tree per document on top of org.bson's, and that
-    cost multiplies with document count. Neither library is uniformly lighter — it depends on point-lookups vs bulk
-    scans.
-  </p>
-
-  <h2 id="design">Design notes</h2>
-  <ul>
-    <li><strong>Scala 3 only.</strong> <code>given</code>-based throughout; derivation uses <code>Mirror</code> and inline, no runtime reflection.</li>
-    <li><strong>Effect-agnostic by construction.</strong> <code>core</code> depends on neither cats-effect nor fs2 — a runtime module is ~two <code>given</code> instances.</li>
-    <li><strong>No global <code>CodecProvider</code>.</strong> Every codec is resolved (and, for bson-direct, registered) per-collection, never process-wide.</li>
-    <li><strong>Own filter/update AST</strong> — interpretable both to a real <code>Bson</code> query and, for tests, against an in-memory map.</li>
-    <li><strong>Batching is empty-list-safe</strong> — <code>inFilter(Nil)</code> is <code>Filter.none</code>, not "match everything."</li>
-    <li><strong><code>BaseMongoRepository</code> is a base class you extend</strong>, not a generated one — declare extra domain queries directly against <code>collection</code>/<code>Filter</code>/<code>Field</code>.</li>
-  </ul>
-
-  <footer>
     <p>
-      <a href="https://github.com/mongo4s/mongo4s">Source</a> ·
-      <a href="https://github.com/mongo4s/mongo4s/blob/main/README.md">README</a> ·
-      Apache 2.0
+        <code>WithId[Id, E]</code> wraps an entity with a separately-typed id (<code>type Oid[E] = WithId[ObjectId,
+        E]</code>)
+        and ships its own <code>PrimaryKey</code>/<code>BsonDocumentCodec</code> instances, for entities that don't
+        carry
+        their own id field.
     </p>
-  </footer>
+    <p class="muted">
+        Like <code>MongoCollection</code>, every <code>Repository</code> method takes <code>(using session:
+        Option[ClientSession] = None)</code> — a repository call can join a <a href="#sessions">transaction</a> the same
+        way a raw <code>collection</code> call can.
+    </p>
+    <p>
+        For unit tests, <code>FakeMongoCollection</code> implements <code>MongoCollection</code> in memory — the exact
+        same <code>Filter</code>/<code>Update</code>/<code>Field</code> AST the real driver interprets is interpreted
+        against a <code>TrieMap</code> instead, so repository logic is testable without <code>aggregate</code>/
+        <code>distinct</code>/<code>watch</code> and without a running MongoDB.
+    </p>
+
+    <h2 id="runtime">Runtime backends</h2>
+    <p>Each runtime module provides <code>given Effect[F]</code> and <code>given RsBridge[F, S]</code>:</p>
+    <table>
+        <tr>
+            <th>Module</th>
+            <th>Effect</th>
+            <th>Stream</th>
+            <th>Notes</th>
+        </tr>
+        <tr>
+            <td><code>mongo4s-cats</code></td>
+            <td>cats.effect.IO</td>
+            <td>fs2.Stream</td>
+            <td>via fs2.interop.reactivestreams</td>
+        </tr>
+        <tr>
+            <td><code>mongo4s-zio</code></td>
+            <td>zio.Task</td>
+            <td>zio.stream.ZStream</td>
+            <td>via zio-interop-reactivestreams</td>
+        </tr>
+        <tr>
+            <td><code>mongo4s-kyo</code></td>
+            <td>kyo.IO</td>
+            <td>kyo.Stream</td>
+            <td>via kyo-reactive-streams</td>
+        </tr>
+        <tr>
+            <td><code>mongo4s-rapid</code></td>
+            <td>rapid.Task</td>
+            <td>rapid.Stream</td>
+            <td></td>
+        </tr>
+    </table>
+    <p>
+        <code>MongoClient.fromClient</code>/<code>fromSettings</code>/<code>fromConnectionString</code> return a bare
+        <code>F[MongoClient[F, S]]</code> — you own calling <code>.close</code>. On <code>mongo4s-cats</code>,
+        <code>MongoClientResource</code> mirrors the same three constructor names, wrapped as a
+        <code>cats.effect.Resource</code> so <code>.close</code> runs on release automatically:
+    </p>
+    <pre><code>import mongo4s.cats.MongoClientResource
+
+MongoClientResource.fromConnectionString[IO]("mongodb://localhost:27017").use: client =>
+  ...</code></pre>
+    <p class="muted">
+        (zio/kyo/rapid equivalents, using each runtime's own resource-safety idiom instead of copying
+        <code>Resource</code> as-is, are on the roadmap.)
+    </p>
+
+    <h2 id="modules">Modules</h2>
+    <p>Published for Scala 3 under <code>org.mongo4s</code>:</p>
+    <pre><code>"org.mongo4s" %% "mongo4s-&lt;module&gt;" % "0.2.0"</code></pre>
+    <table>
+        <tr>
+            <th>Kind</th>
+            <th>Module</th>
+            <th>Notes</th>
+        </tr>
+        <tr>
+            <td>core</td>
+            <td><code>mongo4s-core</code></td>
+            <td>client/database/collection, Field/Filter/Update, PrimaryKey</td>
+        </tr>
+        <tr>
+            <td rowspan="6">bson</td>
+            <td><code>mongo4s-bson-core</code></td>
+            <td>the scalar + document codec seam</td>
+        </tr>
+        <tr>
+            <td><code>mongo4s-bson-direct</code></td>
+            <td>WireCodec — AST-free, no third-party dependency</td>
+        </tr>
+        <tr>
+            <td><code>mongo4s-bson-cats-data</code></td>
+            <td>cats.data (NonEmptyList/Chain/NonEmptyVector/NonEmptySet/NonEmptyMap) instances</td>
+        </tr>
+        <tr>
+            <td><code>mongo4s-bson-medeia</code></td>
+            <td>bridges medeia</td>
+        </tr>
+        <tr>
+            <td><code>mongo4s-bson-zio</code></td>
+            <td>bridges zio-schema-bson</td>
+        </tr>
+        <tr>
+            <td><code>mongo4s-bson-calypso</code></td>
+            <td>bridges calypso</td>
+        </tr>
+        <tr>
+            <td rowspan="4">runtime</td>
+            <td><code>mongo4s-cats</code></td>
+            <td>cats-effect 3 + fs2</td>
+        </tr>
+        <tr>
+            <td><code>mongo4s-zio</code></td>
+            <td>ZIO 2 + zio-streams</td>
+        </tr>
+        <tr>
+            <td><code>mongo4s-kyo</code></td>
+            <td>kyo 1.0.0-RC6</td>
+        </tr>
+        <tr>
+            <td><code>mongo4s-rapid</code></td>
+            <td>rapid</td>
+        </tr>
+        <tr>
+            <td>repositories</td>
+            <td><code>mongo4s-repositories</code></td>
+            <td>BaseMongoRepository, Repository, WithId</td>
+        </tr>
+    </table>
+
+    <h2 id="benchmarks">Benchmarks</h2>
+    <p>
+        Three separate JMH harnesses, one developer machine — directional ballparks, not hardware-independent
+        authorities. Run them on your own hardware before deciding on the numbers alone.
+    </p>
+    <h3>Codec backends — to <code>org.bson.BsonDocument</code></h3>
+    <table>
+        <tr>
+            <th>Codec</th>
+            <th class="num">Encode ops/s</th>
+            <th class="num">Decode ops/s</th>
+        </tr>
+        <tr>
+            <td>calypso (forProductN)</td>
+            <td class="num"><strong class="best">~3.36M</strong></td>
+            <td class="num">~3.24M</td>
+        </tr>
+        <tr>
+            <td>medeia (derives)</td>
+            <td class="num">~1.40M</td>
+            <td class="num"><strong class="best">~3.34M</strong></td>
+        </tr>
+        <tr>
+            <td>zio-bson (zio-schema derived)</td>
+            <td class="num">~992k</td>
+            <td class="num">~2.98M</td>
+        </tr>
+        <tr>
+            <td>mongo4cats-zio-json</td>
+            <td class="num">~1.03M</td>
+            <td class="num">~920k</td>
+        </tr>
+        <tr>
+            <td>mongo4cats-circe</td>
+            <td class="num"><span class="worst">~972k</span></td>
+            <td class="num"><span class="worst">~665k</span></td>
+        </tr>
+    </table>
+    <p class="muted">All three mongo4s codec bridges beat both mongo4cats codecs by 3–5× on decode — the cost of case
+        class ↔ circe/zio-json ↔ mongo4cats.Bson ↔ org.Bson instead of straight to org.bson.</p>
+
+    <h3>AST-free wire codec — all the way to real bytes</h3>
+    <table>
+        <tr>
+            <th>Path</th>
+            <th class="num">Throughput</th>
+            <th class="num">Alloc</th>
+        </tr>
+        <tr>
+            <td>direct encode</td>
+            <td class="num"><strong class="best">~1.79M ops/s</strong></td>
+            <td class="num"><strong class="best">1792 B/op</strong></td>
+        </tr>
+        <tr>
+            <td>medeiaFull encode</td>
+            <td class="num"><span class="worst">~838k ops/s</span></td>
+            <td class="num"><span class="worst">4712 B/op</span></td>
+        </tr>
+        <tr>
+            <td>direct decode</td>
+            <td class="num"><strong class="best">~1.49M ops/s</strong></td>
+            <td class="num"><strong class="best">1088 B/op</strong></td>
+        </tr>
+        <tr>
+            <td>medeiaFull decode</td>
+            <td class="num"><span class="worst">~900k ops/s</span></td>
+            <td class="num"><span class="worst">3200 B/op</span></td>
+        </tr>
+    </table>
+    <p class="muted">
+        <code>WireCodec</code> is ~2.1× the throughput on encode, ~1.7× on decode, and allocates 2.6–2.9× less —
+        avoiding
+        medeia's own intermediate AST <em>and</em> the driver's own <code>BsonDocument</code>. In typical CRUD the
+        network
+        round trip dwarfs this; it matters for bulk-decode-heavy paths — large cursor streams, ETL, big aggregations.
+    </p>
+
+    <h3 id="runtime-overhead">Runtime overhead — real MongoDB, every backend</h3>
+    <table>
+        <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
+            Throughput — operations per second, higher is better
+        </caption>
+        <tr>
+            <th>Operation</th>
+            <th class="num">cats</th>
+            <th class="num">zio</th>
+            <th class="num">rapid</th>
+            <th class="num">kyo</th>
+            <th class="num">mongo4cats-cats</th>
+            <th class="num">mongo4cats-zio</th>
+        </tr>
+        <tr>
+            <td>insertOne</td>
+            <td class="num"><span class="worst">2272</span></td>
+            <td class="num"><strong class="best">2562</strong></td>
+            <td class="num">2447</td>
+            <td class="num">2505</td>
+            <td class="num">2277</td>
+            <td class="num">2504</td>
+        </tr>
+        <tr>
+            <td>find(filter).all</td>
+            <td class="num">1432</td>
+            <td class="num">1585</td>
+            <td class="num">1551</td>
+            <td class="num"><strong class="best">1595</strong></td>
+            <td class="num"><span class="worst">1316</span></td>
+            <td class="num">1325</td>
+        </tr>
+        <tr>
+            <td>find(filter).stream</td>
+            <td class="num">1404</td>
+            <td class="num">1393</td>
+            <td class="num"><strong class="best">1557</strong></td>
+            <td class="num">1548</td>
+            <td class="num"><span class="worst">359</span></td>
+            <td class="num">1147</td>
+        </tr>
+        <tr>
+            <td>updateOne</td>
+            <td class="num"><span class="worst">2002</span></td>
+            <td class="num"><strong class="best">2222</strong></td>
+            <td class="num">2198</td>
+            <td class="num">2215</td>
+            <td class="num">2138</td>
+            <td class="num">2219</td>
+        </tr>
+        <tr>
+            <td>count(filter)</td>
+            <td class="num"><span class="worst">1804</span></td>
+            <td class="num"><strong class="best">2014</strong></td>
+            <td class="num">1996</td>
+            <td class="num">1975</td>
+            <td class="num">1905</td>
+            <td class="num">1990</td>
+        </tr>
+    </table>
+    <p class="muted">
+        With a clean database on every trial, all six columns land within the same band — the TCP round trip to MongoDB
+        dominates at this scale. The one real outlier is mongo4cats-cats' <code>find(filter).stream</code> (359 ops/s
+        against its own <code>.all</code>'s 1316) — it bridges through a hand-rolled <code>Queue</code>-backed
+        <code>Subscriber</code> instead of <code>fs2.interop.reactivestreams</code>, which every mongo4s
+        <code>.stream()</code> uses.
+    </p>
+
+    <h3>Codec choice under real MongoDB — mongo4s vs mongo4cats</h3>
+    <p>
+        The same harness isolates the codec dimension: four configs, all on cats-effect, against the same real MongoDB —
+        mongo4s with bson-medeia vs bson-direct, and mongo4cats with circe vs zio-json. Two separate runs, same four
+        stacks, two different questions.
+    </p>
+    <table>
+        <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
+            Throughput — operations per second, higher is better
+        </caption>
+        <tr>
+            <th>Operation</th>
+            <th class="num">mongo4s+medeia</th>
+            <th class="num">mongo4s+bson-direct</th>
+            <th class="num">mongo4cats+circe</th>
+            <th class="num">mongo4cats+zio-json</th>
+        </tr>
+        <tr>
+            <td>insertOne</td>
+            <td class="num"><span class="worst">2321</span></td>
+            <td class="num">2323</td>
+            <td class="num">2381</td>
+            <td class="num"><strong class="best">2405</strong></td>
+        </tr>
+        <tr>
+            <td>insertMany (10 docs)</td>
+            <td class="num">2027</td>
+            <td class="num"><span class="worst">2012</span></td>
+            <td class="num"><strong class="best">2173</strong></td>
+            <td class="num">2115</td>
+        </tr>
+        <tr>
+            <td>findOneById</td>
+            <td class="num">2047</td>
+            <td class="num"><span class="worst">2031</span></td>
+            <td class="num"><strong class="best">2184</strong></td>
+            <td class="num">2122</td>
+        </tr>
+        <tr>
+            <td>findOneByFilter</td>
+            <td class="num">2117</td>
+            <td class="num"><span class="worst">2066</span></td>
+            <td class="num"><strong class="best">2270</strong></td>
+            <td class="num">2194</td>
+        </tr>
+        <tr>
+            <td>findAll (~100 docs)</td>
+            <td class="num">1415</td>
+            <td class="num"><strong class="best">1477</strong></td>
+            <td class="num"><span class="worst">1299</span></td>
+            <td class="num">1310</td>
+        </tr>
+        <tr>
+            <td>findStream (~100 docs)</td>
+            <td class="num">1426</td>
+            <td class="num"><strong class="best">1435</strong></td>
+            <td class="num"><span class="worst">386</span></td>
+            <td class="num">388</td>
+        </tr>
+        <tr>
+            <td>updateOne</td>
+            <td class="num">2026</td>
+            <td class="num"><span class="worst">1988</span></td>
+            <td class="num">2143</td>
+            <td class="num"><strong class="best">2159</strong></td>
+        </tr>
+        <tr>
+            <td>deleteOne</td>
+            <td class="num">1063</td>
+            <td class="num"><span class="worst">1062</span></td>
+            <td class="num"><strong class="best">1129</strong></td>
+            <td class="num">1108</td>
+        </tr>
+        <tr>
+            <td>count</td>
+            <td class="num">1852</td>
+            <td class="num"><span class="worst">1847</span></td>
+            <td class="num"><strong class="best">1958</strong></td>
+            <td class="num">1916</td>
+        </tr>
+    </table>
+    <p class="muted">
+        Same finding as the <a href="#runtime-overhead">runtime table above</a>: all four land within the same band on
+        every
+        operation (differences within normal run-to-run noise, ~±5–10%) — the network round trip dominates regardless of
+        codec. The one outlier is mongo4cats' <code>find(filter).stream</code>, ~6× slower than everything else
+        <em>and independent of codec</em> (386 vs 388 ops/s for circe vs zio-json) — confirms it's the runtime's
+        <code>Queue</code>-backed <code>Subscriber</code> bridge, not the codec.
+    </p>
+    <table>
+        <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
+            Memory allocated per single call, in KB — lower is less garbage, not less work done
+        </caption>
+        <tr>
+            <th>Operation</th>
+            <th class="num">mongo4s+medeia</th>
+            <th class="num">mongo4s+bson-direct</th>
+            <th class="num">mongo4cats+circe</th>
+            <th class="num">mongo4cats+zio-json</th>
+        </tr>
+        <tr>
+            <td>insertOne</td>
+            <td class="num"><span class="worst">49.0</span></td>
+            <td class="num">46.6</td>
+            <td class="num">25.3</td>
+            <td class="num"><strong class="best">24.6</strong></td>
+        </tr>
+        <tr>
+            <td>insertMany (10 docs)</td>
+            <td class="num"><span class="worst">89.9</span></td>
+            <td class="num"><strong class="best">66.5</strong></td>
+            <td class="num">80.9</td>
+            <td class="num">74.6</td>
+        </tr>
+        <tr>
+            <td>findOneById</td>
+            <td class="num"><span class="worst">60.6</span></td>
+            <td class="num">58.8</td>
+            <td class="num">39.5</td>
+            <td class="num"><strong class="best">36.6</strong></td>
+        </tr>
+        <tr>
+            <td>findOneByFilter</td>
+            <td class="num"><span class="worst">60.5</span></td>
+            <td class="num">58.7</td>
+            <td class="num">39.3</td>
+            <td class="num"><strong class="best">36.5</strong></td>
+        </tr>
+        <tr>
+            <td>findAll (~100 docs)</td>
+            <td class="num">419.4</td>
+            <td class="num"><strong class="best">241.9</strong></td>
+            <td class="num"><span class="worst">951.7</span></td>
+            <td class="num">674.8</td>
+        </tr>
+        <tr>
+            <td>findStream (~100 docs)</td>
+            <td class="num">427.5</td>
+            <td class="num"><strong class="best">240.3</strong></td>
+            <td class="num"><span class="worst">3027.2</span></td>
+            <td class="num">2746.2</td>
+        </tr>
+        <tr>
+            <td>updateOne</td>
+            <td class="num"><span class="worst">47.0</span></td>
+            <td class="num">46.9</td>
+            <td class="num"><strong class="best">22.4</strong></td>
+            <td class="num"><strong class="best">22.4</strong></td>
+        </tr>
+        <tr>
+            <td>deleteOne</td>
+            <td class="num"><span class="worst">94.2</span></td>
+            <td class="num">92.3</td>
+            <td class="num">45.3</td>
+            <td class="num"><strong class="best">44.8</strong></td>
+        </tr>
+        <tr>
+            <td>count</td>
+            <td class="num"><span class="worst">56.5</span></td>
+            <td class="num"><span class="worst">56.5</span></td>
+            <td class="num"><strong class="best">31.5</strong></td>
+            <td class="num"><strong class="best">31.5</strong></td>
+        </tr>
+    </table>
+    <p class="muted">
+        <strong>bson-direct allocates less than bson-medeia on every single operation</strong> — the AST-free advantage
+        measured in isolation above survives end-to-end through a real driver round trip, modestly on single-document
+        ops
+        (~4–6%) and much more on bulk reads (~42–44% less). <strong>mongo4cats allocates less than mongo4s on
+        single-document ops, but far more on bulk reads</strong> (2–13× more on findAll/findStream) — its own
+        <code>mongo4cats.bson.BsonValue</code> wrapper adds a full extra tree per document on top of org.bson's, and
+        that
+        cost multiplies with document count. Neither library is uniformly lighter — it depends on point-lookups vs bulk
+        scans.
+    </p>
+
+    <h2 id="design">Design notes</h2>
+    <ul>
+        <li><strong>Scala 3 only.</strong> <code>given</code>-based throughout; derivation uses <code>Mirror</code> and
+            inline, no runtime reflection.
+        </li>
+        <li><strong>Effect-agnostic by construction.</strong> <code>core</code> depends on neither cats-effect nor fs2 —
+            a runtime module is ~two <code>given</code> instances.
+        </li>
+        <li><strong>No global <code>CodecProvider</code>.</strong> Every codec is resolved (and, for bson-direct,
+            registered) per-collection, never process-wide.
+        </li>
+        <li><strong>Own filter/update AST</strong> — interpretable both to a real <code>Bson</code> query and, for
+            tests, against an in-memory map.
+        </li>
+        <li><strong>Batching is empty-list-safe</strong> — <code>inFilter(Nil)</code> is <code>Filter.none</code>, not
+            "match everything."
+        </li>
+        <li><strong><code>BaseMongoRepository</code> is a base class you extend</strong>, not a generated one — declare
+            extra domain queries directly against <code>collection</code>/<code>Filter</code>/<code>Field</code>.
+        </li>
+    </ul>
+
+    <footer>
+        <p>
+            <a href="https://github.com/mongo4s/mongo4s">Source</a> ·
+            <a href="https://github.com/mongo4s/mongo4s/blob/main/README.md">README</a> ·
+            Apache 2.0
+        </p>
+    </footer>
 
 </div>
 </body>

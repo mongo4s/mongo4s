@@ -1,13 +1,15 @@
 package mongo4s.kyo
 
-import kyo.{AllowUnsafe, Duration, KyoApp, Sync}
-import mongo4s.kyo.KyoInstances.given
-import mongo4s.{Effect, RsBridge}
-import org.reactivestreams.{Publisher, Subscriber, Subscription}
-import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.matchers.should.Matchers
 
-import scala.concurrent.duration.*
+import kyo.{AllowUnsafe, Duration, KyoApp, Sync}
+import org.reactivestreams.{Publisher, Subscriber, Subscription}
+
+import mongo4s.{Effect, RsBridge, RsBridgeConfig, RsBridgeError}
+
+import scala.concurrent.duration.given
+import mongo4s.kyo.KyoInstances.given
 
 object KyoBridgeSpec:
   final class ListPublisher[A](items: List[A]) extends Publisher[A]:
@@ -26,8 +28,16 @@ object KyoBridgeSpec:
           def cancel(): Unit         = cancelled = true
       )
 
+  final class NeverPublisher[A] extends Publisher[A]:
+    def subscribe(subscriber: Subscriber[? >: A]): Unit =
+      subscriber.onSubscribe(
+        new Subscription:
+          def request(n: Long): Unit = ()
+          def cancel(): Unit         = ()
+      )
+
 final class KyoBridgeSpec extends AnyWordSpec, Matchers:
-  import KyoBridgeSpec.ListPublisher
+  import KyoBridgeSpec.{ListPublisher, NeverPublisher}
 
   private val bridge = summon[RsBridge[KIO, KStream]]
   private val effect = summon[Effect[KIO]]
@@ -52,6 +62,33 @@ final class KyoBridgeSpec extends AnyWordSpec, Matchers:
     }
     "stream all elements" in {
       run(bridge.stream(ListPublisher(List(1, 2, 3))).run).toList shouldBe List(1, 2, 3)
+    }
+  }
+
+  "kyo RsBridge with strictSingleResult" should {
+    given RsBridgeConfig = RsBridgeConfig.Default.copy(strictSingleResult = true)
+    val strictBridge     = summon[RsBridge[KIO, KStream]]
+
+    "fail one with TooManyResults for a 2-element publisher" in {
+      intercept[RsBridgeError.TooManyResults](run(strictBridge.one(ListPublisher(List(1, 2))))) shouldBe RsBridgeError.TooManyResults(2)
+    }
+    "fail one with EmptyResult for an empty publisher" in {
+      intercept[RsBridgeError.EmptyResult](run(strictBridge.one(ListPublisher(List.empty[Int])))) shouldBe RsBridgeError.EmptyResult()
+    }
+  }
+
+  "kyo RsBridge with strictSingleResult disabled (default)" should {
+    "still return the first element for a 2-element publisher (regression guard)" in {
+      run(bridge.one(ListPublisher(List(1, 2)))) shouldBe 1
+    }
+  }
+
+  "kyo RsBridge with a timeout" should {
+    given RsBridgeConfig = RsBridgeConfig.Default.copy(timeout = Some(50.millis))
+    val timeoutBridge    = summon[RsBridge[KIO, KStream]]
+
+    "fail with RsBridgeError.Timeout when the publisher never completes" in {
+      intercept[RsBridgeError.Timeout](run(timeoutBridge.list(NeverPublisher[Int]()))) shouldBe RsBridgeError.Timeout(50.millis)
     }
   }
 

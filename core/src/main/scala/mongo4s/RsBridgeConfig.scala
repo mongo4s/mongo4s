@@ -1,6 +1,12 @@
 package mongo4s
 
-final case class RsBridgeConfig(bufferSize: Int)
+import scala.concurrent.duration.FiniteDuration
+
+final case class RsBridgeConfig(
+    bufferSize: Int,
+    timeout: Option[FiniteDuration] = None,
+    strictSingleResult: Boolean = false,
+)
 
 object RsBridgeConfig:
   val Default: RsBridgeConfig = RsBridgeConfig(bufferSize = 256)
