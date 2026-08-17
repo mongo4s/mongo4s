@@ -53,10 +53,10 @@ third-party codec library, no extra dependency beyond `mongo4s-core` itself:
 
 ```scala
 libraryDependencies ++= Seq(
-  "org.mongo4s" %% "mongo4s-cats"           % "0.3.0", // mongo4s-core + cats-effect integration
-  "org.mongo4s" %% "mongo4s-bson-direct"    % "0.3.0", // ast-free bson codecs
-  "org.mongo4s" %% "mongo4s-bson-cats-data" % "0.3.0", // if you need NonEmptyList etc. codec instances
-  "org.mongo4s" %% "mongo4s-repositories"   % "0.3.0", // if you need auto-generated CRUD repository ops for your model
+  "org.mongo4s" %% "mongo4s-cats"           % "0.3.1", // mongo4s-core + cats-effect integration
+  "org.mongo4s" %% "mongo4s-bson-direct"    % "0.3.1", // ast-free bson codecs
+  "org.mongo4s" %% "mongo4s-bson-cats-data" % "0.3.1", // if you need NonEmptyList etc. codec instances
+  "org.mongo4s" %% "mongo4s-repositories"   % "0.3.1", // if you need auto-generated CRUD repository ops for your model
 )
 ```
 
@@ -492,7 +492,7 @@ on the roadmap.)
 Published for Scala 3 under `org.mongo4s`:
 
 ```scala
-"org.mongo4s" %% "mongo4s-<module>" % "0.3.0"
+"org.mongo4s" %% "mongo4s-<module>" % "0.3.1"
 ```
 
 | | Module | Notes |
