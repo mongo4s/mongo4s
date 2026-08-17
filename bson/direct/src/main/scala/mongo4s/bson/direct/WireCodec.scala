@@ -28,7 +28,13 @@ private[direct] trait FieldCodec[A] extends WireCodec[A]:
     reader.readEndDocument()
     result
 
-object WireCodec extends WirePrimitiveInstances:
+private[direct] trait WireCodecLowPriorityDerivation:
+  inline given derived[A](using m: Mirror.Of[A], config: WireCodecConfig): WireCodec[A] =
+    inline m match
+      case p: Mirror.ProductOf[A] => WireProductDerivation.derived[A](using p, config)
+      case s: Mirror.SumOf[A]     => WireSumDerivation.derived[A](using s, config)
+
+object WireCodec extends WireCodecLowPriorityDerivation, WirePrimitiveInstances:
   inline def apply[A](using instance: WireCodec[A]): WireCodec[A] = instance
 
   def instance[A](enc: (BsonWriter, A) => Unit, dec: BsonReader => A): WireCodec[A] =
@@ -44,8 +50,3 @@ object WireCodec extends WirePrimitiveInstances:
 
   given fromEncoderAndDecoder[A](using encoder: WireEncoder[A], decoder: WireDecoder[A]): WireCodec[A] =
     from(encoder, decoder)
-
-  inline given derived[A](using m: Mirror.Of[A], config: WireCodecConfig): WireCodec[A] =
-    inline m match
-      case p: Mirror.ProductOf[A] => WireProductDerivation.derived[A](using p, config)
-      case s: Mirror.SumOf[A]     => WireSumDerivation.derived[A](using s, config)
