@@ -307,10 +307,10 @@
     <p>Pick a runtime. The default codec (<code>bson-direct</code>) derives straight from your case class — AST-free, no
         third-party codec library, no extra dependency beyond <code>mongo4s-core</code> itself:</p>
     <pre><code>libraryDependencies ++= Seq(
-    "org.mongo4s" %% "mongo4s-cats"           % "0.3.1", // mongo4s-core + cats-effect integration
-    "org.mongo4s" %% "mongo4s-bson-direct"    % "0.3.1", // ast-free bson codecs
-    "org.mongo4s" %% "mongo4s-bson-cats-data" % "0.3.1", // if you need NonEmptyList etc. codec instances
-    "org.mongo4s" %% "mongo4s-repositories"   % "0.3.1", // if you need auto-generated CRUD repository ops for your model
+    "org.mongo4s" %% "mongo4s-cats"           % "0.4.0", // mongo4s-core + cats-effect integration
+    "org.mongo4s" %% "mongo4s-bson-direct"    % "0.4.0", // ast-free bson codecs
+    "org.mongo4s" %% "mongo4s-bson-cats-data" % "0.4.0", // if you need NonEmptyList etc. codec instances
+    "org.mongo4s" %% "mongo4s-repositories"   % "0.4.0", // if you need auto-generated CRUD repository ops for your model
 )</code></pre>
     <pre><code>import cats.effect.{IO, IOApp}
 
@@ -542,7 +542,8 @@ val adults: IO[List[User]] = users.aggregate[User](pipeline).all</code></pre>
             <td><code>mongo4s-bson-cats-data</code></td>
             <td>cats-core</td>
             <td><code>BsonEncoder</code>/<code>BsonDecoder</code>/<code>WireCodec</code> for
-                <code>NonEmptyList</code>/<code>Chain</code>/<code>NonEmptyVector</code>/<code>NonEmptySet</code>/<code>NonEmptyMap</code>
+                <code>NonEmptyList</code>/<code>Chain</code>/<code>NonEmptyVector</code>/<code>NonEmptySet</code>/<code>NonEmptyMap</code>,
+                <code>WireCodec</code> for <code>Ior</code>
             </td>
         </tr>
     </table>
@@ -567,11 +568,20 @@ object Shape:
   final case class Circle(radius: Double)                   extends Shape derives WireCodec
   final case class Rectangle(width: Double, height: Double) extends Shape derives WireCodec</code></pre>
     <p>
-        Products, <code>Option</code>, <code>List</code>, nested case classes, sealed traits/enums (via a
+        Products, <code>Option</code>, <code>Either</code>, nested case classes, sealed traits/enums (via a
         <code>_type</code> discriminator field, written first), and self-/mutually-recursive types all derive directly —
         recursive derivation defers behind a <code>lazy val</code> internally so a type's own <code>given</code> never
         forces itself mid-construction. Anything with an existing <code>BsonEncoder</code>/<code>BsonDecoder</code>
         bridges automatically, at the cost of one <code>BsonValue</code> per field instead of zero.
+    </p>
+    <p class="muted">
+        <code>List</code>/<code>Vector</code>/<code>Seq</code>/<code>Set</code>/<code>Array</code> write a real BSON
+        array, and <code>Map[String, A]</code> a real BSON document keyed by its own keys —
+        <code>String</code> being the key type isn't a limitation of the general mechanism, it's just what BSON's
+        own field names are. Every <em>other</em> <code>Iterable</code> collection with a
+        <code>scala.collection.Factory</code> (<code>Queue</code>, <code>ArraySeq</code>, <code>ListSet</code>,
+        <code>LazyList</code>, <code>SortedSet</code>/<code>TreeSet</code> given an <code>Ordering</code>, …) gets an
+        array-shaped <code>WireCodec</code> too, generically — no dedicated <code>given</code> needed per type.
     </p>
     <p>
         <code>getDirectCollection</code> registers the derived codec with the driver via
@@ -671,6 +681,35 @@ object UserId:
         instead of misbehaving at runtime.
     </p>
 
+    <h4>Either[A, B]</h4>
+    <p>
+        <code>WireCodec[Either[A, B]]</code> derives given <code>WireCodec[A]</code> and <code>WireCodec[B]</code>,
+        flat like a derived sealed trait (<code>{"_type": "Circle", "radius": 2.0}</code>) rather than wrapped in a
+        <code>Left</code>/<code>Right</code> envelope — the discriminator is each branch's own runtime type name,
+        and a document-shaped branch (a case class) has its fields inlined directly instead of nested under a
+        <code>"value"</code> key:
+    </p>
+    <pre><code>final case class ValidationError(message: String)
+final case class Approved(reference: String)
+
+// Right(Approved("abc")) -> {"_type": "Approved", "reference": "abc"}
+// Left(ValidationError("bad input")) -> {"_type": "ValidationError", "message": "bad input"}
+val result: Either[ValidationError, Approved] = ...</code></pre>
+    <p class="muted">
+        A scalar branch (no fields to inline, e.g. a bare <code>String</code>) keeps a <code>"value"</code> field,
+        since a bare BSON scalar can't also carry the discriminator in the same slot. The two branches must resolve
+        to distinguishable type names — <code>Either[Foo, Foo]</code>, or two differently-named types that happen to
+        share a runtime class name once generics are erased, throws when the codec is summoned rather than risking a
+        silent wrong-branch decode later.
+    </p>
+    <p class="muted">
+        The discriminator is <code>ClassTag[A].runtimeClass.getSimpleName</code> — for
+        <code>Int</code>/<code>Long</code>/<code>Double</code>/<code>Boolean</code>/etc, that's the <em>JVM
+        primitive's</em> name (<code>"int"</code>, not <code>"Integer"</code>), since <code>ClassTag[Int]</code>'s
+        <code>runtimeClass</code> is the primitive class, not the boxed one. Not a bug, just worth knowing if one
+        branch is a bare numeric/boolean type.
+    </p>
+
     <h3>bson-cats-data — <code>cats.data</code> support</h3>
     <p>
         <code>NonEmptyList</code>/<code>Chain</code>/<code>NonEmptyVector</code>/<code>NonEmptySet</code>/<code>NonEmptyMap</code>
@@ -686,6 +725,15 @@ final case class Team(members: NonEmptyList[String]) derives BsonDocumentCodec /
     <p class="muted">
         <code>NonEmptySet</code>/<code>NonEmptyMap</code> additionally need a <code>cats.Order</code> for their
         element/key type — the same <code>Order</code> you'd already need to construct one of these types directly.
+    </p>
+    <p class="muted">
+        <code>Ior[A, B]</code> gets a <code>WireCodec</code> too — flat and discriminated by each branch's own type
+        name, the same idea as <code>bson-direct</code>'s own <code>Either[A, B]</code> above, not
+        <code>"Left"</code>/<code>"Right"</code>/<code>"Both"</code>. <code>Both</code> doesn't have a single "own"
+        type — it holds an <code>A</code> and a <code>B</code> at once — so its discriminator is the two names
+        joined (<code>"String+Foo"</code>), with each side nested under its own <code>"left"</code>/<code>"right"</code>
+        key rather than inlined, to avoid a silent field-name collision if <code>A</code> and <code>B</code> happen
+        to share a field.
     </p>
 
     <h2 id="repositories">Repositories</h2>
@@ -752,22 +800,41 @@ BaseMongoRepository.objectId[F, S, E](db, "collection")      // WithId[ObjectId,
     </table>
     <p>
         <code>MongoClient.fromClient</code>/<code>fromSettings</code>/<code>fromConnectionString</code> return a bare
-        <code>F[MongoClient[F, S]]</code> — you own calling <code>.close</code>. On <code>mongo4s-cats</code>,
-        <code>MongoClientResource</code> mirrors the same three constructor names, wrapped as a
-        <code>cats.effect.Resource</code> so <code>.close</code> runs on release automatically:
+        <code>F[MongoClient[F, S]]</code> — you own calling <code>.close</code>. Every runtime module also ships
+        <code>MongoClientResource</code> with the same three constructor names, wrapped in that runtime's own
+        resource-safety idiom rather than one type copy-pasted across all four:
     </p>
-    <pre><code>import mongo4s.cats.MongoClientResource
+    <pre><code>// cats — cats.effect.Resource
+import mongo4s.cats.MongoClientResource
 
 MongoClientResource.fromConnectionString[IO]("mongodb://localhost:27017").use: client =>
   ...</code></pre>
-    <p class="muted">
-        (zio/kyo/rapid equivalents, using each runtime's own resource-safety idiom instead of copying
-        <code>Resource</code> as-is, are on the roadmap.)
-    </p>
+    <pre><code>// zio — ZIO.acquireRelease, released when the enclosing ZIO.scoped block exits
+import mongo4s.zio.MongoClientResource
+
+ZIO.scoped:
+  for
+    client &lt;- MongoClientResource.fromConnectionString("mongodb://localhost:27017")
+    ...
+  yield ()</code></pre>
+    <pre><code>// kyo — Scope.acquireRelease, released by Scope.run
+import mongo4s.kyo.MongoClientResource
+
+Scope.run:
+  for
+    client &lt;- MongoClientResource.fromConnectionString("mongodb://localhost:27017")
+    ...
+  yield ()</code></pre>
+    <pre><code>// rapid has no Resource/Scope type — Task.guarantee is its only finalizer primitive, attached to an
+// already-known computation — so this is bracket-shaped (a `use` callback) instead of a composable value
+import mongo4s.rapid.MongoClientResource
+
+MongoClientResource.fromConnectionString("mongodb://localhost:27017"): client =>
+  ...</code></pre>
 
     <h2 id="modules">Modules</h2>
     <p>Published for Scala 3 under <code>org.mongo4s</code>:</p>
-    <pre><code>"org.mongo4s" %% "mongo4s-&lt;module&gt;" % "0.3.1"</code></pre>
+    <pre><code>"org.mongo4s" %% "mongo4s-&lt;module&gt;" % "0.4.0"</code></pre>
     <table>
         <tr>
             <th>Kind</th>
@@ -790,7 +857,7 @@ MongoClientResource.fromConnectionString[IO]("mongodb://localhost:27017").use: c
         </tr>
         <tr>
             <td><code>mongo4s-bson-cats-data</code></td>
-            <td>cats.data (NonEmptyList/Chain/NonEmptyVector/NonEmptySet/NonEmptyMap) instances</td>
+            <td>cats.data (NonEmptyList/Chain/NonEmptyVector/NonEmptySet/NonEmptyMap/Ior) instances</td>
         </tr>
         <tr>
             <td><code>mongo4s-bson-medeia</code></td>

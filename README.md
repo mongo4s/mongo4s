@@ -53,10 +53,10 @@ third-party codec library, no extra dependency beyond `mongo4s-core` itself:
 
 ```scala
 libraryDependencies ++= Seq(
-  "org.mongo4s" %% "mongo4s-cats"           % "0.3.1", // mongo4s-core + cats-effect integration
-  "org.mongo4s" %% "mongo4s-bson-direct"    % "0.3.1", // ast-free bson codecs
-  "org.mongo4s" %% "mongo4s-bson-cats-data" % "0.3.1", // if you need NonEmptyList etc. codec instances
-  "org.mongo4s" %% "mongo4s-repositories"   % "0.3.1", // if you need auto-generated CRUD repository ops for your model
+  "org.mongo4s" %% "mongo4s-cats"           % "0.4.0", // mongo4s-core + cats-effect integration
+  "org.mongo4s" %% "mongo4s-bson-direct"    % "0.4.0", // ast-free bson codecs
+  "org.mongo4s" %% "mongo4s-bson-cats-data" % "0.4.0", // if you need NonEmptyList etc. codec instances
+  "org.mongo4s" %% "mongo4s-repositories"   % "0.4.0", // if you need auto-generated CRUD repository ops for your model
 )
 ```
 
@@ -296,7 +296,7 @@ AST-free path below, a `WireCodec[A]`. Bring whichever backend fits — mongo4s 
 | `mongo4s-bson-zio` | [zio-schema-bson](https://github.com/zio/zio-bson)                             | via `zio.schema.Schema` |
 | `mongo4s-bson-calypso` | [calypso](https://github.com/m2-oss/calypso)                                   | hand-written `forProductN` codecs |
 | `mongo4s-bson-direct` | [mongo4s itself](https://github.com/mongo4s/mongo4s/tree/main/bson/direct/src) | `WireCodec[A]`, AST-free — see below |
-| `mongo4s-bson-cats-data` | [cats-core](https://typelevel.org/cats/) | `BsonEncoder`/`BsonDecoder`/`WireCodec` for `NonEmptyList`/`Chain`/`NonEmptyVector`/`NonEmptySet`/`NonEmptyMap` |
+| `mongo4s-bson-cats-data` | [cats-core](https://typelevel.org/cats/) | `BsonEncoder`/`BsonDecoder`/`WireCodec` for `NonEmptyList`/`Chain`/`NonEmptyVector`/`NonEmptySet`/`NonEmptyMap`, `WireCodec` for `Ior` |
 
 ### `bson-direct` — AST-free `WireCodec`
 
@@ -317,11 +317,17 @@ object Shape:
   final case class Rectangle(width: Double, height: Double) extends Shape derives WireCodec
 ```
 
-Products, `Option`, `List`, nested case classes, sealed traits/enums (via a `_type` discriminator field, written
+Products, `Option`, `Either`, nested case classes, sealed traits/enums (via a `_type` discriminator field, written
 first), and self-/mutually-recursive types all derive directly — recursive derivation is deferred behind a `lazy val`
 internally so a type's own `given` never forces itself mid-construction. Anything with an existing `BsonEncoder`/
 `BsonDecoder` (`ObjectId`, `Instant`, `UUID`, …) bridges automatically, at the cost of one `BsonValue` per field
 instead of zero.
+
+`List`/`Vector`/`Seq`/`Set`/`Array` write a real BSON array, and `Map[String, A]` a real BSON document keyed by its
+own keys — `String` being the key type isn't a limitation of the general mechanism, it's just what BSON's own field
+names are. Every *other* `Iterable` collection with a `scala.collection.Factory` (`Queue`, `ArraySeq`, `ListSet`,
+`LazyList`, `SortedSet`/`TreeSet` given an `Ordering`, …) gets an array-shaped `WireCodec` too, generically — no
+dedicated `given` needed per type.
 
 `getDirectCollection` registers the derived codec with the driver via `CodecRegistries.fromCodecs(...)`, so
 insert/find/replace/update/delete/bulkWrite decode straight to `A` — genuinely zero `BsonDocument` construction on the
@@ -422,6 +428,31 @@ in the first place. `ScalarWireCodec` is deliberately narrower than `WireCodec`:
 (`derives WireCodec`) is genuinely document-shaped, so it's never typed as `ScalarWireCodec` — asking for one
 (`ScalarWireCodec[SomeCaseClass]`) fails to compile instead of misbehaving at runtime.
 
+#### `Either[A, B]`
+
+`WireCodec[Either[A, B]]` derives given `WireCodec[A]` and `WireCodec[B]`, flat like a derived sealed trait
+(`{"_type": "Circle", "radius": 2.0}`) rather than wrapped in a `Left`/`Right` envelope — the discriminator is each
+branch's own runtime type name, and a document-shaped branch (a case class) has its fields inlined directly instead
+of nested under a `"value"` key:
+
+```scala
+final case class ValidationError(message: String)
+final case class Approved(reference: String)
+
+// Right(Approved("abc")) -> {"_type": "Approved", "reference": "abc"}
+// Left(ValidationError("bad input")) -> {"_type": "ValidationError", "message": "bad input"}
+val result: Either[ValidationError, Approved] = ...
+```
+
+A scalar branch (no fields to inline, e.g. a bare `String`) keeps a `"value"` field, since a bare BSON scalar can't
+also carry the discriminator in the same slot. The two branches must resolve to distinguishable type names —
+`Either[Foo, Foo]`, or two differently-named types that happen to share a runtime class name once generics are
+erased, throws when the codec is summoned rather than risking a silent wrong-branch decode later.
+
+The discriminator is `ClassTag[A].runtimeClass.getSimpleName` — for `Int`/`Long`/`Double`/`Boolean`/etc, that's the
+*JVM primitive's* name (`"int"`, not `"Integer"`), since `ClassTag[Int]`'s `runtimeClass` is the primitive class,
+not the boxed one. Not a bug, just worth knowing if one branch is a bare numeric/boolean type.
+
 ### `bson-cats-data` — `cats.data` support
 
 `NonEmptyList`/`Chain`/`NonEmptyVector`/`NonEmptySet`/`NonEmptyMap` get `BsonEncoder`/`BsonDecoder` and `WireCodec`
@@ -437,6 +468,12 @@ final case class Team(members: NonEmptyList[String]) derives BsonDocumentCodec /
 
 `NonEmptySet`/`NonEmptyMap` additionally need a `cats.Order` for their element/key type — the same `Order` you'd
 already need to construct one of these types directly.
+
+`Ior[A, B]` gets a `WireCodec` too — flat and discriminated by each branch's own type name, the same idea as
+`bson-direct`'s own `Either[A, B]` above, not `"Left"`/`"Right"`/`"Both"`. `Both` doesn't have a
+single "own" type — it holds an `A` and a `B` at once — so its discriminator is the two names joined
+(`"String+Foo"`), with each side nested under its own `"left"`/`"right"` key rather than inlined, to avoid a silent
+field-name collision if `A` and `B` happen to share a field.
 
 ## Repositories
 
@@ -474,25 +511,54 @@ Each runtime module provides `given Effect[F]` (a minimal `pure`/`delay`/`map`/`
 | `mongo4s-rapid` | `rapid.Task` | `rapid.Stream` | |
 
 `MongoClient.fromClient`/`fromSettings`/`fromConnectionString` return a bare `F[MongoClient[F, S]]` — you own calling
-`.close`. On `mongo4s-cats`, `MongoClientResource` mirrors the same three constructor names, wrapped as a
-`cats.effect.Resource` so `.close` runs on release automatically:
+`.close`. Every runtime module also ships `MongoClientResource` with the same three constructor names, wrapped in
+that runtime's own resource-safety idiom rather than one type copy-pasted across all four:
 
 ```scala
+// cats — cats.effect.Resource
 import mongo4s.cats.MongoClientResource
 
 MongoClientResource.fromConnectionString[IO]("mongodb://localhost:27017").use: client =>
   ...
 ```
 
-(zio/kyo/rapid equivalents, using each runtime's own resource-safety idiom instead of copying `Resource` as-is, are
-on the roadmap.)
+```scala
+// zio — ZIO.acquireRelease, released when the enclosing ZIO.scoped block exits
+import mongo4s.zio.MongoClientResource
+
+ZIO.scoped:
+  for
+    client <- MongoClientResource.fromConnectionString("mongodb://localhost:27017")
+    ...
+  yield ()
+```
+
+```scala
+// kyo — Scope.acquireRelease, released by Scope.run
+import mongo4s.kyo.MongoClientResource
+
+Scope.run:
+  for
+    client <- MongoClientResource.fromConnectionString("mongodb://localhost:27017")
+    ...
+  yield ()
+```
+
+```scala
+// rapid has no Resource/Scope type — Task.guarantee is its only finalizer primitive, attached to an
+// already-known computation — so this is bracket-shaped (a `use` callback) instead of a composable value
+import mongo4s.rapid.MongoClientResource
+
+MongoClientResource.fromConnectionString("mongodb://localhost:27017"): client =>
+  ...
+```
 
 ## Modules
 
 Published for Scala 3 under `org.mongo4s`:
 
 ```scala
-"org.mongo4s" %% "mongo4s-<module>" % "0.3.1"
+"org.mongo4s" %% "mongo4s-<module>" % "0.4.0"
 ```
 
 | | Module | Notes |
@@ -500,7 +566,7 @@ Published for Scala 3 under `org.mongo4s`:
 | core | `mongo4s-core` | `MongoClient`/`MongoDatabase`/`MongoCollection`, `Field`/`Filter`/`Update`, `PrimaryKey`; depends on `bson-core` + `bson-direct` only |
 | bson | `mongo4s-bson-core` | `BsonEncoder`/`BsonDecoder`/`BsonDocumentCodec` — the scalar + document codec seam |
 | | `mongo4s-bson-direct` | `WireCodec[A]` — AST-free product/sum derivation, no third-party dependency |
-| | `mongo4s-bson-cats-data` | `cats.data` (`NonEmptyList`/`Chain`/`NonEmptyVector`/`NonEmptySet`/`NonEmptyMap`) instances |
+| | `mongo4s-bson-cats-data` | `cats.data` (`NonEmptyList`/`Chain`/`NonEmptyVector`/`NonEmptySet`/`NonEmptyMap`/`Ior`) instances |
 | | `mongo4s-bson-medeia` | bridges `medeia`'s `derives BsonDocumentCodec` |
 | | `mongo4s-bson-zio` | bridges `zio-schema-bson` |
 | | `mongo4s-bson-calypso` | bridges `calypso`'s `forProductN` |

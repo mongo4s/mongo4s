@@ -4,25 +4,19 @@ import java.time.Instant
 
 import zio.*
 
-import mongo4s.zio.ZioStream
-import mongo4s.{Field, MongoClient}
+import mongo4s.Field
+import mongo4s.zio.MongoClientResource
 
 import mongo4s.bson.BsonInstances.given
 import mongo4s.bson.ziobson.ZioBsonInstances.given
-import mongo4s.zio.ZioInstances.given
 import zioBsonCodecs.given
 
 object CoreZioZioBsonApp extends ZIOAppDefault:
 
-  type S[A] = ZioStream[A]
-
-  private def mongoClient(connectionString: String): ZIO[Scope, Throwable, MongoClient[Task, S]] =
-    ZIO.acquireRelease(MongoClient.fromConnectionString[Task, S](connectionString))(_.close.orDie)
-
   def run: ZIO[Any, Throwable, Unit] =
     ZIO.scoped:
       for
-        client <- mongoClient("mongodb://localhost:27018")
+        client <- MongoClientResource.fromConnectionString("mongodb://localhost:27018")
         db     <- client.getDatabase("mongo4s_examples")
         users  <- db.getCollection[User]("core_zio_ziobson_users")
         alice   = User(
