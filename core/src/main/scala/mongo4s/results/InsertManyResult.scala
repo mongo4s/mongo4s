@@ -7,4 +7,4 @@ opaque type InsertManyResult = List[BsonValue]
 object InsertManyResult:
   def apply(insertedIds: List[BsonValue]): InsertManyResult = insertedIds
 
-  extension (result: InsertManyResult) def insertedIds: List[BsonValue] = result
+  extension (result: InsertManyResult) inline def insertedIds: List[BsonValue] = result

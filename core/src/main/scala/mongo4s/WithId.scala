@@ -12,8 +12,15 @@ object WithId:
 
   type Oid[E] = WithId[ObjectId, E]
 
+  def field[Id, E, A](inner: Field[E, A]): Field[WithId[Id, E], A] = Field(inner.path)
+  def idField[Id, E]: Field[WithId[Id, E], Id]                     = Field(FieldPath.literal(IdField))
+
   given [E]: PrimaryKey[WithId[ObjectId, E], ObjectId] =
-    PrimaryKey.make(_.id, id => KeyFields.one(IdField, BsonObjectId(id)))
+    PrimaryKey.make(
+      _.id,
+      List(IdField),
+      id => KeyFields.one(IdField, BsonObjectId(id)),
+    )
 
   given [Id, E](using
       idEncoder: BsonEncoder[Id],
@@ -21,14 +28,15 @@ object WithId:
       codec: BsonDocumentCodec[E],
   ): BsonDocumentCodec[WithId[Id, E]] =
     BsonDocumentCodec.from(
-      BsonDocumentEncoder.instance: value =>
+      BsonDocumentEncoder.instance { value =>
         val document = codec.encodeDocument(value.entity)
         document.append(IdField, idEncoder.encode(value.id))
-      ,
-      BsonDocumentDecoder.instance: document =>
+      },
+      BsonDocumentDecoder.instance { document =>
         for
           rawId  <- Option(document.get(IdField)).toRight(BsonError.MissingField(IdField))
           id     <- idDecoder.decode(rawId)
           entity <- codec.decodeDocument(document)
-        yield WithId(id, entity),
+        yield WithId(id, entity)
+      },
     )

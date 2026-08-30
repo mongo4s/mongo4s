@@ -8,8 +8,8 @@ import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
 import org.bson.io.{BasicOutputBuffer, ByteBufferBsonInput}
-import org.bson.codecs.{BsonDocumentCodec as DriverBsonDocumentCodec, DecoderContext, EncoderContext}
 import org.bson.{BsonBinaryReader, BsonBinaryWriter, BsonDocument, BsonString, ByteBufNIO}
+import org.bson.codecs.{BsonDocumentCodec as DriverBsonDocumentCodec, DecoderContext, EncoderContext}
 
 import mongo4s.bson.{BsonError, BsonEncoder}
 
@@ -29,13 +29,13 @@ object ScalarWireCodecSpec:
 
     given ScalarWireCodec[Provider] =
       ScalarWireCodec[String].iemap(raw => from(raw).toRight(s"Unsupported provider: $raw"))(_.value)
-    given BsonEncoder[Provider] = summon[ScalarWireCodec[Provider]].toBsonEncoder
+    given BsonEncoder[Provider]     = summon[ScalarWireCodec[Provider]].toBsonEncoder
 
   final case class Address(city: String, zip: String) derives WireCodec
 
   // ScalarWireCodec values are only ever legal nested inside a document field (a bare scalar can't be
   // written to the root of a real BSON document) — these holders exercise that real usage shape.
-  final case class EventIdHolder(id: EventId)         derives WireCodec
+  final case class EventIdHolder(id: EventId) derives WireCodec
   final case class ProviderHolder(provider: Provider) derives WireCodec
 
 final class ScalarWireCodecSpec extends AnyWordSpec, Matchers:

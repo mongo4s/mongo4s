@@ -33,7 +33,8 @@ object ChangeEvent:
       Option(document.getClusterTime),
     )
 
-  private def sequence[E, A](o: Option[Either[E, A]]): Either[E, Option[A]] = o match
-    case None           => Right(None)
-    case Some(Left(e))  => Left(e)
-    case Some(Right(a)) => Right(Some(a))
+  private def sequence[E, A](o: Option[Either[E, A]]): Either[E, Option[A]] =
+    o match
+      case None           => Right(None)
+      case Some(Left(e))  => Left(e)
+      case Some(Right(a)) => Right(Some(a))

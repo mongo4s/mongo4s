@@ -1,0 +1,74 @@
+package mongo4s.changestream
+
+import scala.concurrent.duration.*
+
+import org.bson.{BsonDocument, BsonString, BsonTimestamp}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
+import com.mongodb.client.model.changestream.{FullDocument, FullDocumentBeforeChange}
+
+import mongo4s.operations.Stage
+
+final class WatchOptionsSpec extends AnyWordSpec, Matchers:
+
+  private def token(value: String): BsonDocument = BsonDocument("_data", BsonString(value))
+
+  "the default" should {
+    // MongoDB's own default only fills fullDocument in for inserts and replaces, which leaves the
+    // most common question — "what does this document look like now" — unanswered on updates.
+    "look up the current document rather than the server default" in {
+      WatchOptions.default[String].fullDocument shouldBe FullDocument.UPDATE_LOOKUP
+    }
+
+    "start from now, with no pipeline" in {
+      val options = WatchOptions.default[String]
+
+      options.pipeline shouldBe empty
+      options.resumeAfter shouldBe None
+      options.startAfter shouldBe None
+      options.startAtOperationTime shouldBe None
+    }
+  }
+
+  "resume points" should {
+    // The server rejects a change stream carrying both, so setting one has to clear the other
+    // instead of leaving a combination that only fails once it reaches MongoDB.
+    "be mutually exclusive: resumingAfter clears startAfter" in {
+      val options = WatchOptions.default[String].startingAfter(token("a")).resumingAfter(token("b"))
+
+      options.resumeAfter shouldBe Some(token("b"))
+      options.startAfter shouldBe None
+    }
+
+    "be mutually exclusive: startingAfter clears resumeAfter" in {
+      val options = WatchOptions.default[String].resumingAfter(token("a")).startingAfter(token("b"))
+
+      options.startAfter shouldBe Some(token("b"))
+      options.resumeAfter shouldBe None
+    }
+
+    "expose resumeAfter as a one-step constructor" in {
+      WatchOptions.resumeAfter[String](token("a")).resumeAfter shouldBe Some(token("a"))
+    }
+  }
+
+  "the builders" should {
+    "carry every option" in {
+      val stages  = Seq(Stage.raw[String](BsonDocument("$match", BsonDocument("operationType", BsonString("insert")))))
+      val options = WatchOptions
+        .default[String]
+        .withPipeline(stages)
+        .withFullDocument(FullDocument.DEFAULT)
+        .withFullDocumentBeforeChange(FullDocumentBeforeChange.WHEN_AVAILABLE)
+        .startingAt(BsonTimestamp(1, 1))
+        .withMaxAwaitTime(2.seconds)
+        .withBatchSize(64)
+
+      options.pipeline shouldBe stages
+      options.fullDocument shouldBe FullDocument.DEFAULT
+      options.fullDocumentBeforeChange shouldBe Some(FullDocumentBeforeChange.WHEN_AVAILABLE)
+      options.startAtOperationTime shouldBe Some(BsonTimestamp(1, 1))
+      options.maxAwaitTime shouldBe Some(2.seconds)
+      options.batchSize shouldBe Some(64)
+    }
+  }

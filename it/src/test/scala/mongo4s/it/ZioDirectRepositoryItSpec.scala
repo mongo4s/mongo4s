@@ -2,11 +2,12 @@ package mongo4s.it
 
 import zio.{Runtime, Task, Unsafe}
 
-import mongo4s.{Effect, RsBridge, Streamable}
-import mongo4s.zio.ZioInstances.given
 import mongo4s.zio.ZioStream
+import mongo4s.{Effect, RsBridge, Streamable}
 
 import DirectRepositoryItSpec.Person
+
+import mongo4s.zio.ZioInstances.given
 
 final class ZioDirectRepositoryItSpec extends DirectRepositoryItSpec[Task, ZioStream]:
   protected def effectInstance: Effect[Task]              = summon

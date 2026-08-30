@@ -16,17 +16,14 @@ object CollectionWireCodecSpec:
 
   given Ordering[Foo] = Ordering.by(_.x)
 
-  final case class MapHolder(m: Map[String, Foo])          derives WireCodec
-  final case class ArrayHolder(xs: Array[Foo])              derives WireCodec
-  final case class QueueHolder(xs: Queue[Foo])              derives WireCodec
-  final case class ArraySeqHolder(xs: ArraySeq[Foo])        derives WireCodec
-  final case class ListSetHolder(xs: ListSet[Foo])          derives WireCodec
-  final case class LazyListHolder(xs: LazyList[Foo])        derives WireCodec
-  final case class TreeSetHolder(xs: TreeSet[Foo])          derives WireCodec
-
-  // regression guard: confirm List/Vector/Seq/Set still resolve their own dedicated, higher-priority
-  // instances rather than the new generic Factory-based fallback
-  final case class ListHolder(xs: List[Foo])     derives WireCodec
+  final case class MapHolder(m: Map[String, Foo]) derives WireCodec
+  final case class ArrayHolder(xs: Array[Foo]) derives WireCodec
+  final case class QueueHolder(xs: Queue[Foo]) derives WireCodec
+  final case class ArraySeqHolder(xs: ArraySeq[Foo]) derives WireCodec
+  final case class ListSetHolder(xs: ListSet[Foo]) derives WireCodec
+  final case class LazyListHolder(xs: LazyList[Foo]) derives WireCodec
+  final case class TreeSetHolder(xs: TreeSet[Foo]) derives WireCodec
+  final case class ListHolder(xs: List[Foo]) derives WireCodec
   final case class VectorHolder(xs: Vector[Foo]) derives WireCodec
 
 final class CollectionWireCodecSpec extends AnyWordSpec, Matchers:

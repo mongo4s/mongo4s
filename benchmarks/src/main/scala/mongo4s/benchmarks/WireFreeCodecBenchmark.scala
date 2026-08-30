@@ -6,8 +6,8 @@ import java.util.concurrent.TimeUnit
 import org.openjdk.jmh.annotations.*
 
 import org.bson.*
-import org.bson.codecs.{BsonDocumentCodec as DriverBsonDocumentCodec, DecoderContext, EncoderContext}
 import org.bson.io.{BasicOutputBuffer, ByteBufferBsonInput}
+import org.bson.codecs.{BsonDocumentCodec as DriverBsonDocumentCodec, DecoderContext, EncoderContext}
 
 import mongo4s.bson.medeia.MedeiaDocumentCodec
 

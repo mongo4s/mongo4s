@@ -21,6 +21,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK
+        # kyo's Frame macro runs at compile time and its class files target Java 25, so the compiler
+        # itself has to run on 25 — this is not just the runtime target.
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -39,8 +41,45 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-sbt-
 
+      # `it` is not aggregated by root — it needs Docker — so scalafmtCheckAll skips it. Naming it
+      # explicitly is what keeps the integration sources under the same rule as everything else.
+      - name: Check formatting
+        run: sbt scalafmtCheckAll scalafmtSbtCheck it/scalafmtCheck it/Test/scalafmtCheck
+
       - name: Compile
-        run: sbt compile
+        run: sbt Test/compile
 
       - name: Test
-        run: sbt test
+        # `testOnly *` rather than `test`: sbt 2.x routes `test` through testQuick, whose
+        # content-addressed cache survives even a clean, so a warm cache can report success without
+        # running a single test.
+        run: sbt "testOnly *"
+
+  integration:
+    name: Integration tests (real MongoDB via Testcontainers)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Set up sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Cache sbt
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.sbt
+            ~/.cache/coursier
+          key: ${{ runner.os }}-sbt-${{ hashFiles('**/*.sbt', 'project/**.scala', 'project/build.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-sbt-
+
+      - name: Integration tests
+        run: sbt "it/testOnly *"

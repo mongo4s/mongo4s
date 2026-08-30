@@ -10,6 +10,14 @@ import scala.jdk.CollectionConverters.given
 
 trait DefaultBsonDecoderInstances:
 
+  private def wholeNumber(value: BsonValue, target: String): Either[BsonError, Long] =
+    val asDouble = value.asNumber.doubleValue
+    if asDouble != Math.rint(asDouble)
+    then Left(BsonError.InvalidValue(s"$asDouble is not a whole number and cannot be read as $target"))
+    else if asDouble < Long.MinValue.toDouble || asDouble > Long.MaxValue.toDouble
+    then Left(BsonError.InvalidValue(s"$asDouble is out of range for $target"))
+    else Right(asDouble.toLong)
+
   given BsonDecoder[BsonValue] = value => Right(value)
 
   given BsonDecoder[String] = value =>
@@ -23,14 +31,22 @@ trait DefaultBsonDecoderInstances:
     else Left(BsonError.typeMismatch(BsonTypeName.Bool, value))
 
   given BsonDecoder[Int] = value =>
-    if value.isNumber
-    then Right(value.asNumber.intValue)
-    else Left(BsonError.typeMismatch(BsonTypeName.Int, value))
+    if !value.isNumber
+    then Left(BsonError.typeMismatch(BsonTypeName.Int, value))
+    else if value.isInt32
+    then Right(value.asInt32.getValue)
+    else
+      wholeNumber(value, "Int").flatMap: whole =>
+        if whole < Int.MinValue || whole > Int.MaxValue
+        then Left(BsonError.InvalidValue(s"$whole is out of range for Int"))
+        else Right(whole.toInt)
 
   given BsonDecoder[Long] = value =>
-    if value.isNumber
+    if !value.isNumber
+    then Left(BsonError.typeMismatch(BsonTypeName.Long, value))
+    else if value.isInt32 || value.isInt64
     then Right(value.asNumber.longValue)
-    else Left(BsonError.typeMismatch(BsonTypeName.Long, value))
+    else wholeNumber(value, "Long")
 
   given BsonDecoder[Double] = value =>
     if value.isNumber
@@ -38,10 +54,10 @@ trait DefaultBsonDecoderInstances:
     else Left(BsonError.typeMismatch(BsonTypeName.Double, value))
 
   given BsonDecoder[BigDecimal] = value =>
-    if value.isDecimal128
-    then Right(BigDecimal(value.asDecimal128.decimal128Value.bigDecimalValue))
-    else if value.isNumber
-    then Right(BigDecimal(value.asNumber.doubleValue))
+    if value.isDecimal128 then Right(BigDecimal(value.asDecimal128.decimal128Value.bigDecimalValue))
+    else if value.isInt32 then Right(BigDecimal(value.asInt32.getValue))
+    else if value.isInt64 then Right(BigDecimal(value.asInt64.getValue))
+    else if value.isDouble then Right(BigDecimal(value.asDouble.getValue))
     else Left(BsonError.typeMismatch(BsonTypeName.Decimal, value))
 
   given BsonDecoder[Instant] = value =>

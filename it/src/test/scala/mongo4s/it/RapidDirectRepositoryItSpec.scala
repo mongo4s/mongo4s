@@ -2,9 +2,10 @@ package mongo4s.it
 
 import rapid.Task
 
-import mongo4s.{Effect, RsBridge, Streamable}
-import mongo4s.rapid.RapidInstances.given
 import mongo4s.rapid.RapidStream
+import mongo4s.{Effect, RsBridge, Streamable}
+
+import mongo4s.rapid.RapidInstances.given
 
 import DirectRepositoryItSpec.Person
 

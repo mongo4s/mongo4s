@@ -7,9 +7,9 @@ import org.bson.types.ObjectId
 
 import mongo4s.cats.CatsStream
 import mongo4s.bson.BsonDocumentCodec
+import mongo4s.repositories.BaseMongoRepository
 import mongo4s.{Field, MongoClient, PrimaryKey, WithId}
 import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec}
-import mongo4s.repositories.BaseMongoRepository
 
 import mongo4s.bson.BsonInstances.given
 import mongo4s.cats.CatsInstances.given
@@ -34,45 +34,44 @@ object RepositoryCatsBsonDirectApp extends IOApp.Simple:
     Resource.make(MongoClient.fromConnectionString[IO, S](connectionString))(_.close)
 
   def run: IO[Unit] =
-    mongoClient("mongodb://localhost:27018").use: client =>
+    mongoClient("mongodb://localhost:27018").use { client =>
       for
         db <- client.getDatabase("mongo4s_examples")
 
-        // 1. regular model
         userCollection <- db.getDirectCollection[User]("repo_direct_users")
-        users           = BaseMongoRepository(userCollection)
-        alice           = User(
-                            UserId("1"),
-                            "Alice",
-                            "alice@example.com",
-                            30,
-                            Role.Admin,
-                            Address("New York", "10001"),
-                            List("vip"),
-                            active = true,
-                            Instant.now(),
-                            userRole = UserRole.Admin,
-                          )
-        _              <- users.insertOne(alice)
-        foundUser      <- users.findOne(UserId("1"))
-        _              <- IO.println(s"user: $foundUser")
 
-        // UserRole is an enum with a stored `value: String` (not just `derives WireCodec`) — its
-        // ScalarWireCodec.imap/iemap-derived BsonEncoder (see domain.scala) is what makes this query work
-        admins         <- users.findBy(Field.of[User, UserRole](_.userRole), UserRole.Admin)
-        _              <- IO.println(s"admins: ${admins.map(_.name)}")
+        users = BaseMongoRepository(userCollection)
 
-        // 2. id: ObjectId
-        tokens     <- BaseMongoRepository.identified[IO, S, ApiToken, ObjectId](db, "repo_direct_tokens")
+        alice = User(
+                  UserId("1"),
+                  "Alice",
+                  "alice@example.com",
+                  30,
+                  Role.Admin,
+                  Address("New York", "10001"),
+                  List("vip"),
+                  active = true,
+                  Instant.now(),
+                  userRole = UserRole.Admin,
+                )
+
+        _         <- users.insertOne(alice)
+        foundUser <- users.findOne(UserId("1"))
+        _         <- IO.println(s"user: $foundUser")
+
+        admins <- users.findBy(Field.of[User, UserRole](_.userRole), UserRole.Admin)
+        _      <- IO.println(s"admins: ${admins.map(_.name)}")
+
+        tokens     <- BaseMongoRepository.withoutId[IO, S, ApiToken, ObjectId](db, "repo_direct_tokens")
         token       = ApiToken(ObjectId.get(), UserId("1"), "cli-token", Instant.now())
         _          <- tokens.insertOne(token)
         foundToken <- tokens.findOne(token._id)
         _          <- IO.println(s"token: $foundToken")
 
-        // 3. WithId
         events     <- BaseMongoRepository.objectId[IO, S, LoginEvent](db, "repo_direct_events")
         eventId     = ObjectId.get()
         _          <- events.insertOne(WithId(eventId, LoginEvent(UserId("1"), Instant.now())))
         foundEvent <- events.findOne(eventId)
         _          <- IO.println(s"event: $foundEvent")
       yield ()
+    }

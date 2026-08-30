@@ -1,20 +1,22 @@
 package mongo4s.it
 
-import cats.effect.IO
-import cats.effect.testing.scalatest.AsyncIOSpec
-import mongo4s.bson.*
-import mongo4s.bson.BsonInstances.given
-import mongo4s.cats.CatsInstances.given
-import mongo4s.cats.CatsStream
-import mongo4s.operations.{Sort, Stage}
-import mongo4s.{Field, MongoClient}
-import org.bson.{BsonDocument, BsonInt32, BsonString}
 import org.scalatest.BeforeAndAfterAll
-import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AsyncWordSpec
+import org.scalatest.matchers.should.Matchers
+import cats.effect.testing.scalatest.AsyncIOSpec
 import org.testcontainers.containers.MongoDBContainer
 
-import scala.concurrent.duration.*
+import cats.effect.IO
+import org.bson.{BsonDocument, BsonInt32, BsonString}
+
+import mongo4s.bson.*
+import mongo4s.cats.CatsStream
+import mongo4s.{Field, MongoClient}
+import mongo4s.operations.{Sort, Stage}
+
+import scala.concurrent.duration.given
+import mongo4s.cats.CatsInstances.given
+import mongo4s.bson.BsonInstances.given
 
 object CoreItSpec:
 

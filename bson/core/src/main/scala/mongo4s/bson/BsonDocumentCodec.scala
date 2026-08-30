@@ -16,3 +16,5 @@ object BsonDocumentCodec:
     new BsonDocumentCodec[A]:
       def encodeDocument(value: A): BsonDocument                       = to(value)
       def decodeDocument(document: BsonDocument): Either[BsonError, A] = from(document)
+  
+  given raw: BsonDocumentCodec[BsonDocument] = make(document => document, document => Right(document))

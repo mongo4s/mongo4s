@@ -42,7 +42,7 @@ trait RepositoryBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
   protected def effectInstance: Effect[F]
 
   protected def run[A](fa: F[A]): A
-  
+
   protected def drain(stream: S[Person]): List[Person]
   protected def emitStream(values: List[Person]): S[Person]
 
@@ -152,7 +152,7 @@ trait RepositoryBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
 
       val modified = run(repository.updateBy(Field.of[Person, Int](_.age).equalTo(30), Update.set(Field.of[Person, Int](_.age), 99)))
 
-      modified shouldBe 2L
+      modified.matchedCount shouldBe 2L
       collection.snapshot should contain theSameElementsAs List(Person("1", "bob", 99), Person("2", "alice", 99), Person("3", "eve", 40))
     }
   }

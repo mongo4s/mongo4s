@@ -12,8 +12,12 @@ final case class Sort[E](fields: List[(FieldPath, Boolean)]):
   def isEmpty: Boolean = fields.isEmpty
 
   def toBson(naming: FieldNaming): BsonDocument =
-    fields.foldLeft(BsonDocument()): (document, entry) =>
-      document.append(entry._1.render(naming), BsonInt32(if entry._2 then 1 else -1))
+    fields.foldLeft(BsonDocument()) { (document, entry) =>
+      document.append(
+        entry._1.render(naming),
+        BsonInt32(if entry._2 then 1 else -1),
+      )
+    }
 
 object Sort:
   def empty[E]: Sort[E]                       = Sort(Nil)

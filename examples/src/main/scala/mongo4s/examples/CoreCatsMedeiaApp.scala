@@ -16,11 +16,14 @@ object CoreCatsMedeiaApp extends IOApp.Simple:
   type S[A] = CatsStream[IO][A]
 
   def run: IO[Unit] =
-    MongoClientResource.fromConnectionString[IO]("mongodb://localhost:27018").use: client =>
-      for
-        db     <- client.getDatabase("mongo4s_examples")
-        users  <- db.getCollection[User]("core_cats_medeia_users")
-        alice   = User(
+    MongoClientResource
+      .fromConnectionString[IO]("mongodb://localhost:27018")
+      .use { client =>
+        for
+          db    <- client.getDatabase("mongo4s_examples")
+          users <- db.getCollection[User]("core_cats_medeia_users")
+
+          alice = User(
                     UserId("1"),
                     "Alice",
                     "alice@example.com",
@@ -31,9 +34,11 @@ object CoreCatsMedeiaApp extends IOApp.Simple:
                     active = true,
                     Instant.now(),
                   )
-        _      <- users.insertOne(alice)
-        found  <- users.find(Field.of[User, UserId](_.id).equalTo(UserId("1"))).first
-        _      <- IO.println(s"found: $found")
-        adults <- users.find(Field.of[User, Int](_.age).gte(18)).all
-        _      <- IO.println(s"adults: ${adults.size}")
-      yield ()
+
+          _      <- users.insertOne(alice)
+          found  <- users.find(Field.of[User, UserId](_.id).equalTo(UserId("1"))).first
+          _      <- IO.println(s"found: $found")
+          adults <- users.find(Field.of[User, Int](_.age).gte(18)).all
+          _      <- IO.println(s"adults: ${adults.size}")
+        yield ()
+      }

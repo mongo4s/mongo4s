@@ -1,11 +1,12 @@
 package mongo4s.repositories
 
 import kyo.{AllowUnsafe, Duration as KyoDuration, KyoApp, Stream, Sync as KyoSync}
-import mongo4s.{Effect, Streamable}
-import mongo4s.kyo.KyoInstances.given
-import mongo4s.kyo.{KIO, KStream}
 
-import scala.concurrent.duration.*
+import mongo4s.kyo.{KIO, KStream}
+import mongo4s.{Effect, Streamable}
+
+import scala.concurrent.duration.given
+import mongo4s.kyo.KyoInstances.given
 
 final class KyoRepositoryBackendSpec extends RepositoryBackendSpec[KIO, KStream]:
   protected def effectInstance: Effect[KIO] = summon

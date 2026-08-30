@@ -1,12 +1,12 @@
 package mongo4s.it
 
-import _root_.kyo.{AllowUnsafe, Duration as KyoDuration, KyoApp, Sync as KyoSync}
+import kyo.{AllowUnsafe, Duration as KyoDuration, KyoApp, Sync as KyoSync}
 
-import mongo4s.{Effect, RsBridge, Streamable}
-import mongo4s.kyo.KyoInstances.given
 import mongo4s.kyo.{KIO, KStream}
+import mongo4s.{Effect, RsBridge, Streamable}
 
-import scala.concurrent.duration.*
+import scala.concurrent.duration.given
+import mongo4s.kyo.KyoInstances.given
 
 import DirectRepositoryItSpec.Person
 

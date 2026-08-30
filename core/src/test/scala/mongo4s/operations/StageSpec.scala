@@ -6,6 +6,7 @@ import org.scalatest.matchers.should.Matchers
 
 import mongo4s.Field
 import mongo4s.bson.FieldNaming
+
 import mongo4s.bson.BsonInstances.given
 
 object StageSpec:

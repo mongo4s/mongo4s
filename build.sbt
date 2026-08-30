@@ -1,11 +1,14 @@
 import Dependencies.Versions
+import com.typesafe.tools.mima.plugin.MimaKeys.mimaPreviousArtifacts
+
+lazy val binaryCompatibleWith = Set.empty[String]
 
 lazy val commonSettings = Seq(
   organization           := "org.mongo4s",
   organizationName       := "Mongo4s",
   homepage               := Some(uri("https://mongo4s.org/")),
   description            := "Mongo client, bson-codecs and repositories for Scala 3",
-  version                := "0.4.0",
+  version                := "1.0.0",
   versionScheme          := Some("semver-spec"),
   scalaVersion           := Versions.scalaLTS,
   parallelExecution      := true,
@@ -29,13 +32,20 @@ lazy val commonSettings = Seq(
     )
   ),
   libraryDependencies ++= Dependencies.Testing.all,
+  exportJars             := false,
   scalacOptions ++= Seq(
     "-encoding",
     "UTF-8",
     "-source:future",
-    "-Wunused:all"
+    "-deprecation",
+    "-feature",
+    "-unchecked",
+    "-Xcheck-macros",
+    "-Wunused:all",
+    "-Wvalue-discard",
   ),
   credentials += Credentials(Path.userHome / ".sbt" / "sonatype_credentials"),
+  mimaPreviousArtifacts  := binaryCompatibleWith.map(organization.value %% moduleName.value % _),
 )
 
 lazy val bsonCore = project
@@ -273,9 +283,11 @@ lazy val it = project
     scalaVersion   := Versions.scalaLast,
     publish / skip := true,
     Test / fork    := true,
-    Test / envVars ++= Map(
-      "DOCKER_HOST" -> sys.env.getOrElse("DOCKER_HOST", "tcp://localhost:2375"),
-    ),
+    Test / envVars ++= sys.env
+      .get("DOCKER_HOST")
+      .map("DOCKER_HOST" -> _)
+      .orElse(Option.when(scala.util.Properties.isWin)("DOCKER_HOST" -> "tcp://localhost:2375"))
+      .toMap,
     libraryDependencies ++= Seq(
       Dependencies.Cats.catsEffect3,
       Dependencies.Cats.catsEffect3Testing,
@@ -304,4 +316,7 @@ lazy val root = project
     core,
     runtime,
     repositories,
+    repositoriesTests,
+    examples,
+    benchmarks,
   )

@@ -66,7 +66,7 @@ final class CatsBridgeSpec extends AsyncWordSpec, AsyncIOSpec, Matchers:
     val strictBridge     = summon[RsBridge[IO, CatsStream[IO]]]
 
     "fail one with TooManyResults for a 2-element publisher" in {
-      strictBridge.one(ListPublisher(List(1, 2))).attempt.asserting(_ shouldBe Left(RsBridgeError.TooManyResults(2)))
+      strictBridge.one(ListPublisher(List(1, 2))).attempt.asserting(_ shouldBe Left(RsBridgeError.TooManyResults()))
     }
     "fail one with EmptyResult for an empty publisher" in {
       strictBridge.one(ListPublisher(List.empty[Int])).attempt.asserting(_ shouldBe Left(RsBridgeError.EmptyResult()))

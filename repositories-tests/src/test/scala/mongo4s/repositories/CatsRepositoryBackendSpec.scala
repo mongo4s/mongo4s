@@ -1,10 +1,12 @@
 package mongo4s.repositories
 
 import cats.effect.IO
-import cats.effect.unsafe.implicits.global
-import mongo4s.{Effect, Streamable}
-import mongo4s.cats.CatsInstances.given
+
 import mongo4s.cats.CatsStream
+import mongo4s.{Effect, Streamable}
+
+import cats.effect.unsafe.implicits.given
+import mongo4s.cats.CatsInstances.given
 
 final class CatsRepositoryBackendSpec extends RepositoryBackendSpec[IO, CatsStream[IO]]:
   protected def effectInstance: Effect[IO] = summon

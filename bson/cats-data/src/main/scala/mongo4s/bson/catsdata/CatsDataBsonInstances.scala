@@ -61,11 +61,16 @@ trait CatsDataBsonInstances:
     def field(doc: BsonDocument, key: String): Either[BsonError, BsonValue] =
       if doc.containsKey(key) then Right(doc.get(key)) else Left(BsonError.MissingField(key))
 
+    def discriminator(doc: BsonDocument): Either[BsonError, String] =
+      field(doc, IorDiscriminatorField).flatMap: value =>
+        if value.isString then Right(value.asString.getValue)
+        else Left(BsonError.Nested(IorDiscriminatorField, BsonError.typeMismatch(BsonTypeName.String, value)))
+
     (bson: BsonValue) =>
       if !bson.isDocument then Left(BsonError.typeMismatch(BsonTypeName.Object, bson))
       else
         val doc = bson.asDocument
-        field(doc, IorDiscriminatorField).flatMap(_.asString.getValue match
+        discriminator(doc).flatMap {
           case tag if tag == nameA   => field(doc, "value").flatMap(decA.decode).map(Ior.Left(_))
           case tag if tag == nameB   => field(doc, "value").flatMap(decB.decode).map(Ior.Right(_))
           case tag if tag == bothTag =>
@@ -73,7 +78,7 @@ trait CatsDataBsonInstances:
               left  <- field(doc, "left").flatMap(decA.decode)
               right <- field(doc, "right").flatMap(decB.decode)
             yield Ior.Both(left, right)
-          case other                 => Left(BsonError.Custom(s"Unknown Ior discriminator: $other")),
-        )
+          case other                 => Left(BsonError.Custom(s"Unknown Ior discriminator: $other"))
+        }
 
 object CatsDataBsonInstances extends CatsDataBsonInstances

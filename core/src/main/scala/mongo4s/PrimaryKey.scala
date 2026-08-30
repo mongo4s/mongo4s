@@ -1,8 +1,5 @@
 package mongo4s
 
-import org.bson.types.ObjectId
-import org.bson.{BsonObjectId, BsonValue}
-
 import mongo4s.bson.BsonEncoder
 import mongo4s.operations.Filter
 
@@ -12,50 +9,61 @@ trait PrimaryKey[E, K] extends KeyRef[E, K]:
 object PrimaryKey:
   inline def apply[E, K](using instance: PrimaryKey[E, K]): instance.type = instance
 
-  def make[E, K](keyOf: E => K, fieldsOf: K => KeyFields): PrimaryKey[E, K] =
+  def make[E, K](keyOf: E => K, names: List[String], fieldsOf: K => KeyFields): PrimaryKey[E, K] =
     new PrimaryKey[E, K]:
       def key(entity: E): K         = keyOf(entity)
+      def fieldNames: List[String]  = names
       def fields(key: K): KeyFields = fieldsOf(key)
 
   def id[E, Id](keyOf: E => Id)(using encoder: BsonEncoder[Id]): PrimaryKey[E, Id] =
-    make(keyOf, key => KeyFields.one("id", encoder.encode(key)))
-
-  def objectId[E](keyOf: E => ObjectId): PrimaryKey[E, ObjectId] =
-    make(keyOf, key => KeyFields.one("_id", BsonObjectId(key)))
-
+    single("id")(keyOf)
+    
   def storedId[E, Id](keyOf: E => Id)(using encoder: BsonEncoder[Id]): PrimaryKey[E, Id] =
-    make(keyOf, key => KeyFields.one("_id", encoder.encode(key)))
+    single("_id")(keyOf)
 
   def single[E, F1](name: String)(keyOf: E => F1)(using encoder: BsonEncoder[F1]): PrimaryKey[E, F1] =
-    make(keyOf, key => KeyFields.one(name, encoder.encode(key)))
+    make(keyOf, List(name), key => KeyFields.one(name, encoder.encode(key)))
 
-  def make[E, K, F1, F2](
-      keyOf: E => K,
-      field1: K => (String, F1),
-      field2: K => (String, F2),
-  )(using e1: BsonEncoder[F1], e2: BsonEncoder[F2]): PrimaryKey[E, K] =
-    make(keyOf, key => KeyFields.of(encoded(field1, key), encoded(field2, key)))
+  def compound[E, K, F1, F2](keyOf: E => K)(name1: String, value1: K => F1)(name2: String, value2: K => F2)(using
+      e1: BsonEncoder[F1],
+      e2: BsonEncoder[F2],
+  ): PrimaryKey[E, K] =
+    make(
+      keyOf,
+      List(name1, name2),
+      key => KeyFields.of(name1 -> e1.encode(value1(key)), name2 -> e2.encode(value2(key))),
+    )
 
-  def make[E, K, F1, F2, F3](
-      keyOf: E => K,
-      field1: K => (String, F1),
-      field2: K => (String, F2),
-      field3: K => (String, F3),
+  def compound3[E, K, F1, F2, F3](keyOf: E => K)(name1: String, value1: K => F1)(name2: String, value2: K => F2)(
+      name3: String,
+      value3: K => F3,
   )(using e1: BsonEncoder[F1], e2: BsonEncoder[F2], e3: BsonEncoder[F3]): PrimaryKey[E, K] =
-    make(keyOf, key => KeyFields.of(encoded(field1, key), encoded(field2, key), encoded(field3, key)))
+    make(
+      keyOf,
+      List(name1, name2, name3),
+      key => KeyFields.of(name1 -> e1.encode(value1(key)), name2 -> e2.encode(value2(key)), name3 -> e3.encode(value3(key))),
+    )
 
-  def make[E, K, F1, F2, F3, F4](
-      keyOf: E => K,
-      field1: K => (String, F1),
-      field2: K => (String, F2),
-      field3: K => (String, F3),
-      field4: K => (String, F4),
-  )(using e1: BsonEncoder[F1], e2: BsonEncoder[F2], e3: BsonEncoder[F3], e4: BsonEncoder[F4]): PrimaryKey[E, K] =
-    make(keyOf, key => KeyFields.of(encoded(field1, key), encoded(field2, key), encoded(field3, key), encoded(field4, key)))
-
-  private def encoded[K, F](extract: K => (String, F), key: K)(using encoder: BsonEncoder[F]): (String, BsonValue) =
-    val (name, value) = extract(key)
-    name -> encoder.encode(value)
+  def compound4[E, K, F1, F2, F3, F4](keyOf: E => K)(name1: String, value1: K => F1)(name2: String, value2: K => F2)(
+      name3: String,
+      value3: K => F3,
+  )(name4: String, value4: K => F4)(using
+      e1: BsonEncoder[F1],
+      e2: BsonEncoder[F2],
+      e3: BsonEncoder[F3],
+      e4: BsonEncoder[F4],
+  ): PrimaryKey[E, K] =
+    make(
+      keyOf,
+      List(name1, name2, name3, name4),
+      key =>
+        KeyFields.of(
+          name1 -> e1.encode(value1(key)),
+          name2 -> e2.encode(value2(key)),
+          name3 -> e3.encode(value3(key)),
+          name4 -> e4.encode(value4(key)),
+        ),
+    )
 
   extension [E, K](entity: E)(using pk: PrimaryKey[E, K]) def primaryKeyFilter: Filter[E] = pk.eqFilter(pk.key(entity))
 

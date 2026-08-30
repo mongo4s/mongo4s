@@ -6,8 +6,8 @@ import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
 import org.bson.io.{BasicOutputBuffer, ByteBufferBsonInput}
-import org.bson.codecs.{BsonDocumentCodec as DriverBsonDocumentCodec, DecoderContext}
 import org.bson.{BsonBinaryReader, BsonBinaryWriter, BsonDocument, ByteBufNIO}
+import org.bson.codecs.{BsonDocumentCodec as DriverBsonDocumentCodec, DecoderContext}
 
 final class WireCodecMirrorAmbiguitySpec extends AnyWordSpec, Matchers:
 

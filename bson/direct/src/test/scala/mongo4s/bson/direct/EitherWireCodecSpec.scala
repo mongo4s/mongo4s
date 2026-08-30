@@ -12,7 +12,7 @@ import org.bson.codecs.{BsonDocumentCodec as DriverBsonDocumentCodec, DecoderCon
 import mongo4s.bson.BsonError
 
 object EitherWireCodecSpec:
-  final case class Foo(x: Int)  derives WireCodec
+  final case class Foo(x: Int) derives WireCodec
   final case class Bar(y: String) derives WireCodec
 
 final class EitherWireCodecSpec extends AnyWordSpec, Matchers:

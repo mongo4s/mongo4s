@@ -48,7 +48,14 @@ object Field:
     def notIn(values: Seq[A]): Filter[E] =
       if values.isEmpty then Filter.MatchAll() else Filter.Nin(field.path, values.toList.map(encoder.encode))
 
-    def set(value: A): Update[E] = Update.Set(field.path, encoder.encode(value))
+    def set(value: A): Update[E]         = Update.Set(field.path, encoder.encode(value))
+    def setOnInsert(value: A): Update[E] = Update.SetOnInsert(field.path, encoder.encode(value))
+
+  extension [E, V](field: Field[E, Map[String, V]]) def at(key: String): Field[E, V] = Field(field.path.stored(key))
+
+  extension [E, C](field: Field[E, C])
+    @targetName("child")
+    infix def /[A](segment: String): Field[E, A] = Field(field.path.stored(segment))
 
   extension [E, A](field: Field[E, A])
     def exists: Filter[E]                                       = Filter.Exists(field.path, true)
@@ -57,3 +64,29 @@ object Field:
     def unset: Update[E]                                        = Update.Unset(field.path)
     def ascending: Sort[E]                                      = Sort.asc(field)
     def descending: Sort[E]                                     = Sort.desc(field)
+
+  extension [E, C](field: Field[E, C])
+    def inc[A](amount: A)(using NumericOf[C, A]): Update[E] = Update.inc(field, amount)
+    def mul[A](factor: A)(using NumericOf[C, A]): Update[E] = Update.mul(field, factor)
+    def min[A](value: A)(using NumericOf[C, A]): Update[E]  = Update.min(field, value)
+    def max[A](value: A)(using NumericOf[C, A]): Update[E]  = Update.max(field, value)
+
+    def push[A](value: A)(using ElementOf[C, A], BsonEncoder[A]): Update[E]     = Update.push(field, value)
+    def pull[A](value: A)(using ElementOf[C, A], BsonEncoder[A]): Update[E]     = Update.pull(field, value)
+    def addToSet[A](value: A)(using ElementOf[C, A], BsonEncoder[A]): Update[E] = Update.addToSet(field, value)
+
+    def elemMatch[A](filter: Filter[A])(using ElementOf[C, A]): Filter[E]                    =
+      Filter.ElemMatch(field.path, filter)
+    def contains[A](value: A)(using ev: ElementOf[C, A], encoder: BsonEncoder[A]): Filter[E] =
+      Filter.Eq(field.path, encoder.encode(value))
+
+    def containsAll[A](values: Seq[A])(using ev: ElementOf[C, A], encoder: BsonEncoder[A]): Filter[E] =
+      if values.isEmpty
+      then Filter.MatchAll()
+      else Filter.All(field.path, values.toList.map(encoder.encode))
+
+    def hasSize(size: Int): Filter[E] = Filter.Size(field.path, size)
+
+  extension [E, A](field: Field[E, A])
+    def hasType(bsonType: String): Filter[E]           = Filter.Type(field.path, bsonType)
+    def mod(divisor: Long, remainder: Long): Filter[E] = Filter.Mod(field.path, divisor, remainder)

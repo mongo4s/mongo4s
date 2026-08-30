@@ -1,7 +1,7 @@
 package mongo4s.bson.catsdata
 
-import scala.collection.immutable.{SortedMap, SortedSet}
 import scala.reflect.ClassTag
+import scala.collection.immutable.{SortedMap, SortedSet}
 
 import cats.Order
 import cats.data.{Chain, Ior, NonEmptyList, NonEmptyMap, NonEmptySet, NonEmptyVector}

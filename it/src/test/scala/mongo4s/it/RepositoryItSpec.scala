@@ -8,10 +8,11 @@ import org.testcontainers.containers.MongoDBContainer
 
 import cats.effect.IO
 import org.bson.types.ObjectId
-import mongo4s.bson.medeia.MedeiaDocumentCodec
+
 import mongo4s.cats.CatsStream
-import mongo4s.operations.{Update, WriteCommand}
+import mongo4s.bson.medeia.MedeiaDocumentCodec
 import mongo4s.repositories.BaseMongoRepository
+import mongo4s.operations.{Update, WriteCommand}
 import mongo4s.{Field, MongoClient, PrimaryKey, WithId}
 
 import scala.concurrent.duration.given
@@ -114,8 +115,7 @@ final class RepositoryItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befor
         two            <- repo.findOne("2")
         _              <- client.close
       yield (modified, one, two)).timeout(30.seconds).asserting { case (modified, one, two) =>
-        // "1" was already moved off age=30 by updateField, so updateBy's age==30 filter only still matches "2"
-        modified shouldBe 1L
+        modified.matchedCount shouldBe 1L
         one shouldBe Some(Person("1", "bob", 99))
         two shouldBe Some(Person("2", "alice", 50))
       }

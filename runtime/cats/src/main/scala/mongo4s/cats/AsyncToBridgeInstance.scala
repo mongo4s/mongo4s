@@ -5,8 +5,8 @@ import cats.effect.kernel.Async
 import org.reactivestreams.Publisher
 import fs2.interop.reactivestreams.fromPublisher
 
+import mongo4s.internal.{PublisherCollector, RsBridgeSupport}
 import mongo4s.{RsBridge, RsBridgeConfig, RsBridgeError, Streamable}
-import mongo4s.internal.RsBridgeSupport
 
 trait AsyncToBridgeInstance:
 
@@ -18,23 +18,37 @@ trait AsyncToBridgeInstance:
       case None    => fa
 
     def stream[A](publisher: => Publisher[A])(using Streamable[CatsStream[F], A]): Stream[F, A] =
-      Stream.eval(F.delay(publisher)).flatMap(fromPublisher[F, A](_, config.bufferSize))
+      Stream
+        .eval(F.delay(publisher))
+        .flatMap(fromPublisher[F, A](_, config.bufferSize))
+
+    private def collect[A](publisher: => Publisher[A], limit: Int): F[List[A]] =
+      withTimeout(
+        F.fromCompletableFuture(
+          F.delay(PublisherCollector.collect(publisher, limit))
+        )
+      )
+
+    def list[A](publisher: => Publisher[A]): F[List[A]] =
+      collect(publisher, Int.MaxValue)
+
+    def unit[A](publisher: => Publisher[A]): F[Unit] =
+      withTimeout(
+        F.void(
+          F.fromCompletableFuture(
+            F.delay(PublisherCollector.drain(publisher))
+          )
+        )
+      )
 
     def one[A](publisher: => Publisher[A]): F[A] =
-      withTimeout {
-        F.flatMap(stream(publisher).take(2).compile.toList) { xs =>
-          RsBridgeSupport.selectOne(xs, config.strictSingleResult).fold(F.raiseError, F.pure)
-        }
+      F.flatMap(collect(publisher, RsBridgeSupport.SingleResultProbe)) { xs =>
+        RsBridgeSupport.selectOne(xs, config.strictSingleResult).fold(F.raiseError, F.pure)
       }
 
     def option[A](publisher: => Publisher[A]): F[Option[A]] =
-      withTimeout {
-        F.flatMap(stream(publisher).take(2).compile.toList) { xs =>
-          RsBridgeSupport.selectOption(xs, config.strictSingleResult).fold(F.raiseError, F.pure)
-        }
+      F.flatMap(collect(publisher, RsBridgeSupport.SingleResultProbe)) { xs =>
+        RsBridgeSupport.selectOption(xs, config.strictSingleResult).fold(F.raiseError, F.pure)
       }
-
-    def list[A](publisher: => Publisher[A]): F[List[A]] = withTimeout(stream(publisher).compile.toList)
-    def unit[A](publisher: => Publisher[A]): F[Unit]    = withTimeout(stream(publisher).compile.drain)
 
 object AsyncToBridgeInstance extends AsyncToBridgeInstance

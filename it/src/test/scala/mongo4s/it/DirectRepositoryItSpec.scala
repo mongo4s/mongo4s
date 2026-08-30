@@ -103,8 +103,7 @@ trait DirectRepositoryItSpec[F[*], S[*]] extends AnyWordSpec, Matchers, BeforeAn
       val two            = run(repo.findOne("2"))
       run(client.close)
 
-      // "1" was already moved off age=30 by updateField, so updateBy's age==30 filter only still matches "2"
-      modified shouldBe 1L
+      modified.matchedCount shouldBe 1L
       one shouldBe Some(Person("1", "bob", 99))
       two shouldBe Some(Person("2", "alice", 50))
     }

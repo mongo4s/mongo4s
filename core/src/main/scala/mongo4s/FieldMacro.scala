@@ -7,22 +7,47 @@ private[mongo4s] object FieldMacro:
   def impl[E: Type, A: Type](selector: Expr[E => A])(using Quotes): Expr[Field[E, A]] =
     import quotes.reflect.*
 
-    def fail(term: Term): Nothing =
-      report.errorAndAbort(s"Expected a field selector such as _.field or _.nested.field, got: ${term.show}")
+    def fail(message: String): Nothing = report.errorAndAbort(message)
 
-    def extract(term: Term, acc: List[String]): List[String] =
-      term match
-        case Inlined(_, _, inner)               => extract(inner, acc)
-        case Typed(inner, _)                    => extract(inner, acc)
-        case Block(Nil, inner)                  => extract(inner, acc)
-        case Block(List(definition: DefDef), _) => definition.rhs.fold(fail(term))(extract(_, acc))
-        case Lambda(_, body)                    => extract(body, acc)
-        case Select(qualifier, name)            => extract(qualifier, name :: acc)
+    def verifyField(owner: TypeRepr, name: String, whole: Term): TypeRepr =
+      val symbol = owner.typeSymbol
+      val field  = symbol.caseFields.find(_.name == name)
+
+      field match
+        case Some(member) => owner.memberType(member)
+        case None         =>
+          val known =
+            if symbol.caseFields.isEmpty then "it is not a case class"
+            else s"its fields are ${symbol.caseFields.map(_.name).mkString(", ")}"
+
+          fail(
+            s"'$name' is not a field of ${symbol.name} ($known). " +
+              s"Field.of only accepts case-class field selectors such as _.field or _.nested.field; " +
+              s"got: ${whole.show}. " +
+              s"To reference a stored name directly — including inside an array — use Field.stored."
+          )
+
+    def segmentsOf(term: Term): List[String] =
+      def loop(current: Term, acc: List[String]): List[String] = current match
+        case Inlined(_, _, inner)               => loop(inner, acc)
+        case Typed(inner, _)                    => loop(inner, acc)
+        case Block(Nil, inner)                  => loop(inner, acc)
+        case Block(List(definition: DefDef), _) => definition.rhs.fold(fail(s"Expected a field selector, got: ${term.show}"))(loop(_, acc))
+        case Lambda(_, body)                    => loop(body, acc)
+        case Select(qualifier, name)            => loop(qualifier, name :: acc)
         case Ident(_)                           => acc
-        case other                              => fail(other)
+        case other                              => fail(s"Expected a field selector such as _.field or _.nested.field, got: ${other.show}")
 
-    val segments = extract(selector.asTerm, Nil)
+      loop(term, Nil)
+    end segmentsOf
 
-    if segments.isEmpty then report.errorAndAbort("Field selector must reference at least one field")
+    val root     = TypeRepr.of[E]
+    val segments = segmentsOf(selector.asTerm)
 
-    '{ Field[E, A](FieldPath(${ Expr(segments) })) }
+    if segments.isEmpty
+    then fail("Field selector must reference at least one field")
+
+    segments.foldLeft(root)((owner, name) => verifyField(owner.widen, name, selector.asTerm))
+
+    '{ Field[E, A](FieldPath.derived(${ Expr(segments) })) }
+  end impl

@@ -12,9 +12,9 @@ import cats.data.{Chain, Ior, NonEmptyList, NonEmptyMap, NonEmptySet, NonEmptyVe
 import mongo4s.bson.direct.WireCodec
 import mongo4s.bson.{BsonDecoder, BsonEncoder}
 
-import mongo4s.bson.BsonInstances.given
 import CatsDataBsonInstances.given
 import CatsDataWireInstances.given
+import mongo4s.bson.BsonInstances.given
 
 final class CatsDataInstancesSpec extends AnyWordSpec, Matchers:
 
@@ -38,9 +38,6 @@ final class CatsDataInstancesSpec extends AnyWordSpec, Matchers:
     reader.readEndDocument()
     result
 
-  // Ior's WireCodec is document-shaped (always writes its own {"_type": ..., ...} document), unlike the
-  // array-shaped NonEmptyList/etc above, so it can be encoded standalone at the wire root without the extra
-  // "value" field wrapper wireRoundTrip needs for those.
   private def iorRoundTrip[A](value: A)(using codec: WireCodec[A]): A =
     val buffer = BasicOutputBuffer()
     val writer = BsonBinaryWriter(buffer)
@@ -81,8 +78,6 @@ final class CatsDataInstancesSpec extends AnyWordSpec, Matchers:
     }
 
     "discriminate by each branch's own type name, and tag Both with both names combined" in {
-      // ClassTag[Int].runtimeClass is the JVM primitive class, so its simple name is "int" (lowercase),
-      // not "Integer" — a real quirk of the ClassTag-based discriminator worth knowing about, not a bug.
       val right = BsonEncoder[Ior[String, Int]].encode(Ior.Right(1)).asDocument
       right.getString("_type").getValue shouldBe "int"
       right.getInt32("value").getValue shouldBe 1

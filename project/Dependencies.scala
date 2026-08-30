@@ -6,12 +6,12 @@ object Dependencies {
     val scalaLTS  = "3.3.8"
     val scalaLast = "3.8.4"
 
-    val mongo = "5.9.1"
+    val mongo = "5.11.0"
 
-    val cats               = "2.13.0"
-    val catsEffect3        = "3.7.0"
-    val catsEffectTesting  = "1.8.0"
-    val fs2                = "3.13.0"
+    val cats              = "2.13.0"
+    val catsEffect3       = "3.7.1"
+    val catsEffectTesting = "1.8.0"
+    val fs2               = "3.13.0"
 
     val zio                       = "2.1.26"
     val zioPrelude                = "1.0.0-RC48"
@@ -25,9 +25,9 @@ object Dependencies {
     val zioBson = "1.0.11"
     val calypso = "0.7.0"
 
-    val mongo4cats  = "0.7.18"
-    val circe       = "0.14.10"
-    val zioSchema   = "1.8.5"
+    val mongo4cats = "0.7.18"
+    val circe      = "0.14.16"
+    val zioSchema  = "1.8.6"
 
     val testcontainers = "1.21.4"
 
@@ -35,14 +35,14 @@ object Dependencies {
   }
 
   object Benchmarks {
-    val mongo4catsCore    = "io.github.kirill5k" %% "mongo4cats-core"     % Versions.mongo4cats
-    val mongo4catsCirce   = "io.github.kirill5k" %% "mongo4cats-circe"    % Versions.mongo4cats
-    val mongo4catsZio     = "io.github.kirill5k" %% "mongo4cats-zio"      % Versions.mongo4cats
-    val mongo4catsZioJson = "io.github.kirill5k" %% "mongo4cats-zio-json" % Versions.mongo4cats
-    val circeGeneric      = "io.circe"           %% "circe-generic"       % Versions.circe
-    val zioSchema         = "dev.zio"            %% "zio-schema"          % Versions.zioSchema
-    val zioSchemaDerivation = "dev.zio"          %% "zio-schema-derivation" % Versions.zioSchema
-    val zioSchemaBson     = "dev.zio"            %% "zio-schema-bson"     % Versions.zioSchema
+    val mongo4catsCore      = "io.github.kirill5k" %% "mongo4cats-core"       % Versions.mongo4cats
+    val mongo4catsCirce     = "io.github.kirill5k" %% "mongo4cats-circe"      % Versions.mongo4cats
+    val mongo4catsZio       = "io.github.kirill5k" %% "mongo4cats-zio"        % Versions.mongo4cats
+    val mongo4catsZioJson   = "io.github.kirill5k" %% "mongo4cats-zio-json"   % Versions.mongo4cats
+    val circeGeneric        = "io.circe"           %% "circe-generic"         % Versions.circe
+    val zioSchema           = "dev.zio"            %% "zio-schema"            % Versions.zioSchema
+    val zioSchemaDerivation = "dev.zio"            %% "zio-schema-derivation" % Versions.zioSchema
+    val zioSchemaBson       = "dev.zio"            %% "zio-schema-bson"       % Versions.zioSchema
   }
 
   object IntegrationTesting {
@@ -56,10 +56,9 @@ object Dependencies {
   }
 
   object Mongo {
-    val bson           = "org.mongodb" % "bson"                            % Versions.mongo
-    val driverCore     = "org.mongodb" % "mongodb-driver-core"             % Versions.mongo
-    val driverReactive = "org.mongodb" % "mongodb-driver-reactivestreams"  % Versions.mongo
-    val driverSync     = "org.mongodb" % "mongodb-driver-sync"             % Versions.mongo
+    val bson           = "org.mongodb" % "bson"                           % Versions.mongo
+    val driverCore     = "org.mongodb" % "mongodb-driver-core"            % Versions.mongo
+    val driverReactive = "org.mongodb" % "mongodb-driver-reactivestreams" % Versions.mongo
   }
 
   object Cats {
@@ -86,9 +85,9 @@ object Dependencies {
 
   object Kyo {
     val kyoCore            = "io.getkyo" %% "kyo-core"             % Versions.kyo
-    val kyoData            = "io.getkyo" %% "kyo-data"              % Versions.kyo
-    val kyoPrelude         = "io.getkyo" %% "kyo-prelude"           % Versions.kyo
-    val kyoReactiveStreams = "io.getkyo" %% "kyo-reactive-streams"  % Versions.kyo
+    val kyoData            = "io.getkyo" %% "kyo-data"             % Versions.kyo
+    val kyoPrelude         = "io.getkyo" %% "kyo-prelude"          % Versions.kyo
+    val kyoReactiveStreams = "io.getkyo" %% "kyo-reactive-streams" % Versions.kyo
 
     val all: Seq[ModuleID] = Seq(kyoCore, kyoData, kyoPrelude, kyoReactiveStreams)
   }

@@ -1,10 +1,10 @@
 package mongo4s.repositories
 
-import cats.effect.IO
 import org.scalatest.wordspec.AsyncWordSpec
 import org.scalatest.matchers.should.Matchers
 import cats.effect.testing.scalatest.AsyncIOSpec
 
+import cats.effect.IO
 import org.bson.{BsonDocument, BsonInt32, BsonString}
 
 import mongo4s.bson.*
@@ -150,7 +150,7 @@ final class BaseMongoRepositorySpec extends AsyncWordSpec, AsyncIOSpec, Matchers
         _        <- collection.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 30), Person("3", "eve", 40)))
         modified <- repository.updateBy(Field.of[Person, Int](_.age).equalTo(30), Update.set(Field.of[Person, Int](_.age), 99))
       yield
-        modified shouldBe 2L
+        modified.matchedCount shouldBe 2L
         collection.snapshot should contain theSameElementsAs List(Person("1", "bob", 99), Person("2", "alice", 99), Person("3", "eve", 40))
     }
   }

@@ -49,13 +49,22 @@ final class WithIdSpec extends AnyWordSpec with Matchers:
     }
   }
 
-  "PrimaryKey.objectId" should {
+  "PrimaryKey.storedId" should {
     "extract the id from the entity and target _id" in {
       final case class Doc(id: ObjectId, text: String)
-      val pk  = PrimaryKey.objectId[Doc](_.id)
+      val pk  = PrimaryKey.storedId[Doc, ObjectId](_.id)
       val oid = ObjectId.get()
 
       pk.key(Doc(oid, "x")) shouldBe oid
       pk.eqFilter(oid).toBson(FieldNaming.identity).toJson shouldBe s"""{"_id": {"$$oid": "${oid.toHexString}"}}"""
+    }
+
+    // The key's type is irrelevant — what makes it a primary key is that the codec writes it to _id.
+    "work for a non-ObjectId key" in {
+      final case class Doc(slug: String)
+      val pk = PrimaryKey.storedId[Doc, String](_.slug)
+
+      pk.fieldNames shouldBe List("_id")
+      pk.eqFilter("intro").toBson(FieldNaming.snakeCase).toJson shouldBe """{"_id": "intro"}"""
     }
   }

@@ -5,11 +5,10 @@ import java.util.concurrent.atomic.AtomicLong
 
 import org.openjdk.jmh.annotations.*
 
-import kyo.{AllowUnsafe, Duration as KyoDuration, KyoApp, Sync as KyoSync}
 import cats.effect.IO
-import cats.effect.unsafe.implicits.global
 import rapid.Task as RapidTask
 import zio.{Exit, Runtime, Scope as ZScope, Task, Unsafe}
+import kyo.{AllowUnsafe, Duration as KyoDuration, KyoApp, Sync as KyoSync}
 import mongo4cats.circe.deriveCirceCodecProvider
 import mongo4cats.codecs.MongoCodecProvider
 import mongo4cats.client.{GenericMongoClient, MongoClient as M4CClient}
@@ -24,6 +23,7 @@ import mongo4s.{Field, MongoClient as Mongo4sClient, Streamable}
 import mongo4s.benchmarks.CodecBenchmark.{Address, Person}
 
 import scala.concurrent.duration.given
+import cats.effect.unsafe.implicits.given
 import io.circe.generic.auto.given
 import mongo4s.zio.ZioInstances.given
 import mongo4s.bson.BsonInstances.given

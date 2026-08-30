@@ -10,40 +10,67 @@ import mongo4s.bson.BsonError
 object WireSumDerivation:
 
   private[direct] val DiscriminatorField = "_type"
+  private[direct] val NestedValueField   = "value"
 
-  inline def derived[A](using m: Mirror.SumOf[A], config: WireCodecConfig): WireCodec[A] =
-    val discriminators: Array[String] = labelsOf[m.MirroredElemLabels].toArray.map(config.discriminatorNaming.apply)
+  inline def derived[A](using mirror: Mirror.SumOf[A], config: WireCodecConfig): WireCodec[A] =
+    val discriminators: Array[String] = labelsOf[mirror.MirroredElemLabels].toArray.map(config.discriminatorNaming.apply)
     require(
       discriminators.distinct.length == discriminators.length,
       s"WireCodecConfig.discriminatorNaming produced duplicate discriminators: ${discriminators.mkString(", ")}",
     )
-    make[A](m, discriminators, config.encodeEmptyCasesAsString, () => codecsOf[m.MirroredElemTypes].toArray.asInstanceOf[Array[FieldCodec[Any]]])
+    make[A](
+      mirror,
+      discriminators,
+      config.encodeEmptyCasesAsString,
+      () => codecsOf[mirror.MirroredElemTypes].toArray.asInstanceOf[Array[WireCodec[Any]]],
+    )
 
   private def make[A](
-      m: Mirror.SumOf[A],
+      mirror: Mirror.SumOf[A],
       discriminators: Array[String],
       encodeEmptyCasesAsString: Boolean,
-      codecsThunk: () => Array[FieldCodec[Any]],
+      codecsThunk: () => Array[WireCodec[Any]],
   ): WireCodec[A] =
-    lazy val codecs: Array[FieldCodec[Any]] = codecsThunk()
-    val indexOf: Map[String, Int]           = discriminators.zipWithIndex.toMap
+    lazy val codecs: Array[WireCodec[Any]] = codecsThunk()
+    val indexOf: Map[String, Int]          = discriminators.zipWithIndex.toMap
+
+    def unknown(tag: String): Nothing =
+      throw BsonError.DecodingFailure(BsonError.Custom(s"Unknown subtype discriminator: $tag"))
 
     new WireCodec[A]:
       def encode(writer: BsonWriter, value: A): Unit =
-        val ordinal = m.ordinal(value)
-        if encodeEmptyCasesAsString && codecs(ordinal).isEmpty then writer.writeString(discriminators(ordinal))
-        else
-          writer.writeStartDocument()
-          writer.writeName(DiscriminatorField)
-          writer.writeString(discriminators(ordinal))
-          codecs(ordinal).writeFields(writer, value)
-          writer.writeEndDocument()
+        val ordinal = mirror.ordinal(value)
+
+        codecs(ordinal) match
+          case fields: FieldCodec[Any] if encodeEmptyCasesAsString && fields.isEmpty =>
+            writer.writeString(discriminators(ordinal))
+
+          case fields: FieldCodec[Any] =>
+            writer.writeStartDocument()
+            writer.writeName(DiscriminatorField)
+            writer.writeString(discriminators(ordinal))
+            fields.writeFields(writer, value)
+            writer.writeEndDocument()
+
+          case nested =>
+            writer.writeStartDocument()
+            writer.writeName(DiscriminatorField)
+            writer.writeString(discriminators(ordinal))
+            writer.writeName(NestedValueField)
+            nested.encode(writer, value)
+            writer.writeEndDocument()
 
       def decode(reader: BsonReader): A =
         if reader.getCurrentBsonType == BsonType.STRING then
           val tag = reader.readString()
-          val idx = indexOf.getOrElse(tag, throw BsonError.DecodingFailure(BsonError.Custom(s"Unknown subtype discriminator: $tag")))
-          codecs(idx).readEmpty.asInstanceOf[A]
+          val idx = indexOf.getOrElse(tag, unknown(tag))
+
+          codecs(idx) match
+            case fields: FieldCodec[Any] => fields.readEmpty.asInstanceOf[A]
+            case _                       =>
+              throw BsonError.DecodingFailure(
+                BsonError.Custom(s"Subtype '$tag' has a payload and cannot be read from a bare string")
+              )
         else
           reader.readStartDocument()
           if reader.readBsonType() == BsonType.END_OF_DOCUMENT then throw BsonError.DecodingFailure(BsonError.MissingField(DiscriminatorField))
@@ -54,9 +81,19 @@ object WireSumDerivation:
               BsonError.Custom(s"Expected discriminator field '$DiscriminatorField' first, got '$firstName'")
             )
 
-          val tag    = reader.readString()
-          val idx    = indexOf.getOrElse(tag, throw BsonError.DecodingFailure(BsonError.Custom(s"Unknown subtype discriminator: $tag")))
-          val result = codecs(idx).readFields(reader)
+          val tag = reader.readString()
+          val idx = indexOf.getOrElse(tag, unknown(tag))
+
+          val result = codecs(idx) match
+            case fields: FieldCodec[Any] => fields.readFields(reader)
+            case nested                  =>
+              reader.readBsonType()
+              val name  = reader.readName()
+              if name != NestedValueField then throw BsonError.DecodingFailure(BsonError.Custom(s"Expected '$NestedValueField' for subtype '$tag', got '$name'"))
+              val value = nested.decode(reader)
+              reader.readBsonType()
+              value
+
           reader.readEndDocument()
           result.asInstanceOf[A]
 
@@ -65,7 +102,7 @@ object WireSumDerivation:
       case _: EmptyTuple => Nil
       case _: (t *: ts)  => constValue[t].asInstanceOf[String] :: labelsOf[ts]
 
-  private inline def codecsOf[T <: Tuple]: List[FieldCodec[?]] =
+  private inline def codecsOf[T <: Tuple]: List[WireCodec[?]] =
     inline erasedValue[T] match
       case _: EmptyTuple => Nil
-      case _: (t *: ts)  => summonInline[WireCodec[t]].asInstanceOf[FieldCodec[t]] :: codecsOf[ts]
+      case _: (t *: ts)  => summonInline[WireCodec[t]] :: codecsOf[ts]

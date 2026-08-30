@@ -19,9 +19,9 @@ object calypsoCodecs:
   given CalypsoDecoder[Address] = CalypsoDecoder.forProduct2("city", "zip")(Address.apply)
 
   given CalypsoEncoder[User] =
-    CalypsoEncoder.forProduct10("id", "name", "email", "age", "role", "address", "tags", "active", "createdAt", "userRole"):
-      user =>
-        (user.id, user.name, user.email, user.age, user.role, user.address, user.tags, user.active, user.createdAt, user.userRole)
+    CalypsoEncoder.forProduct10("id", "name", "email", "age", "role", "address", "tags", "active", "createdAt", "userRole") { user =>
+      (user.id, user.name, user.email, user.age, user.role, user.address, user.tags, user.active, user.createdAt, user.userRole)
+    }
 
   given CalypsoDecoder[User] =
     CalypsoDecoder.forProduct10("id", "name", "email", "age", "role", "address", "tags", "active", "createdAt", "userRole")(User.apply)

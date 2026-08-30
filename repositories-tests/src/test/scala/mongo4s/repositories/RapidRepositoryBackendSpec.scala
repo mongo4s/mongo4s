@@ -1,9 +1,11 @@
 package mongo4s.repositories
 
-import mongo4s.{Effect, Streamable}
-import mongo4s.rapid.RapidInstances.given
-import mongo4s.rapid.RapidStream
 import rapid.{Stream, Task}
+
+import mongo4s.rapid.RapidStream
+import mongo4s.{Effect, Streamable}
+
+import mongo4s.rapid.RapidInstances.given
 
 final class RapidRepositoryBackendSpec extends RepositoryBackendSpec[Task, RapidStream]:
   protected def effectInstance: Effect[Task] = summon

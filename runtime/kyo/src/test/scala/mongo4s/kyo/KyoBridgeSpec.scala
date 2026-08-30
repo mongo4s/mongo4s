@@ -70,7 +70,7 @@ final class KyoBridgeSpec extends AnyWordSpec, Matchers:
     val strictBridge     = summon[RsBridge[KIO, KStream]]
 
     "fail one with TooManyResults for a 2-element publisher" in {
-      intercept[RsBridgeError.TooManyResults](run(strictBridge.one(ListPublisher(List(1, 2))))) shouldBe RsBridgeError.TooManyResults(2)
+      intercept[RsBridgeError.TooManyResults](run(strictBridge.one(ListPublisher(List(1, 2))))) shouldBe RsBridgeError.TooManyResults()
     }
     "fail one with EmptyResult for an empty publisher" in {
       intercept[RsBridgeError.EmptyResult](run(strictBridge.one(ListPublisher(List.empty[Int])))) shouldBe RsBridgeError.EmptyResult()

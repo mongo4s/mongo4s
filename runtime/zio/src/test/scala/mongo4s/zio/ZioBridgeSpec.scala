@@ -68,7 +68,7 @@ final class ZioBridgeSpec extends AnyWordSpec, Matchers:
     val strictBridge     = summon[RsBridge[Task, ZioStream]]
 
     "fail one with TooManyResults for a 2-element publisher" in {
-      run(strictBridge.one(ListPublisher(List(1, 2))).either) shouldBe Left(RsBridgeError.TooManyResults(2))
+      run(strictBridge.one(ListPublisher(List(1, 2))).either) shouldBe Left(RsBridgeError.TooManyResults())
     }
     "fail one with EmptyResult for an empty publisher" in {
       run(strictBridge.one(ListPublisher(List.empty[Int])).either) shouldBe Left(RsBridgeError.EmptyResult())

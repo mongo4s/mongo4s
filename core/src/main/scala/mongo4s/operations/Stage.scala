@@ -1,9 +1,11 @@
 package mongo4s.operations
 
-import org.bson.{BsonBoolean, BsonDocument, BsonInt32, BsonString}
+import org.bson.*
 
-import mongo4s.{Field, FieldPath}
 import mongo4s.bson.FieldNaming
+import mongo4s.{Field, FieldPath}
+
+import scala.jdk.CollectionConverters.given
 
 enum Stage[E]:
   case MatchStage(filter: Filter[E])
@@ -14,6 +16,15 @@ enum Stage[E]:
   case Count(fieldName: String)
   case Unwind(path: FieldPath, preserveNullAndEmptyArrays: Boolean)
   case Lookup(from: String, localField: FieldPath, foreignField: FieldPath, as: String)
+  case Group(by: Option[FieldPath], accumulators: List[(String, Accumulator[E])])
+  case AddFields(fields: List[(String, BsonValue)])
+  case ReplaceRoot(path: FieldPath)
+  case Sample(size: Int)
+  case UnionWith(collection: String)
+  case Facet(facets: List[(String, List[Stage[E]])])
+  case Out(collection: String)
+  case Merge(collection: String)
+
   case Raw(document: BsonDocument)
 
   def toBson(naming: FieldNaming): BsonDocument = this match
@@ -37,7 +48,27 @@ enum Stage[E]:
           .append("foreignField", BsonString(foreignField.render(naming)))
           .append("as", BsonString(as)),
       )
-    case Stage.Raw(document)                              => document
+    case Stage.Group(by, accumulators)                    =>
+      val group = BsonDocument("_id", by.fold(BsonNull.VALUE: BsonValue)(path => BsonString("$" + path.render(naming))))
+      accumulators.foreach((name, accumulator) => group.append(name, accumulator.toBson(naming)))
+      BsonDocument("$group", group)
+
+    case Stage.AddFields(fields) =>
+      BsonDocument("$addFields", fields.foldLeft(BsonDocument())((acc, entry) => acc.append(entry._1, entry._2)))
+
+    case Stage.ReplaceRoot(path)     => BsonDocument("$replaceRoot", BsonDocument("newRoot", BsonString("$" + path.render(naming))))
+    case Stage.Sample(size)          => BsonDocument("$sample", BsonDocument("size", BsonInt32(size)))
+    case Stage.UnionWith(collection) => BsonDocument("$unionWith", BsonString(collection))
+
+    case Stage.Facet(facets) =>
+      val document = BsonDocument()
+      facets.foreach: (name, stages) =>
+        document.append(name, BsonArray(stages.map(_.toBson(naming)).asJava))
+      BsonDocument("$facet", document)
+
+    case Stage.Out(collection)   => BsonDocument("$out", BsonString(collection))
+    case Stage.Merge(collection) => BsonDocument("$merge", BsonString(collection))
+    case Stage.Raw(document)     => document
 
 object Stage:
   def matching[E](filter: Filter[E]): Stage[E]        = MatchStage(filter)
@@ -51,6 +82,28 @@ object Stage:
     Unwind(field.path, preserveNullAndEmptyArrays)
 
   def lookup[E, A](from: String, localField: Field[E, A], foreignField: String, as: String): Stage[E] =
-    Lookup(from, localField.path, FieldPath.of(foreignField), as)
+    Lookup(
+      from = from,
+      localField = localField.path,
+      foreignField = FieldPath.literal(foreignField),
+      as = as,
+    )
+
+  def groupBy[E, A](field: Field[E, A])(accumulators: (String, Accumulator[E])*): Stage[E] =
+    Group(Some(field.path), accumulators.toList)
+
+  def groupAll[E](accumulators: (String, Accumulator[E])*): Stage[E] = Group(None, accumulators.toList)
+
+  def addFields[E](fields: (String, BsonValue)*): Stage[E] = AddFields(fields.toList)
+
+  def replaceRoot[E, A](field: Field[E, A]): Stage[E] = ReplaceRoot(field.path)
+
+  def sample[E](size: Int): Stage[E]             = Sample(size)
+  def unionWith[E](collection: String): Stage[E] = UnionWith(collection)
+
+  def facet[E](facets: (String, List[Stage[E]])*): Stage[E] = Facet(facets.toList)
+
+  def out[E](collection: String): Stage[E]   = Out(collection)
+  def merge[E](collection: String): Stage[E] = Merge(collection)
 
   def raw[E](document: BsonDocument): Stage[E] = Raw(document)

@@ -65,7 +65,7 @@ final class RapidBridgeSpec extends AnyWordSpec, Matchers:
     val strictBridge     = summon[RsBridge[Task, RapidStream]]
 
     "fail one with TooManyResults for a 2-element publisher" in {
-      intercept[RsBridgeError.TooManyResults](strictBridge.one(ListPublisher(List(1, 2))).sync()) shouldBe RsBridgeError.TooManyResults(2)
+      intercept[RsBridgeError.TooManyResults](strictBridge.one(ListPublisher(List(1, 2))).sync()) shouldBe RsBridgeError.TooManyResults()
     }
     "fail one with EmptyResult for an empty publisher" in {
       intercept[RsBridgeError.EmptyResult](strictBridge.one(ListPublisher(List.empty[Int])).sync()) shouldBe RsBridgeError.EmptyResult()

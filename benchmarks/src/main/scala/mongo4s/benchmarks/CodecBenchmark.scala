@@ -4,8 +4,9 @@ import java.util.concurrent.TimeUnit
 
 import org.openjdk.jmh.annotations.*
 
-import org.bson.BsonDocument
 import zio.json.JsonCodec
+import org.bson.BsonDocument
+
 import mongo4s.bson.BsonDocumentCodec
 import mongo4s.bson.calypso.{CalypsoDecoder, CalypsoEncoder}
 import mongo4s.bson.direct.WireCodec

@@ -6,12 +6,12 @@ import org.scalatest.matchers.should.Matchers
 import cats.effect.testing.scalatest.AsyncIOSpec
 import org.testcontainers.containers.MongoDBContainer
 
-import cats.effect.IO
+import cats.effect.{Deferred, IO}
 import org.bson.{BsonDocument, BsonInt32, BsonString}
 
 import mongo4s.bson.*
 import mongo4s.cats.CatsStream
-import mongo4s.{MongoClient, MongoSession}
+import mongo4s.{MongoClient, MongoSession, withTransaction}
 
 import scala.concurrent.duration.given
 import mongo4s.bson.BsonInstances.given
@@ -90,12 +90,12 @@ final class TransactionItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befo
     "commit a successful body, with the session picked up implicitly by every call inside it" in {
       val program =
         for
-          client     <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
-          database   <- client.getDatabase("tx-helper-commit")
-          collection <- database.getCollection[Person]("people")
-          _          <- client.withTransaction(collection.insertOne(Person("carol", 40)))
+          client      <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database    <- client.getDatabase("tx-helper-commit")
+          collection  <- database.getCollection[Person]("people")
+          _           <- client.withTransaction(collection.insertOne(Person("carol", 40)))
           afterCommit <- collection.count()
-          _          <- client.close
+          _           <- client.close
         yield afterCommit
 
       program.timeout(30.seconds).asserting(_ shouldBe 1L)
@@ -117,6 +117,33 @@ final class TransactionItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befo
       program.timeout(30.seconds).asserting { case (outcome, afterAbort) =>
         outcome.left.map(_.getMessage) shouldBe Left("boom")
         afterAbort shouldBe 0L
+      }
+    }
+
+    "roll back and end the transaction when the fiber is cancelled" in {
+      val program =
+        for
+          client      <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database    <- client.getDatabase("tx-cancel")
+          collection  <- database.getCollection[Person]("people")
+          session     <- client.startSession
+          inserted    <- Deferred[IO, Unit]
+          fiber       <- session
+                           .withTransaction[IO, S, Unit](
+                             collection.insertOne(Person("erin", 60)).void *> inserted.complete(()).void *> IO.never[Unit]
+                           )
+                           .start
+          _           <- inserted.get
+          _           <- fiber.cancel
+          stillActive <- IO(session.hasActiveTransaction)
+          afterCancel <- collection.count()
+          _           <- IO(session.close())
+          _           <- client.close
+        yield (stillActive, afterCancel)
+
+      program.timeout(30.seconds).asserting { case (stillActive, afterCancel) =>
+        stillActive shouldBe false
+        afterCancel shouldBe 0L
       }
     }
   }
