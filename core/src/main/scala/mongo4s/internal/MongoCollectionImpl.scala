@@ -239,7 +239,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
   def createIndex(index: Index[A])(using session: Option[ClientSession]): F[String] =
     F.suspend {
       val options = IndexOptions().unique(index.unique).sparse(index.sparse)
-      
+
       index.name.foreach(options.name)
       index.expireAfter.foreach(duration => options.expireAfter(duration.toSeconds, TimeUnit.SECONDS))
       index.partialFilter.foreach(filter => options.partialFilterExpression(filter.toBson(naming)))

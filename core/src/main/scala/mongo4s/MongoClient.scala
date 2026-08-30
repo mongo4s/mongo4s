@@ -38,7 +38,7 @@ trait MongoClient[F[*], S[*]]:
   def underlying: RSMongoClient
 
 object MongoClient:
-  
+
   def fromClient[F[*], S[*]](client: RSMongoClient)(using F: Effect[F], rs: RsBridge[F, S]): F[MongoClient[F, S]] =
     F.pure(MongoClientImpl(client))
 

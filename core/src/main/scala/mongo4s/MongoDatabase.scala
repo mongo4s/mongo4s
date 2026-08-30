@@ -16,7 +16,7 @@ trait MongoDatabase[F[*], S[*]]:
       collectionName: String,
       naming: FieldNaming = FieldNaming.identity,
   )(using BsonDocumentCodec[A]): F[MongoCollection[F, S, A]]
-  
+
   def getDirectCollection[A](
       collectionName: String,
       naming: FieldNaming = FieldNaming.identity,

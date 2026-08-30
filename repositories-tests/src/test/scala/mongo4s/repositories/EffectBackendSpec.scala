@@ -15,7 +15,7 @@ trait EffectBackendSpec[F[*]] extends AnyWordSpec, Matchers:
 
   private given Effect[F]  = effectInstance
   private def F: Effect[F] = effectInstance
-  
+
   private def runAttempt[A](fa: F[A]): Either[Throwable, A] = run(F.attempt(fa))
 
   private final class Boom(val tag: String) extends RuntimeException(tag)

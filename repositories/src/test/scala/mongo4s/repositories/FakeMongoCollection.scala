@@ -239,7 +239,7 @@ final class FakeMongoCollection[F[*], S[*], E](
       throw UnsupportedOperationException("FakeMongoCollection: $expr is not simulated")
 
     case Filter.Raw(_) => throw UnsupportedOperationException("FakeMongoCollection: Filter.Raw is not simulated")
-  
+
   private def storedSegments(path: mongo4s.FieldPath): List[String] = path.render(naming).split('.').toList
 
   private def elementsAt(document: BsonDocument, path: mongo4s.FieldPath): Option[List[BsonValue]] =

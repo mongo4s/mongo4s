@@ -17,7 +17,7 @@ trait KeyRef[E, K]:
         Filter.Eq[E](FieldPath.literal(name), value)
       }*
     )
-    
+
   def inFilter(keys: List[K]): Filter[E] =
     keys match
       case Nil           => Filter.none

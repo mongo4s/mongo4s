@@ -22,7 +22,7 @@ final case class Index[E](
   def withUnique: Index[E]           = copy(unique = true)
   def withSparse: Index[E]           = copy(sparse = true)
   def named(value: String): Index[E] = copy(name = Some(value))
-  
+
   def expiringAfter(duration: FiniteDuration): Index[E] =
     require(
       duration.toSeconds > 0,

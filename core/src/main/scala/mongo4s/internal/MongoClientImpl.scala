@@ -34,7 +34,7 @@ private[mongo4s] final class MongoClientImpl[F[*], S[*]](
     val publisher = session match
       case Some(s) => underlying.listDatabases(s, classOf[BsonDocument])
       case None    => underlying.listDatabases(classOf[BsonDocument])
-      
+
     rs.stream(publisher)
   end listDatabases
 

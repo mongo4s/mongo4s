@@ -17,7 +17,7 @@ object PrimaryKey:
 
   def id[E, Id](keyOf: E => Id)(using encoder: BsonEncoder[Id]): PrimaryKey[E, Id] =
     single("id")(keyOf)
-    
+
   def storedId[E, Id](keyOf: E => Id)(using encoder: BsonEncoder[Id]): PrimaryKey[E, Id] =
     single("_id")(keyOf)
 
