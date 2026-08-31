@@ -1,14 +1,14 @@
 import Dependencies.Versions
 import com.typesafe.tools.mima.plugin.MimaKeys.mimaPreviousArtifacts
 
-lazy val binaryCompatibleWith = Set.empty[String]
+lazy val binaryCompatibleWith = Set("1.0.0")
 
 lazy val commonSettings = Seq(
   organization           := "org.mongo4s",
   organizationName       := "Mongo4s",
   homepage               := Some(uri("https://mongo4s.org/")),
   description            := "Mongo client, bson-codecs and repositories for Scala 3",
-  version                := "1.0.0",
+  version                := "1.1.0",
   versionScheme          := Some("semver-spec"),
   scalaVersion           := Versions.scalaLTS,
   parallelExecution      := true,
@@ -105,7 +105,8 @@ lazy val bson = project
   .in(file("bson"))
   .settings(commonSettings)
   .settings(
-    publish / skip := true
+    publish / skip        := true,
+    mimaPreviousArtifacts := Set.empty,
   )
   .aggregate(
     bsonCore,
@@ -170,7 +171,8 @@ lazy val runtime = project
   .in(file("runtime"))
   .settings(commonSettings)
   .settings(
-    publish / skip := true
+    publish / skip        := true,
+    mimaPreviousArtifacts := Set.empty,
   )
   .aggregate(
     cats,
@@ -192,9 +194,10 @@ lazy val repositoriesTests = project
   .in(file("repositories-tests"))
   .settings(commonSettings)
   .settings(
-    name           := "mongo4s-repositories-tests",
-    scalaVersion   := Versions.scalaLast,
-    publish / skip := true,
+    name                  := "mongo4s-repositories-tests",
+    scalaVersion          := Versions.scalaLast,
+    publish / skip        := true,
+    mimaPreviousArtifacts := Set.empty,
     libraryDependencies ++= Seq(
       Dependencies.Cats.catsEffect3,
       Dependencies.Codecs.medeia,
@@ -220,9 +223,10 @@ lazy val examples = project
   .in(file("examples"))
   .settings(commonSettings)
   .settings(
-    name           := "mongo4s-examples",
-    scalaVersion   := Versions.scalaLast,
-    publish / skip := true,
+    name                  := "mongo4s-examples",
+    scalaVersion          := Versions.scalaLast,
+    publish / skip        := true,
+    mimaPreviousArtifacts := Set.empty,
     libraryDependencies ++= Seq(
       Dependencies.Cats.catsEffect3,
       Dependencies.Codecs.medeia,
@@ -250,9 +254,10 @@ lazy val benchmarks = project
   .enablePlugins(JmhPlugin)
   .settings(commonSettings)
   .settings(
-    name           := "mongo4s-benchmarks",
-    scalaVersion   := Versions.scalaLast,
-    publish / skip := true,
+    name                  := "mongo4s-benchmarks",
+    scalaVersion          := Versions.scalaLast,
+    publish / skip        := true,
+    mimaPreviousArtifacts := Set.empty,
     libraryDependencies ++= Seq(
       Dependencies.Benchmarks.mongo4catsCore,
       Dependencies.Benchmarks.mongo4catsCirce,
@@ -282,6 +287,7 @@ lazy val it = project
     name                     := "mongo4s-it",
     scalaVersion             := Versions.scalaLast,
     publish / skip           := true,
+    mimaPreviousArtifacts    := Set.empty,
     Test / fork              := true,
     Test / parallelExecution := false,
     Test / envVars ++= sys.env
@@ -309,8 +315,9 @@ lazy val root = project
   .in(file("."))
   .settings(commonSettings)
   .settings(
-    name           := "mongo4s",
-    publish / skip := true,
+    name                  := "mongo4s",
+    publish / skip        := true,
+    mimaPreviousArtifacts := Set.empty,
   )
   .aggregate(
     bson,

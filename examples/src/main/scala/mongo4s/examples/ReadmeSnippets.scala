@@ -7,11 +7,11 @@ import com.mongodb.client.model.Collation
 import com.mongodb.client.model.changestream.FullDocument
 
 import mongo4s.cats.{CatsStream, MongoClientResource}
-import mongo4s.bson.{BsonDocumentCodec, DecodeResult}
 import mongo4s.results.{BulkWriteResult, UpdateResult}
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.repositories.{BaseMongoRepository, Page}
-import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec}
+import mongo4s.bson.{BsonDocumentCodec, DecodeResult, FieldNaming}
+import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec, WireCodecConfig}
 import mongo4s.operations.{Accumulator, Filter, Index, Projection, Sort, Stage, Update, WriteCommand}
 import mongo4s.{Field, MongoClient, MongoCollection, MongoDatabase, PrimaryKey, RsBridgeConfig, WithId, withTransaction}
 
@@ -266,6 +266,24 @@ object ReadmeSnippets:
       _     <- notes.insertOne(WithId(id, Note("remember this")))
       found <- notes.findOne(id)
     yield found
+
+  // --- Derivation config ---
+
+  object snakeCased:
+    given WireCodecConfig = WireCodecConfig.SnakeCase.withDiscriminatorNaming(FieldNaming.snakeCase)
+
+    final case class Person(firstName: String, lastName: String) derives WireCodec
+
+  // --- Absent Option fields ---
+
+  final case class Contact(name: String, email: Option[String]) derives WireCodec
+
+  val omitted: Contact = Contact("bob", None)
+
+  object nullsKept:
+    given WireCodecConfig = WireCodecConfig.Default.withOmitNoneFields(false)
+
+    final case class LegacyContact(name: String, email: Option[String]) derives WireCodec
 
   // --- Bridge configuration ---
 

@@ -29,4 +29,5 @@ object ScalarWireCodec:
     new ScalarWireCodec[A]:
       def encode(writer: BsonWriter, value: A): Unit = encoder.encode(writer, value)
       def decode(reader: BsonReader): A              = decoder.decode(reader)
+      override def isAbsent(value: A): Boolean       = encoder.isAbsent(value)
       override def defaultOnMissing: Option[A]       = decoder.defaultOnMissing

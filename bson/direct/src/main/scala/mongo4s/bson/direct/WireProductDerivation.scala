@@ -12,9 +12,14 @@ object WireProductDerivation:
   inline def derived[A](using m: Mirror.ProductOf[A], config: WireCodecConfig): WireCodec[A] =
     val labels: Array[String] = labelsOf[m.MirroredElemLabels].toArray.map(config.fieldNaming.apply)
     require(labels.distinct.length == labels.length, s"WireCodecConfig.fieldNaming produced duplicate field names: ${labels.mkString(", ")}")
-    make[A](m, labels, () => codecsOf[m.MirroredElemTypes].toArray.asInstanceOf[Array[WireCodec[Any]]])
+    make[A](m, labels, config.omitNoneFields, () => codecsOf[m.MirroredElemTypes].toArray.asInstanceOf[Array[WireCodec[Any]]])
 
-  private def make[A](m: Mirror.ProductOf[A], labels: Array[String], codecsThunk: () => Array[WireCodec[Any]]): WireCodec[A] =
+  private def make[A](
+      m: Mirror.ProductOf[A],
+      labels: Array[String],
+      omitAbsentFields: Boolean,
+      codecsThunk: () => Array[WireCodec[Any]],
+  ): WireCodec[A] =
     lazy val codecs: Array[WireCodec[Any]] = codecsThunk()
     val indexOf: Map[String, Int]          = labels.zipWithIndex.toMap
 
@@ -26,8 +31,10 @@ object WireProductDerivation:
         val values = value.asInstanceOf[Product].productIterator
         var i      = 0
         while values.hasNext do
-          writer.writeName(labels(i))
-          codecs(i).encode(writer, values.next())
+          val field = values.next()
+          if !(omitAbsentFields && codecs(i).isAbsent(field)) then
+            writer.writeName(labels(i))
+            codecs(i).encode(writer, field)
           i += 1
 
       def readFields(reader: BsonReader): A =

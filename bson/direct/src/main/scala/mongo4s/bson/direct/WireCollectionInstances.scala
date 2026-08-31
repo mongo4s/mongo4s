@@ -19,6 +19,8 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
         None
       else Some(inner.decode(reader))
 
+    override def isAbsent(value: Option[A]): Boolean = value.isEmpty
+
     override def defaultOnMissing: Option[Option[A]] = Some(None)
 
   given listWireCodec[A](using inner: WireCodec[A]): WireCodec[List[A]] with

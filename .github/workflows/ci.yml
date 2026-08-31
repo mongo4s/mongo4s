@@ -48,6 +48,9 @@ jobs:
       - name: Test
         run: sbt "testOnly *"
 
+      - name: Binary compatibility
+        run: sbt mimaReportBinaryIssues
+
   integration:
     name: Integration tests (real MongoDB via Testcontainers)
     runs-on: ubuntu-latest

@@ -5,10 +5,10 @@ import java.nio.ByteBuffer
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
+import org.bson.*
 import org.bson.types.ObjectId
 import org.bson.io.{BasicOutputBuffer, ByteBufferBsonInput}
 import org.bson.codecs.{BsonDocumentCodec as DriverBsonDocumentCodec, DecoderContext, EncoderContext}
-import org.bson.{BsonBinaryReader, BsonBinaryWriter, BsonDocument, BsonDouble, BsonString, ByteBufNIO}
 
 import mongo4s.bson.{BsonError, FieldNaming}
 
@@ -21,7 +21,7 @@ object WireCodecSpec:
     final case class UserAccount(userId: String, isActive: Boolean) derives WireCodec
 
   object DiscriminatorOnlyMapped:
-    given WireCodecConfig = WireCodecConfig(discriminatorNaming = FieldNaming.snakeCase)
+    given WireCodecConfig = WireCodecConfig.Default.withDiscriminatorNaming(FieldNaming.snakeCase)
     sealed trait Event derives WireCodec
     object Event:
       final case class UserCreated(userId: String) extends Event derives WireCodec
@@ -33,11 +33,11 @@ object WireCodecSpec:
       final case class ActiveStatus(sinceDay: Int) extends Status derives WireCodec
 
   object DuplicateFieldNames:
-    given WireCodecConfig = WireCodecConfig(fieldNaming = _ => "same")
+    given WireCodecConfig = WireCodecConfig.Default.withFieldNaming(_ => "same")
     final case class TwoFields(a: Int, b: Int) derives WireCodec
 
   object EmptyCasesAsString:
-    given WireCodecConfig = WireCodecConfig(encodeEmptyCasesAsString = true)
+    given WireCodecConfig = WireCodecConfig.Default.withEncodeEmptyCasesAsString(true)
     sealed trait Role derives WireCodec
     object Role:
       case object Admin                      extends Role derives WireCodec
@@ -45,6 +45,14 @@ object WireCodecSpec:
       final case class Custom(label: String) extends Role derives WireCodec
 
     final case class Holder(role: Role) derives WireCodec
+
+  object NullsForAbsentOptions:
+    given WireCodecConfig = WireCodecConfig.Default.withOmitNoneFields(false)
+    final case class LegacyContact(name: String, email: Option[String]) derives WireCodec
+
+  final case class Contact(name: String, email: Option[String], phone: Option[String]) derives WireCodec
+
+  final case class Slots(values: List[Option[Int]]) derives WireCodec
 
   final case class Address(city: String, zip: String) derives WireCodec
 
@@ -109,6 +117,40 @@ final class WireCodecSpec extends AnyWordSpec, Matchers:
     "round-trip an absent Option field and an empty List" in {
       val person = Person("1", "bob", 30, 9.5, active = true, Nil, None, Address("NYC", "10001"))
       roundTrip(person) shouldBe person
+    }
+
+    "leave a None field out of the document entirely rather than storing an explicit null" in {
+      val document = documentOf(Contact("bob", None, None))
+
+      document.containsKey("name") shouldBe true
+      document.containsKey("email") shouldBe false
+      document.containsKey("phone") shouldBe false
+    }
+
+    "store an explicit null for a None field when omitNoneFields is disabled" in {
+      import NullsForAbsentOptions.*
+
+      val document = documentOf(LegacyContact("bob", None))
+
+      document.isNull("email") shouldBe true
+    }
+
+    "decode a document carrying an explicit null into None, so documents written before omitNoneFields still read back" in {
+      val document = BsonDocument()
+        .append("name", BsonString("bob"))
+        .append("email", BsonNull.VALUE)
+        .append("phone", BsonNull.VALUE)
+
+      WireCodec[Contact].decode(readerOf(bytesOfDocument(document))) shouldBe Contact("bob", None, None)
+    }
+
+    "still write a null for a None inside an array, where omitting the element would shift every position after it" in {
+      val slots    = Slots(List(Some(1), None, Some(3)))
+      val document = documentOf(slots)
+
+      document.getArray("values").size shouldBe 3
+      document.getArray("values").get(1).isNull shouldBe true
+      roundTrip(slots) shouldBe slots
     }
 
     "round-trip sealed trait cases via the discriminator field" in {

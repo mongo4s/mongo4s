@@ -37,13 +37,13 @@ final class WireCodecMirrorAmbiguitySpec extends AnyWordSpec, Matchers:
       document.getArray("foos").size shouldBe 2
     }
 
-    "encode Option[CaseClass] as the bare value/null, not a Some/None document" in {
+    "encode Option[CaseClass] as the bare value, not a Some/None document, and drop the field when it is empty" in {
       val present = documentOf(OptionHolder(Some(Foo(1))))
       present.isDocument("foo") shouldBe true
       present.getDocument("foo").getInt32("x").getValue shouldBe 1
 
       val absent = documentOf(OptionHolder(None))
-      absent.isNull("foo") shouldBe true
+      absent.containsKey("foo") shouldBe false
     }
 
     "encode nested List[List[CaseClass]] as nested arrays" in {

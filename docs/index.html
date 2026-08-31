@@ -800,11 +800,35 @@ given WireCodecConfig = WireCodecConfig.SnakeCase
 final case class Person(firstName: String, lastName: String) derives WireCodec // writes "first_name"/"last_name"</code></pre>
     <p class="muted">
         Field naming and discriminator naming (the <code>_type</code> value for sealed traits/enums) are independently
-        configurable via <code>WireCodecConfig(fieldNaming = ..., discriminatorNaming = ...)</code>. Pass the matching
+        configurable: start from <code>WireCodecConfig.Default</code> (or <code>SnakeCase</code>) and chain
+        <code>withFieldNaming</code>, <code>withDiscriminatorNaming</code>, <code>withEncodeEmptyCasesAsString</code>,
+        <code>withOmitNoneFields</code> — the same shape <code>WatchOptions</code> uses, and the reason new derivation
+        options can be added in a minor release without breaking binary compatibility. Pass the matching
         <code>FieldNaming</code> to <code>getDirectCollection</code>'s own <code>naming</code> parameter too, so
         <code>Filter</code>/<code>Update</code>/<code>Field</code> queries render the same field names the codec wrote.
         <code>encodeEmptyCasesAsString = true</code> writes a parameterless case as a bare BSON string instead of a
         <code>{"_type": "..."}</code> document — only safe when nested inside another document, not at the root.
+    </p>
+
+    <h4>Absent Option fields</h4>
+    <p>
+        A field holding <code>None</code> is left out of the document entirely rather than stored as an explicit
+        <code>null</code> — the key costs nothing on disk, and a collection of mostly-empty optional fields gets
+        materially smaller. Reads are unaffected either way: a missing field decodes to <code>None</code>, and a
+        document already carrying an explicit <code>null</code> still decodes to <code>None</code>, so a collection
+        written before this keeps working unchanged.
+    </p>
+    <pre><code>final case class Contact(name: String, email: Option[String]) derives WireCodec
+
+Contact("bob", None) // {"name": "bob"} — no "email" key at all</code></pre>
+    <p class="muted">
+        <code>{field: null}</code> as a filter still matches, since MongoDB reads that predicate as "null or missing",
+        but <code>$exists: true</code> no longer matches a <code>None</code> and a sparse index on that field no longer
+        includes those documents — <code>WireCodecConfig.Default.withOmitNoneFields(false)</code> restores the explicit
+        <code>null</code> where either matters. The flag governs fields of a derived product only: a <code>None</code>
+        inside an array is still written as <code>null</code>, because dropping an element would shift every position
+        after it, and <code>Update.set(field, None)</code> still writes <code>null</code> because
+        <code>$set: null</code> and <code>$unset</code> are different intents (<code>field.unset</code> is the latter).
     </p>
 
     <h4>Hand-writing a codec: contramap/map/emap/imap</h4>
@@ -1178,6 +1202,16 @@ given RsBridgeConfig = RsBridgeConfig(
         </li>
         <li>Deprecations get at least one minor release before removal.</li>
     </ul>
+    <p>
+        <strong>1.1.0</strong> carries one deliberate exception, declared as MiMa filters rather than left silent:
+        <code>WireCodecConfig</code> stopped being a <code>case class</code>. It is now a <code>final class</code>
+        with a private constructor and <code>withX</code> builders, so <code>WireCodecConfig(...)</code>,
+        <code>.copy(...)</code>, <code>unapply</code> and the <code>Product</code> methods are gone — recompile and
+        use <code>WireCodecConfig.Default.withFieldNaming(...)</code>. The break was taken deliberately and once:
+        every derivation option added after this one is a new <code>withX</code> method, which is binary compatible,
+        where a new field on a case class would have broken <code>apply</code>/<code>copy</code> again in every
+        release.
+    </p>
     <p class="muted">
         Scala 3 TASTy is backward but not forward compatible, so <code>mongo4s-bson-calypso</code>,
         <code>mongo4s-kyo</code> and <code>mongo4s-rapid</code> — built on Scala 3.8 because their upstream
@@ -1615,35 +1649,304 @@ given RsBridgeConfig = RsBridgeConfig(
     </p>
 
     <h2 id="design">Design notes</h2>
+    <p>
+        Why mongo4s is shaped the way it is — what was chosen, what was rejected, and what it cost. Several of these
+        decisions look arbitrary until you know the failure they were a response to, so the failures are here too.
+    </p>
+
+    <h3 id="principles">Principles</h3>
+    <ol>
+        <li><strong>Scala 3 only.</strong> <code>given</code>-based throughout, derivation via <code>Mirror</code> and
+            <code>inline</code>, no runtime reflection. Not cross-building to 2.13 is what buys macro field selectors,
+            <code>derives</code>, opaque types and typed contextual parameters — the whole reason the API can be
+            type-safe where a cross-built one cannot.
+        </li>
+        <li><strong>The compiler is the test.</strong> A wrong field name, a missing codec, a value of the wrong type
+            for a field: all of these should be compile errors, not runtime exceptions or silently empty results.
+        </li>
+        <li><strong>No global state.</strong> No process-wide codec registry, no ambient effect. Everything is
+            resolved at the call site and scoped to the collection it belongs to.
+        </li>
+        <li><strong>The driver is not hidden.</strong> <code>underlying</code> is public on client, database and
+            collection. Anything mongo4s does not model is still reachable, and reaching for it is not a defeat.
+        </li>
+    </ol>
+
+    <h3 id="design-shape">The shape: mirror the driver</h3>
+    <p>
+        <code>MongoClient[F, S]</code> → <code>MongoDatabase[F, S]</code> → <code>MongoCollection[F, S, A]</code>
+        follow the official driver's hierarchy one-to-one. Someone who knows
+        <code>mongodb-driver-reactivestreams</code> can guess where things are; someone who does not can read the
+        driver's documentation and have it apply. Two type parameters, not one, because no effect system bundles
+        effect and stream — cats-effect pairs with fs2, ZIO ships its own <code>ZStream</code>, and the pairing is a
+        user decision.
+    </p>
+    <p class="muted">
+        Every method that reaches the server takes <code>(using session: Option[ClientSession] = None)</code>.
+        Sessions are invisible until you opt in, and joining a transaction requires no change at the call site — the
+        session is given implicitly by <code>withTransaction</code> and picked up by every call inside the block,
+        including repository calls that know nothing about transactions. The alternative — a second overload of every
+        method taking an explicit session — doubles the API surface and makes a transactional call textually
+        different from a non-transactional one.
+    </p>
+
+    <h3 id="design-effect">Effect-agnostic by construction</h3>
+    <p>
+        <code>mongo4s-core</code> depends on the Mongo driver and nothing else. A runtime module is two
+        <code>given</code> instances.
+    </p>
+    <pre><code>trait Effect[F[*]]:
+  def pure[A](a: A): F[A]
+  def delay[A](a: =&gt; A): F[A]
+  def map[A, B](fa: F[A])(f: A =&gt; B): F[B]
+  def flatMap[A, B](fa: F[A])(f: A =&gt; F[B]): F[B]
+  def raiseError[A](error: Throwable): F[A]
+  def handleErrorWith[A](fa: F[A])(f: Throwable =&gt; F[A]): F[A]
+  def guaranteeCase[A](fa: F[A])(finalizer: ExitCase =&gt; F[Unit]): F[A]
+  // suspend, unit, void, attempt, guarantee, onError, bracket, bracketCase — derived, overridable</code></pre>
+    <p>
+        Seven abstract members, and that number is a deliberate ceiling: everything derivable is derived with a
+        default, so supporting a new effect system is an afternoon, and adding capability later does not break
+        implementors.
+    </p>
+    <p>
+        <strong><code>guaranteeCase</code> is the load-bearing one.</strong> It sees
+        <code>ExitCase.Succeeded | Errored | Canceled</code>, and the <code>Canceled</code> case is why an interrupted
+        transaction rolls back immediately instead of lingering on the server until it is reaped, and why a canceled
+        read releases its cursor. An abstraction built on <code>Monad</code> + <code>MonadError</code> alone cannot
+        express that — which is the reason <code>Effect</code> exists rather than the library taking a
+        <code>cats.effect.Async</code> constraint. A finalizer that itself fails does not replace the error that
+        caused it: it is attached with <code>addSuppressed</code>, because the rollback error is what you want to see
+        but the error that triggered the rollback is what you need to debug.
+    </p>
+    <pre><code>trait RsBridge[F[*], S[*]]:
+  def one[A](publisher: =&gt; Publisher[A]): F[A]
+  def option[A](publisher: =&gt; Publisher[A]): F[Option[A]]
+  def list[A](publisher: =&gt; Publisher[A]): F[List[A]]
+  def unit[A](publisher: =&gt; Publisher[A]): F[Unit]
+  def stream[A](publisher: =&gt; Publisher[A])(using Streamable[S, A]): S[A]
+  def liveStream[A](publisher: =&gt; Publisher[A])(using Streamable[S, A]): S[A] = stream(publisher)</code></pre>
+    <p class="muted">
+        <strong>Every <code>Publisher</code> is taken by name</strong>, and that is not a style choice: the driver
+        opens a cursor when a publisher is subscribed to, and building an <code>F[A]</code> value is not running it. A
+        by-value parameter would open a cursor for a computation that may never run, or run twice for one that is
+        retried. <code>Streamable[S, A]</code> is a marker typeclass with no methods; it exists so every streaming
+        call names its element type at the call site, which is what lets the kyo backend supply the per-element
+        <code>Tag</code> its stream type requires.
+    </p>
+
+    <h3 id="design-codecs">Codecs are per-collection, never global</h3>
+    <p>
+        The driver's model is a process-wide <code>CodecRegistry</code>. mongo4s does not use it for entity codecs at
+        all: a codec is resolved as a <code>given</code> at the call site that creates the collection, and attached to
+        that collection alone. The cost is one more implicit parameter. What it buys is that medeia, zio-bson,
+        calypso and bson-direct can all be in use in the same process on different collections — and that a missing
+        codec is a compile error naming the type, rather than a <code>CodecConfigurationException</code> under load.
+    </p>
+    <p>The driver's registry still matters twice, and both are load-bearing:</p>
     <ul>
-        <li><strong>Scala 3 only.</strong> <code>given</code>-based throughout; derivation uses <code>Mirror</code> and
-            inline, no runtime reflection.
+        <li>It must keep supplying the driver's own <code>BsonDocument</code> codec. A registry that
+            <em>replaces</em> the defaults instead of extending them fails every operation, because mongo4s reads and
+            writes <code>BsonDocument</code> underneath.
         </li>
-        <li><strong>Effect-agnostic by construction.</strong> <code>core</code> depends on neither cats-effect nor fs2 —
-            a runtime module is ~two <code>given</code> instances.
-        </li>
-        <li><strong>Resource-safe on every path.</strong> <code>Effect[F]</code>'s <code>guaranteeCase</code> sees
-            success, failure <em>and</em> cancellation, so a transaction is committed or rolled back either way, and a
-            timed-out or cancelled read releases its cursor rather than leaving it open until the server reaps it.
-        </li>
-        <li><strong>No global <code>CodecProvider</code>.</strong> Every codec is resolved (and, for bson-direct,
-            registered) per-collection, never process-wide.
-        </li>
-        <li><strong>Own filter/update AST</strong> — interpretable both to a real <code>Bson</code> query and, for
-            tests, against an in-memory map.
-        </li>
-        <li><strong>Batching is empty-list-safe</strong> — <code>inFilter(Nil)</code> is <code>Filter.none</code>, not
-            "match everything." Results are merged across batches, <code>upsertedIds</code> rebased onto the whole
-            command sequence rather than restated per batch.
-        </li>
-        <li><strong>Reads are strict by default and lenient on request</strong> — <code>all</code> fails on the first
-            undecodable document; <code>attempting</code> reports each one, for collections written by more than one
-            version of more than one service.
-        </li>
-        <li><strong><code>BaseMongoRepository</code> is a base class you extend</strong>, not a generated one — declare
-            extra domain queries directly against <code>collection</code>/<code>Filter</code>/<code>Field</code>.
+        <li>It governs everything past <code>underlying</code>. The escape hatch is the user's, and their registry is
+            what applies there.
         </li>
     </ul>
+    <p class="muted">
+        On the direct path the derived <code>WireCodec[A]</code> is registered <strong>ahead of</strong> the client's
+        registry. The other order was tried and was wrong: a <code>Codec[A]</code> in the user's registry silently
+        shadowed the derived codec, so the collection wrote a shape nobody had asked for and no error was raised.
+        Both behaviours are pinned by integration specs.
+    </p>
+
+    <h3 id="design-astfree">The AST-free path</h3>
+    <p>
+        Every other Scala Mongo library encodes through an intermediate tree: case class → some JSON or BSON AST →
+        <code>BsonDocument</code> → wire bytes. <code>bson-direct</code> derives a <code>WireCodec[A]</code> that
+        writes into the driver's <code>BsonWriter</code> directly and reads from its <code>BsonReader</code>, with no
+        intermediate representation at all. That is where the performance comes from — but the reason it is the
+        <em>default</em> codec is dependency footprint: it lives in mongo4s itself, so the default path pulls in no
+        third-party codec library.
+    </p>
+    <p class="muted">
+        <strong>It is strict by construction, and that is a trade, not an oversight.</strong> Derivation requires
+        every modelled field to be present unless its decoder supplies a default (<code>Option</code> does), so a
+        projection that drops a modelled field cannot be read back through a direct collection — use
+        <code>getCollection</code> with a <code>BsonDocumentCodec</code>, or model the projected shape as its own
+        type. Strictness catches the far more common bug, which is a document that quietly lost a field.
+        <code>aggregate</code> and <code>distinct</code> still go through <code>BsonDocumentCodec</code>, because
+        their output shape is not <code>A</code> and they are not the hot path.
+    </p>
+
+    <h3 id="design-ast">The query AST</h3>
+    <p>
+        <code>Filter</code> and <code>Update</code> are real <code>enum</code> ADTs that mongo4s interprets itself,
+        not thin wrappers over the driver's opaque <code>Bson</code> builders. That is what makes a second
+        interpreter possible at all, and what lets the AST be normalized rather than passed through.
+    </p>
+    <p>
+        <strong>Field paths track derived-vs-stored per segment, not per path.</strong> Selector-derived names are
+        spelled through the collection's <code>FieldNaming</code>; names that are already what the document stores — a
+        map key, an array index, <code>_id</code>, a <code>PrimaryKey</code>'s field names, a <code>$lookup</code>'s
+        foreign field — are used verbatim. Per-segment is the only granularity that works:
+        <code>totals.at("EUR")</code> has to rename <code>totals</code> under snake_case while leaving the map key
+        alone.
+    </p>
+    <p>
+        <strong><code>Filter.and</code>/<code>or</code> fold <code>all</code> and <code>none</code> away</strong>
+        instead of emitting a one-element <code>$and</code>. Not cosmetic: it is what makes
+        <code>field.in(Nil)</code> produce <code>Filter.none</code> rather than an empty predicate, so
+        <code>deleteMany(Nil)</code> is a safe no-op instead of deleting the collection. An empty list is the most
+        dangerous input a query builder takes, and it gets a defined answer here rather than an emergent one.
+    </p>
+    <p>
+        <strong><code>Update</code> merges operators of the same name into one sub-document</strong> —
+        <code>{$set: {a: 1}}</code> combined with <code>{$set: {b: 2}}</code> is <code>{$set: {a: 1, b: 2}}</code>,
+        not two <code>$set</code> keys the server would reject. <code>Update.Raw</code> merges the same way, but must
+        <strong>clone</strong> the caller's document first: not cloning meant a rendered update wrote into the
+        caller's own <code>BsonDocument</code>, so a shared <code>Raw</code> came back permanently carrying fields it
+        never declared, and rendering it twice under different namings emitted both spellings. An update that would
+        render empty throws rather than sending <code>{}</code>.
+    </p>
+    <p class="muted">
+        Numeric operators go through <code>NumericOf[C, A]</code>, so an <code>Option[Long]</code> field takes a plain
+        <code>Long</code>. There is deliberately no <code>NumericValue[Option[A]]</code>: <code>None</code> has no
+        numeric encoding, and the obvious stand-in — <code>$inc</code> by zero — is a write that silently does
+        nothing.
+    </p>
+
+    <h3 id="design-reads">Reads: strict by default, lenient on request</h3>
+    <p>
+        <code>all</code> fails the whole query on the first undecodable document, because a decode failure usually
+        means the model and the collection disagree, and finding out immediately beats processing 99 documents and
+        silently dropping one. But a collection written by more than one version of more than one service will
+        contain documents this version cannot read, and failing a whole page over one of them is useless — so
+        <code>attempting</code> reports each document as <code>Either[BsonError, A]</code>, and
+        <code>watchAttempting</code> does the same for change streams. Transport errors still fail the effect; only
+        decoding is made recoverable, because only decoding is a per-document property.
+    </p>
+
+    <h3 id="design-streaming">Streaming</h3>
+    <p>
+        Operations expecting at most one document read <strong>two</strong>, not the whole cursor — exactly enough to
+        notice a second result under <code>strictSingleResult</code>, and no more.
+        <code>AggregateQuery.first</code> pushes a <code>$limit</code> into the pipeline for the same reason:
+        bounding work at the server, not in the client.
+    </p>
+    <p>
+        <strong><code>liveStream</code> exists because fs2 chunks.</strong>
+        <code>fromPublisher(p, bufferSize)</code> will not emit an element until the chunk is full or the publisher
+        finishes — its own scaladoc says so. With the default <code>bufferSize = 256</code>, a change stream
+        delivered <strong>nothing</strong> until 256 events had piled up, and a change stream never finishes.
+        <code>find(...).stream</code> only ever worked by accident: its cursor completes, which flushes the partial
+        chunk. So the bridge has two stream methods — finite reads keep <code>stream</code> and its buffering, which
+        is what makes them fast, while every <code>watch</code> goes through <code>liveStream</code>, which the cats
+        backend overrides to <code>fromPublisher(p, 1)</code>. The default implementation delegates to
+        <code>stream</code>, because zio (queue-based), rapid and kyo have no chunk-fill behaviour to work around.
+    </p>
+    <p class="muted">
+        This was found only because change streams had never actually been exercised — the integration spec was
+        calling <code>cancel</code> on itself and reporting green. Two lessons kept: never let an integration spec
+        cancel itself into looking green, and never time a change-stream test with <code>sleep</code> — take the
+        server's <code>operationTime</code> from <code>hello</code> and pass <code>startingAt(now)</code>, which is
+        race-free no matter when the stream actually subscribes. <code>RsBridgeConfig</code>'s per-operation timeout
+        deliberately does not apply to streams: a change stream sitting idle is working, not stuck.
+    </p>
+
+    <h3 id="design-transactions">Transactions</h3>
+    <p>
+        <code>withTransaction</code> commits on success and rolls back on failure <strong>and on cancellation</strong>
+        — the cancellation half is the whole reason <code>guaranteeCase</code> has the shape it does. A rollback that
+        itself fails is attached as a suppressed exception rather than replacing the original error. The manual path
+        is still there, and nothing is automatic on it, including the rollback: the safe version should be the easy
+        one, not the only one.
+    </p>
+
+    <h3 id="design-watch">Change streams</h3>
+    <p>
+        Every event is a <code>ChangeEvent[A]</code> — a real case class, not a raw <code>BsonDocument</code> to dig
+        through — and <code>watch</code> exists at all three driver scopes. <code>fullDocument</code> defaults to
+        <code>UPDATE_LOOKUP</code>, <strong>not</strong> the server's default: MongoDB fills the document in only for
+        inserts and replaces, which leaves the most common question ("what does this document look like now?")
+        unanswered on exactly the events you are usually watching for. <code>resumeAfter</code> and
+        <code>startAfter</code> clear each other, because the server rejects a stream carrying both.
+    </p>
+    <p class="muted">
+        <strong>One known footgun, accepted deliberately:</strong> <code>WatchOptions[E].pipeline</code> is typed
+        <code>Seq[Stage[E]]</code>, but a change stream pipeline matches against the change event envelope, not the
+        document — so a <code>Field.of</code> path renders <code>"age"</code> where the event needs
+        <code>"fullDocument.age"</code>, and <code>Stage.raw</code> is the right tool. The alternative was a second,
+        parallel <code>Stage</code> type for events; that was judged worse than one type with a documented sharp
+        edge.
+    </p>
+
+    <h3 id="design-repositories">Repositories, and one AST with two interpreters</h3>
+    <p>
+        <code>BaseMongoRepository</code> is <strong>open, not generated</strong> — extra domain queries are declared
+        directly against <code>collection</code>/<code>Filter</code>/<code>Field</code>. A generated repository would
+        have to either predict every query or make you drop out of the abstraction to write one. Batching is
+        empty-list-safe throughout, which follows from <code>Filter</code>'s folding.
+    </p>
+    <p>
+        <strong><code>BulkWriteResult.upsertedIds</code> is keyed by command position</strong>, so
+        <code>combine</code> deliberately does not rebase indices; a caller splitting one logical write into batches
+        calls <code>shiftUpsertedIds(offset)</code> per batch first, since only the caller knows how many commands
+        preceded it. Getting this wrong collapsed every batch onto index 0 — a bug that only appears once a write
+        exceeds one batch, which is to say in production and not in tests.
+    </p>
+    <p>
+        Because <code>Filter</code>/<code>Update</code> are an AST rather than driver builders, they can be
+        interpreted twice: into real <code>Bson</code> for the server, and against an in-memory buffer.
+        <code>FakeMongoCollection</code> is that second interpreter — filters, updates, sorting, paging and
+        projections are simulated, while <code>aggregate</code>, <code>distinct</code>, <code>watch</code>,
+        <code>$text</code>, <code>$expr</code> and <code>Filter.Raw</code> throw
+        <code>UnsupportedOperationException</code> naming what was asked for rather than quietly answering wrong. A
+        fake that lies is worse than no fake.
+    </p>
+    <p class="muted">
+        <strong>Current limitation:</strong> <code>FakeMongoCollection</code> lives in
+        <code>mongo4s-repositories</code>' <em>test</em> sources, and test artifacts are not published. It is reusable
+        inside this build but not from a released artifact.
+    </p>
+
+    <h3 id="design-evolution">Evolving the API</h3>
+    <p>
+        Three commitments, and the mechanics that make each keepable. <strong>New <code>Effect</code>/
+        <code>RsBridge</code> members carry default implementations</strong>, so implementing either typeclass
+        yourself keeps compiling across minor releases — <code>liveStream</code> was added that way.
+        <strong>Binary compatibility is checked, not asserted</strong>: MiMa runs in CI against the previous release,
+        and every deliberate break is a visible filter plus an entry in the compatibility notes.
+    </p>
+    <p>
+        <strong>Configuration types are builders, not case classes</strong> — learned the expensive way. Adding a
+        field with a default to a case class is source-compatible but <em>never</em> binary-compatible: default
+        arguments are resolved at the call site, so the JVM only ever sees the old arity, and <code>apply</code>,
+        <code>copy</code> and the constructor all change. Since derivation options keep arriving,
+        <code>WireCodecConfig</code> became a <code>final class</code> with a private constructor and
+        <code>withX</code> methods — one break taken once, every option after it additive.
+    </p>
+
+    <h3 id="design-rejected">Deliberately not done</h3>
+    <ul>
+        <li><strong>A discriminator-free <code>Either</code>/<code>Ior</code> codec.</strong> Dropping
+            <code>_type</code> and trying branch A then branch B via <code>getMark()</code>/<code>reset()</code> is
+            technically feasible, and was rejected because it is silently unsafe whenever the two branches are
+            structurally similar enough that both decode "successfully" — the wrong branch wins with no error.
+        </li>
+        <li><strong>A global <code>CodecProvider</code> convenience.</strong> It would remove one implicit parameter
+            and reintroduce process-wide coupling between unrelated collections.
+        </li>
+        <li><strong>Bounding a live stream with rapid's <code>Stream.take(n)</code>.</strong> Not a mongo4s decision,
+            but worth knowing: rapid decides <code>Step.Stop</code> inside <code>transform</code>, so it needs element
+            n+1 before it stops. On an infinite change stream carrying exactly n events it blocks forever.
+        </li>
+        <li><strong>A circe bridge.</strong> There is no <code>mongo4s-bson-circe</code> module. A
+            <code>BsonDocumentCodec[A]</code> built from circe's <code>Encoder</code>/<code>Decoder</code> is short to
+            hand-write, but a model already on circe has no first-class path today. This is a gap, not a decision.
+        </li>
+    </ul>
+
 
     <footer>
         <p>
