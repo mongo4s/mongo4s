@@ -1,21 +1,20 @@
 package mongo4s.changestream
 
-import scala.concurrent.duration.*
+import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.matchers.should.Matchers
 
 import org.bson.{BsonDocument, BsonString, BsonTimestamp}
-import org.scalatest.matchers.should.Matchers
-import org.scalatest.wordspec.AnyWordSpec
 import com.mongodb.client.model.changestream.{FullDocument, FullDocumentBeforeChange}
 
 import mongo4s.operations.Stage
+
+import scala.concurrent.duration.given
 
 final class WatchOptionsSpec extends AnyWordSpec, Matchers:
 
   private def token(value: String): BsonDocument = BsonDocument("_data", BsonString(value))
 
   "the default" should {
-    // MongoDB's own default only fills fullDocument in for inserts and replaces, which leaves the
-    // most common question — "what does this document look like now" — unanswered on updates.
     "look up the current document rather than the server default" in {
       WatchOptions.default[String].fullDocument shouldBe FullDocument.UPDATE_LOOKUP
     }
@@ -31,8 +30,6 @@ final class WatchOptionsSpec extends AnyWordSpec, Matchers:
   }
 
   "resume points" should {
-    // The server rejects a change stream carrying both, so setting one has to clear the other
-    // instead of leaving a combination that only fails once it reaches MongoDB.
     "be mutually exclusive: resumingAfter clears startAfter" in {
       val options = WatchOptions.default[String].startingAfter(token("a")).resumingAfter(token("b"))
 

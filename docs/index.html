@@ -366,9 +366,9 @@ MongoClientResource.fromSettings[IO](settings).use { client =&gt; ... }</code></
         — a shared domain model (opaque types, enums, nested case classes) run through every runtime/codec combination
         (cats+medeia, ZIO+zio-bson, kyo+medeia, rapid+calypso), a repository example covering all three
         <code>BaseMongoRepository</code> construction styles against bson-direct, and a sessions/transactions + typed
-        aggregation pipeline example on cats+medeia. Every snippet on this page also lives in
-        <a href="https://github.com/mongo4s/mongo4s/blob/main/examples/src/main/scala/mongo4s/examples/ReadmeSnippets.scala"><code>ReadmeSnippets.scala</code></a>,
-        compiled on every build — if the API moves and these docs don't, CI fails.
+        aggregation pipeline example on cats+medeia. Most of what this page shows is compiled there too —
+        <a href="https://github.com/mongo4s/mongo4s/blob/main/examples/src/main/scala/mongo4s/examples/ReadmeSnippets.scala"><code>ReadmeSnippets.scala</code></a>
+        walks the same ground section by section, so if the API moves and these docs don't, CI fails.
     </p>
 
     <h2 id="core">Core concepts</h2>
@@ -382,9 +382,9 @@ MongoClientResource.fromSettings[IO](settings).use { client =&gt; ... }</code></
         reflection — and gives you a typed path to build filters, updates, and sorts:
     </p>
     <pre><code>val adults = Field.of[User, Int](_.age).gte(18)
-val named  = Field.of[User, String](_.name).equalTo("Alice") && adults
-val setAge = Field.of[User, Int](_.age).set(31)
-val city   = Field.of[Order, String](_.address.city).equalTo("Berlin")  // dotted paths from nested selectors</code></pre>
+val named = Field.of[User, String](_.name).equalTo("Jenna") && adults
+val setAge = Field.of[User, Int](_.age).set(27)
+val city = Field.of[Order, String](_.address.city).equalTo("Barcelona") // dotted paths from nested selectors</code></pre>
     <p class="muted">
         Each segment is checked against the case class it is selected from, so <code>_.name.length</code> and
         <code>_.items.head.sku</code> are compile errors rather than paths that render fine and match nothing.
@@ -412,19 +412,25 @@ itemsField.elemMatch(skuField.equalTo("abc") &amp;&amp; qtyField.gt(2))  // one 
     <p class="muted">
         <code>Filter.and</code>/<code>or</code> fold <code>Filter.all</code> and <code>Filter.none</code> away rather
         than emitting a one-element <code>$and</code>. That is what makes an empty list safe:
-        <code>field.in(Nil)</code> is <code>Filter.none</code>, not "match everything".
+        <code>field.in(Nil)</code> is <code>Filter.none</code>, not "match everything". The comparisons have symbolic
+        aliases where they read better — <code>===</code>, <code>=!=</code>, <code>&gt;</code>, <code>&gt;=</code>,
+        <code>&lt;</code>, <code>&lt;=</code>.
     </p>
     <pre><code>ageField.set(31)                   // $set
 ageField.inc(1)                    // $inc — also $mul, $min, $max
 tagsField.push("vip")              // $push — also $pull, $addToSet, and the $each variants
-Update.setOnInsert(nameField, "")  // $setOnInsert, for merge-style upserts</code></pre>
+Update.setOnInsert(nameField, "")  // $setOnInsert, for merge-style upserts
+Update.rename(oldField, newField)  // $rename — also currentDate, popFirst/popLast</code></pre>
     <p class="muted">
         Numeric operators only apply to numeric fields, so <code>Update.inc(nameField, 1)</code> does not compile. An
         <code>Option</code>-typed field takes the unwrapped value — <code>scoreField.inc(5L)</code> on a
         <code>Field[User, Option[Long]]</code> — because <code>None</code> has no numeric encoding, and the obvious
         stand-in, <code>$inc</code> by zero, is a write that quietly does nothing. <code>Update.combine</code> merges
         operators of the same name into one sub-document; <code>Update.Raw</code> carries operators the AST does not
-        model and merges the same way, without mutating the document you handed it.
+        model and merges the same way, without mutating the document you handed it. <code>bulkWrite</code> takes a
+        <code>Seq[WriteCommand[E]]</code> — <code>InsertOne</code>/<code>ReplaceOne</code>/<code>UpdateOne</code>/<code>UpdateMany</code>/<code>DeleteOne</code>/<code>DeleteMany</code>,
+        carrying the same <code>Filter</code> and <code>Update</code> values, run in the order given unless
+        <code>ordered = false</code>.
     </p>
     <p><code>find</code> returns a builder; nothing is sent until <code>first</code>, <code>all</code>,
         <code>stream</code> or <code>attempting</code>:</p>
@@ -441,8 +447,9 @@ Update.setOnInsert(nameField, "")  // $setOnInsert, for merge-style upserts</cod
   .all</code></pre>
     <p class="muted">
         <code>filter</code> narrows what is already there; <code>sort</code>, <code>projection</code>,
-        <code>skip</code> and <code>limit</code> replace. The same options are on <code>aggregate</code>, and
-        <code>collation</code>/<code>maxTime</code>/<code>batchSize</code> on <code>distinct</code>.
+        <code>skip</code> and <code>limit</code> replace. The same options are on <code>aggregate</code>, which adds
+        <code>allowDiskUse</code>, and <code>collation</code>/<code>maxTime</code>/<code>batchSize</code> on
+        <code>distinct</code>.
         <code>Projection</code> keeps inclusion and exclusion apart, since MongoDB rejects a projection mixing them —
         <code>_id</code> being the exception, via <code>withoutId</code>.
     </p>
@@ -479,6 +486,10 @@ val everything: S[DecodeResult[User]] = collection.find().attempting.stream</cod
     <pre><code>given PrimaryKey[User, String]         = PrimaryKey.single("id")(_.id)
 given PrimaryKey[Note, ObjectId]       = PrimaryKey.storedId(_.id)         // keys on "_id" — see WithId
 given PrimaryKey[Order, (String, Int)] = PrimaryKey.compound(o =&gt; (o.userId, o.seq))("user_id", _._1)("seq", _._2)</code></pre>
+    <p class="muted">
+        <code>PrimaryKey.id(_.id)</code> is <code>single("id")</code> spelled short, for the common case;
+        <code>compound3</code>/<code>compound4</code> extend the compound form.
+    </p>
     <p class="muted">
         Field names are given separately from the extractors so the key knows them without a key value — that is what
         lets <code>repository.ensureKeyIndex</code> build the unique index that makes the key a key. Without one, two
@@ -521,7 +532,7 @@ for
 yield ()</code></pre>
     <p class="muted">
         Every <code>MongoClient</code>/<code>MongoDatabase</code>/<code>MongoCollection</code>/<code>Repository</code>
-        method accepts the same <code>(using session: Option[ClientSession] = None)</code>, so a
+        method that reaches the server accepts the same <code>(using session: Option[ClientSession] = None)</code>, so a
         <code>BaseMongoRepository</code> call can join an existing transaction the same way a raw
         <code>collection</code> call can. <code>MongoSession.startTransaction</code>/<code>commitTransaction</code>/<code>abortTransaction</code>
         are there for the fully manual path, where you pass the session explicitly with <code>(using Some(session))</code>
@@ -543,7 +554,7 @@ val pipeline = Seq(
   Stage.sortBy(Sort.asc(Field.of[User, String](_.name))),
   Stage.limit(10),
 )
-val adults: IO[List[User]] = users.aggregate[User](pipeline).all</code></pre>
+val adults: IO[List[User]] = collection.aggregate[User](pipeline).all</code></pre>
     <p>Grouping uses typed accumulators:</p>
     <pre><code>import mongo4s.operations.Accumulator
 
@@ -624,18 +635,21 @@ collection.dropIndex("name_age")</code></pre>
 
 collection.watch(
   WatchOptions
-    .resumeAfter[User](token)          // or .startingAfter(token) / .startingAt(timestamp)
+    .resumeAfter[User](token)                       // shorthand for default[User].resumingAfter(token)
     .withFullDocument(FullDocument.DEFAULT)
     .withMaxAwaitTime(2.seconds)
     .withBatchSize(64)
-)</code></pre>
+)
+
+WatchOptions.default[User].startingAfter(token)     // the other two starting points, same builder
+WatchOptions.default[User].startingAt(timestamp)</code></pre>
     <p class="muted">
         <code>fullDocument</code> defaults to <code>UPDATE_LOOKUP</code>, not the server's own default — MongoDB fills
         the document in only for inserts and replaces, which leaves the most common question ("what does this document
         look like now?") unanswered on updates. It is always <code>None</code> for deletes; there is no document left
         to look up. <code>fullDocumentBeforeChange</code> needs pre-images enabled on the collection.
-        <code>resumeAfter</code> and <code>startAfter</code> are alternatives — the builders keep them mutually
-        exclusive, since the server rejects a stream carrying both.
+        <code>resumingAfter</code> and <code>startingAfter</code> are alternatives — each clears the other, since the
+        server rejects a stream carrying both <code>resumeAfter</code> and <code>startAfter</code>.
     </p>
     <p>
         <code>resumeToken</code> is on every event so a consumer that dies mid-stream can restart from just after the
@@ -745,7 +759,10 @@ object Shape:
         <code>A</code> — genuinely zero <code>BsonDocument</code> construction on the hot path, not just a thinner
         bridge:
     </p>
-    <pre><code>final case class Person(id: String, name: String, age: Int) derives WireCodec
+    <pre><code>import mongo4s.bson.direct.WireCodec
+import mongo4s.repositories.BaseMongoRepository
+
+final case class Person(id: String, name: String, age: Int) derives WireCodec
 object Person:
   given PrimaryKey[Person, String] = PrimaryKey.single("id")(_.id)
 
@@ -755,11 +772,18 @@ for
   repo        = BaseMongoRepository(collection)
   _          &lt;- repo.insertOne(Person("1", "bob", 30))
 yield ()</code></pre>
+    <p>
+        The trade for that speed is strictness: derivation requires every modelled field to be present, unless its
+        decoder supplies a default — which <code>Option</code> does. So a <strong>projection that drops a field the
+        entity declares cannot be read back</strong> through a direct collection. Use <code>getCollection</code> with a
+        <code>BsonDocumentCodec</code>, or model the projected shape as its own type, when you need partial reads.
+    </p>
     <p class="muted">
         <code>aggregate</code>/<code>distinct</code> still go through
         <code>BsonDocumentCodec</code>/<code>BsonDecoder</code>
-        on a direct collection (they're not the hot path); everything else — <code>Filter</code>/<code>Update</code>/
-        <code>Field</code> construction — is identical regardless of which codec backs the collection.
+        on a direct collection (their output shape isn't <code>A</code>, and they're not the hot path); everything
+        else — <code>Filter</code>/<code>Update</code>/<code>Field</code> construction — is identical regardless of
+        which codec backs the collection.
     </p>
 
     <h4>Field naming</h4>
@@ -942,7 +966,7 @@ final case class Team(members: NonEmptyList[String]) derives MedeiaDocumentCodec
     </p>
     <pre><code>BaseMongoRepository(collection)                              // over a collection you already have
 BaseMongoRepository.create[F, S, E, K](db, "collection")     // reads return the document as stored, _id included
-BaseMongoRepository.withoutId[F, S, E, K](db, "collection")  // strips _id from reads — entities that do not model it
+BaseMongoRepository.withoutId[F, S, E, K](db, "collection")  // strips _id from reads — for entities that do not model it
 BaseMongoRepository.objectId[F, S, E](db, "collection")      // WithId[ObjectId, E], auto _id round-trip</code></pre>
     <p class="muted">
         <code>create</code> is the default. Reach for <code>withoutId</code> only when the entity genuinely does not
@@ -973,12 +997,16 @@ users.getBy(adults, Page.first(100))  // same, as a stream</code></pre>
         directly, not reimplementing what's already there.
     </p>
     <p>
-        For unit tests, <code>FakeMongoCollection</code> implements <code>MongoCollection</code> in memory — the exact
+        For unit tests, <code>FakeMongoCollection</code> (in <code>mongo4s-repositories</code>' test sources, reusable
+        via <code>% "test-&gt;test;test-&gt;compile"</code>) implements <code>MongoCollection</code> in memory — the exact
         same <code>Filter</code>/<code>Update</code>/<code>Field</code> AST the real driver interprets is interpreted
         against an in-memory buffer instead, so repository logic is testable without a running MongoDB. Filters,
         updates, sorting, paging and projections are simulated; <code>aggregate</code>, <code>distinct</code>,
-        <code>watch</code>, <code>$text</code> and <code>$expr</code> throw <code>UnsupportedOperationException</code>
-        naming what was asked for, rather than quietly answering wrong.
+        <code>watch</code>, <code>$text</code>, <code>$expr</code> and <code>Filter.Raw</code> throw
+        <code>UnsupportedOperationException</code> naming what was asked for, rather than quietly answering wrong.
+        Replace-based upserts — what <code>upsert</code>/<code>upsertMany</code> go through — insert on a miss the way
+        the server does; an <code>update</code>-based <code>upsert = true</code> that matches nothing throws instead of
+        guessing what the operators would have built.
     </p>
 
     <h2 id="runtime">Runtime backends</h2>
@@ -1026,8 +1054,9 @@ users.getBy(adults, Page.first(100))  // same, as a stream</code></pre>
     <pre><code>// cats — cats.effect.Resource
 import mongo4s.cats.MongoClientResource
 
-MongoClientResource.fromConnectionString[IO]("mongodb://localhost:27017").use: client =>
-  ...</code></pre>
+MongoClientResource.fromConnectionString[IO]("mongodb://localhost:27017").use { client =>
+  // logic
+}</code></pre>
     <pre><code>// zio — ZIO.acquireRelease, released when the enclosing ZIO.scoped block exits
 import mongo4s.zio.MongoClientResource
 
@@ -1048,8 +1077,9 @@ Scope.run:
 // already-known computation — so this is bracket-shaped (a `use` callback) instead of a composable value
 import mongo4s.rapid.MongoClientResource
 
-MongoClientResource.fromConnectionString("mongodb://localhost:27017"): client =>
-  ...</code></pre>
+MongoClientResource.fromConnectionString("mongodb://localhost:27017") { client =>
+  // logic
+}</code></pre>
 
     <h3 id="bridge-config">Bridge configuration</h3>
     <p>
@@ -1160,8 +1190,8 @@ given RsBridgeConfig = RsBridgeConfig(
 
     <h2 id="benchmarks">Benchmarks</h2>
     <p>
-        Three separate JMH harnesses, one developer machine — directional ballparks, not hardware-independent
-        authorities. Run them on your own hardware before deciding on the numbers alone.
+        Three separate JMH harnesses, one developer machine — JDK 25, MongoDB 7 — directional ballparks, not
+        hardware-independent authorities. Run them on your own hardware before deciding on the numbers alone.
     </p>
     <h3>Codec backends — to <code>org.bson.BsonDocument</code></h3>
     <table>
@@ -1171,68 +1201,166 @@ given RsBridgeConfig = RsBridgeConfig(
             <th class="num">Decode ops/s</th>
         </tr>
         <tr>
+            <td>mongo4s-bson-direct (via DocumentCodecBridge)</td>
+            <td class="num">~5.64M</td>
+            <td class="num">~4.19M</td>
+        </tr>
+        <tr>
             <td>calypso (forProductN)</td>
-            <td class="num"><strong class="best">~3.36M</strong></td>
-            <td class="num">~3.24M</td>
+            <td class="num"><strong class="best">~8.12M</strong></td>
+            <td class="num"><strong class="best">~6.65M</strong></td>
         </tr>
         <tr>
             <td>medeia (derives)</td>
-            <td class="num">~1.40M</td>
-            <td class="num"><strong class="best">~3.34M</strong></td>
+            <td class="num">~2.76M</td>
+            <td class="num">~5.97M</td>
         </tr>
         <tr>
             <td>zio-bson (zio-schema derived)</td>
-            <td class="num">~992k</td>
-            <td class="num">~2.98M</td>
+            <td class="num"><span class="worst">~1.86M</span></td>
+            <td class="num">~5.20M</td>
         </tr>
         <tr>
             <td>mongo4cats-zio-json</td>
-            <td class="num">~1.03M</td>
-            <td class="num">~920k</td>
+            <td class="num">~2.02M</td>
+            <td class="num">~1.66M</td>
         </tr>
         <tr>
             <td>mongo4cats-circe</td>
-            <td class="num"><span class="worst">~972k</span></td>
-            <td class="num"><span class="worst">~665k</span></td>
+            <td class="num">~1.95M</td>
+            <td class="num"><span class="worst">~1.33M</span></td>
         </tr>
     </table>
-    <p class="muted">All three mongo4s codec bridges beat both mongo4cats codecs by 3–5× on decode — the cost of case
-        class ↔ circe/zio-json ↔ mongo4cats.Bson ↔ org.Bson instead of straight to org.bson.</p>
+    <p class="muted">Every <code>mongo4s</code> codec bridge beats both <code>mongo4cats</code> codecs by
+        <strong>2.5–5×</strong> on decode — the cost of case class ↔ circe/zio-json ↔ mongo4cats.Bson ↔ org.Bson
+        instead of straight to org.bson. On encode calypso's handwritten forProductN is <strong>1.4×</strong> the next
+        backend, which is what skipping derivation buys; it leads on decode too, though that is the one number here
+        with real spread (±5.3% within the run and ~5% between runs, against ±0.5% for medeia).</p>
+    <p class="muted">
+        <code>bson-direct</code> is in this table through <code>DocumentCodecBridge.toDocumentCodec</code> — the path
+        <code>aggregate</code> and <code>distinct</code> take on a direct collection, <code>WireCodec</code> forced to
+        materialize the <code>BsonDocument</code> it normally skips. Even handicapped that way it encodes
+        <strong>2×</strong> <em>faster</em> than medeia; on decode it falls behind medeia and zio-bson, which read the
+        <code>BsonDocument</code> natively instead of through a <code>BsonDocumentReader</code>. Its AST-free numbers
+        are in the next table — but note the two tables stop in different places, this one at a
+        <code>BsonDocument</code> and the next at real bytes, so rows are not comparable across them. What the
+        intermediate tree costs shows up <em>inside</em> the next table, where every backend is measured to the same
+        endpoint.
+    </p>
 
     <h3>AST-free wire codec — all the way to real bytes</h3>
+    <p>
+        This goes one step further than the table above: the same entity, but all the way to <strong>real BSON wire
+        bytes</strong> (<code>BsonBinaryWriter</code>/<code>BsonBinaryReader</code>) rather than stopping at a
+        <code>BsonDocument</code>. That is the trip the driver actually makes, and it is the only axis on which an
+        AST-free codec can be compared to an AST-based one at all.
+    </p>
+    <p>Every backend is measured on that one axis, doing whatever it has to do to get there:</p>
+    <ul>
+        <li><code>WireCodec</code> writes into the <code>BsonWriter</code> directly — no intermediate representation
+            at all.</li>
+        <li>medeia/calypso/zio-bson build their <code>BsonDocument</code> first, then the driver's own
+            <code>BsonDocumentCodec</code> walks that document out to bytes — two tree-walks.</li>
+        <li>mongo4cats-circe/mongo4cats-zio-json build a <code>mongo4cats.bson.BsonValue</code>, which its own codec
+            then walks out.</li>
+    </ul>
+    <p class="muted">
+        Every row below is a backend you can actually pick. <code>WireCodec</code> is what a
+        <code>getDirectCollection</code> call runs: the derived codec is handed to the driver through a two-method
+        adapter, and the driver calls it with its own <code>BsonBinaryWriter</code>/<code>BsonBinaryReader</code> —
+        nothing else sits in between.
+    </p>
     <table>
+        <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
+            Encode — case class → BSON bytes
+        </caption>
         <tr>
-            <th>Path</th>
+            <th>Backend</th>
             <th class="num">Throughput</th>
             <th class="num">Alloc</th>
         </tr>
         <tr>
-            <td>direct encode</td>
-            <td class="num"><strong class="best">~1.79M ops/s</strong></td>
-            <td class="num"><strong class="best">1792 B/op</strong></td>
+            <td>WireCodec</td>
+            <td class="num"><strong class="best">~2.91M ops/s</strong></td>
+            <td class="num"><strong class="best">1895 B/op</strong></td>
         </tr>
         <tr>
-            <td>medeiaFull encode</td>
-            <td class="num"><span class="worst">~838k ops/s</span></td>
-            <td class="num"><span class="worst">4712 B/op</span></td>
+            <td>calypso</td>
+            <td class="num">~2.01M ops/s</td>
+            <td class="num">3224 B/op</td>
         </tr>
         <tr>
-            <td>direct decode</td>
-            <td class="num"><strong class="best">~1.49M ops/s</strong></td>
-            <td class="num"><strong class="best">1088 B/op</strong></td>
+            <td>medeia</td>
+            <td class="num">~1.22M ops/s</td>
+            <td class="num">4672 B/op</td>
         </tr>
         <tr>
-            <td>medeiaFull decode</td>
-            <td class="num"><span class="worst">~900k ops/s</span></td>
-            <td class="num"><span class="worst">3200 B/op</span></td>
+            <td>zio-bson</td>
+            <td class="num">~995k ops/s</td>
+            <td class="num">5020 B/op</td>
+        </tr>
+        <tr>
+            <td>mongo4cats-circe</td>
+            <td class="num">~907k ops/s</td>
+            <td class="num"><span class="worst">6173 B/op</span></td>
+        </tr>
+        <tr>
+            <td>mongo4cats-zio-json</td>
+            <td class="num"><span class="worst">~876k ops/s</span></td>
+            <td class="num">5480 B/op</td>
+        </tr>
+    </table>
+    <table>
+        <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
+            Decode — BSON bytes → case class
+        </caption>
+        <tr>
+            <th>Backend</th>
+            <th class="num">Throughput</th>
+            <th class="num">Alloc</th>
+        </tr>
+        <tr>
+            <td>WireCodec</td>
+            <td class="num"><strong class="best">~2.65M ops/s</strong></td>
+            <td class="num"><strong class="best">1248 B/op</strong></td>
+        </tr>
+        <tr>
+            <td>medeia</td>
+            <td class="num">~1.62M ops/s</td>
+            <td class="num">3168 B/op</td>
+        </tr>
+        <tr>
+            <td>zio-bson</td>
+            <td class="num">~1.53M ops/s</td>
+            <td class="num">2800 B/op</td>
+        </tr>
+        <tr>
+            <td>calypso</td>
+            <td class="num">~1.49M ops/s</td>
+            <td class="num">3311 B/op</td>
+        </tr>
+        <tr>
+            <td>mongo4cats-zio-json</td>
+            <td class="num">~792k ops/s</td>
+            <td class="num">6008 B/op</td>
+        </tr>
+        <tr>
+            <td>mongo4cats-circe</td>
+            <td class="num"><span class="worst">~704k ops/s</span></td>
+            <td class="num"><span class="worst">8552 B/op</span></td>
         </tr>
     </table>
     <p class="muted">
-        <code>WireCodec</code> is ~2.1× the throughput on encode, ~1.7× on decode, and allocates 2.6–2.9× less —
-        avoiding
-        medeia's own intermediate AST <em>and</em> the driver's own <code>BsonDocument</code>. In typical CRUD the
-        network
-        round trip dwarfs this; it matters for bulk-decode-heavy paths — large cursor streams, ETL, big aggregations.
+        <code>WireCodec</code> <strong>wins both directions</strong> — ahead of the best AST backend by
+        <strong>1.45×</strong> on encode (calypso) and <strong>1.64×</strong> on decode (medeia), and ahead of both
+        mongo4cats codecs by <strong>3.2–3.8×</strong>. It allocates <strong>2.5×</strong> less than medeia in both
+        directions, and up to <strong>6.9×</strong> less than mongo4cats-circe on decode.
+    </p>
+    <p class="muted">
+        The AST backends do not rank the same in both directions — calypso leads on encode and trails on decode,
+        medeia is the reverse — but every one of them is on the far side of a gap that comes from building an
+        intermediate tree at all, not from how well it is built. In a typical CRUD workload the network round trip
+        dwarfs all of this; it matters for bulk paths — large cursor streams, ETL, aggregation over big result sets.
     </p>
 
     <h3 id="runtime-overhead">Runtime overhead — real MongoDB, every backend</h3>
@@ -1251,54 +1379,57 @@ given RsBridgeConfig = RsBridgeConfig(
         </tr>
         <tr>
             <td>insertOne</td>
-            <td class="num"><span class="worst">2272</span></td>
-            <td class="num"><strong class="best">2562</strong></td>
-            <td class="num">2447</td>
-            <td class="num">2505</td>
-            <td class="num">2277</td>
-            <td class="num">2504</td>
+            <td class="num">2469</td>
+            <td class="num"><span class="worst">2118</span></td>
+            <td class="num"><strong class="best">2588</strong></td>
+            <td class="num">2469</td>
+            <td class="num">2465</td>
+            <td class="num">2550</td>
         </tr>
         <tr>
             <td>find(filter).all</td>
-            <td class="num">1432</td>
-            <td class="num">1585</td>
-            <td class="num">1551</td>
-            <td class="num"><strong class="best">1595</strong></td>
-            <td class="num"><span class="worst">1316</span></td>
-            <td class="num">1325</td>
+            <td class="num"><strong class="best">1584</strong></td>
+            <td class="num">1406</td>
+            <td class="num">1581</td>
+            <td class="num">1563</td>
+            <td class="num"><span class="worst">1339</span></td>
+            <td class="num">1369</td>
         </tr>
         <tr>
             <td>find(filter).stream</td>
-            <td class="num">1404</td>
+            <td class="num">1446</td>
             <td class="num">1393</td>
-            <td class="num"><strong class="best">1557</strong></td>
-            <td class="num">1548</td>
-            <td class="num"><span class="worst">359</span></td>
-            <td class="num">1147</td>
+            <td class="num"><strong class="best">1559</strong></td>
+            <td class="num">1528</td>
+            <td class="num"><span class="worst">393</span></td>
+            <td class="num">1215</td>
         </tr>
         <tr>
             <td>updateOne</td>
-            <td class="num"><span class="worst">2002</span></td>
-            <td class="num"><strong class="best">2222</strong></td>
-            <td class="num">2198</td>
-            <td class="num">2215</td>
-            <td class="num">2138</td>
-            <td class="num">2219</td>
+            <td class="num">2155</td>
+            <td class="num"><span class="worst">1960</span></td>
+            <td class="num">2257</td>
+            <td class="num">2189</td>
+            <td class="num">2199</td>
+            <td class="num"><strong class="best">2300</strong></td>
         </tr>
         <tr>
             <td>count(filter)</td>
-            <td class="num"><span class="worst">1804</span></td>
-            <td class="num"><strong class="best">2014</strong></td>
-            <td class="num">1996</td>
-            <td class="num">1975</td>
-            <td class="num">1905</td>
-            <td class="num">1990</td>
+            <td class="num">1958</td>
+            <td class="num"><span class="worst">1768</span></td>
+            <td class="num">2035</td>
+            <td class="num">1995</td>
+            <td class="num">1969</td>
+            <td class="num"><strong class="best">2051</strong></td>
         </tr>
     </table>
     <p class="muted">
         With a clean database on every trial, all six columns land within the same band — the TCP round trip to MongoDB
-        dominates at this scale. The one real outlier is mongo4cats-cats' <code>find(filter).stream</code> (359 ops/s
-        against its own <code>.all</code>'s 1316) — it bridges through a hand-rolled <code>Queue</code>-backed
+        dominates at this scale. Green marks the highest cell in each row and red the lowest, but read them as
+        measured extremes rather than a ranking: run-to-run error is ±3–15%, wider than the spread between the
+        columns. The one real outlier is mongo4cats-cats' <code>find(filter).stream</code> (393
+        ops/s against its own <code>.all</code>'s 1339, and against ~2200 on its own single-document operations) — it
+        bridges through a hand-rolled <code>Queue</code>-backed
         <code>Subscriber</code> instead of <code>fs2.interop.reactivestreams</code>, which every mongo4s
         <code>.stream()</code> uses.
     </p>
@@ -1322,75 +1453,76 @@ given RsBridgeConfig = RsBridgeConfig(
         </tr>
         <tr>
             <td>insertOne</td>
-            <td class="num"><span class="worst">2321</span></td>
-            <td class="num">2323</td>
-            <td class="num">2381</td>
-            <td class="num"><strong class="best">2405</strong></td>
+            <td class="num"><strong class="best">2449</strong></td>
+            <td class="num">2419</td>
+            <td class="num"><span class="worst">2414</span></td>
+            <td class="num">2417</td>
         </tr>
         <tr>
             <td>insertMany (10 docs)</td>
-            <td class="num">2027</td>
-            <td class="num"><span class="worst">2012</span></td>
-            <td class="num"><strong class="best">2173</strong></td>
-            <td class="num">2115</td>
+            <td class="num"><strong class="best">2177</strong></td>
+            <td class="num">2146</td>
+            <td class="num">2173</td>
+            <td class="num"><span class="worst">2134</span></td>
         </tr>
         <tr>
             <td>findOneById</td>
-            <td class="num">2047</td>
-            <td class="num"><span class="worst">2031</span></td>
-            <td class="num"><strong class="best">2184</strong></td>
-            <td class="num">2122</td>
+            <td class="num">2213</td>
+            <td class="num">2202</td>
+            <td class="num"><strong class="best">2224</strong></td>
+            <td class="num"><span class="worst">2200</span></td>
         </tr>
         <tr>
             <td>findOneByFilter</td>
-            <td class="num">2117</td>
-            <td class="num"><span class="worst">2066</span></td>
-            <td class="num"><strong class="best">2270</strong></td>
-            <td class="num">2194</td>
+            <td class="num"><strong class="best">2337</strong></td>
+            <td class="num">2302</td>
+            <td class="num"><span class="worst">2290</span></td>
+            <td class="num">2293</td>
         </tr>
         <tr>
             <td>findAll (~100 docs)</td>
-            <td class="num">1415</td>
-            <td class="num"><strong class="best">1477</strong></td>
-            <td class="num"><span class="worst">1299</span></td>
-            <td class="num">1310</td>
+            <td class="num">1565</td>
+            <td class="num"><strong class="best">1632</strong></td>
+            <td class="num">1328</td>
+            <td class="num"><span class="worst">1308</span></td>
         </tr>
         <tr>
             <td>findStream (~100 docs)</td>
-            <td class="num">1426</td>
-            <td class="num"><strong class="best">1435</strong></td>
-            <td class="num"><span class="worst">386</span></td>
-            <td class="num">388</td>
+            <td class="num">1438</td>
+            <td class="num"><strong class="best">1465</strong></td>
+            <td class="num"><span class="worst">397</span></td>
+            <td class="num">397</td>
         </tr>
         <tr>
             <td>updateOne</td>
-            <td class="num">2026</td>
-            <td class="num"><span class="worst">1988</span></td>
-            <td class="num">2143</td>
-            <td class="num"><strong class="best">2159</strong></td>
+            <td class="num">2177</td>
+            <td class="num">2174</td>
+            <td class="num"><span class="worst">2141</span></td>
+            <td class="num"><strong class="best">2188</strong></td>
         </tr>
         <tr>
             <td>deleteOne</td>
-            <td class="num">1063</td>
-            <td class="num"><span class="worst">1062</span></td>
-            <td class="num"><strong class="best">1129</strong></td>
-            <td class="num">1108</td>
+            <td class="num"><strong class="best">1160</strong></td>
+            <td class="num">1152</td>
+            <td class="num">1134</td>
+            <td class="num"><span class="worst">1108</span></td>
         </tr>
         <tr>
             <td>count</td>
-            <td class="num">1852</td>
-            <td class="num"><span class="worst">1847</span></td>
-            <td class="num"><strong class="best">1958</strong></td>
-            <td class="num">1916</td>
+            <td class="num"><strong class="best">1965</strong></td>
+            <td class="num">1956</td>
+            <td class="num">1961</td>
+            <td class="num"><span class="worst">1925</span></td>
         </tr>
     </table>
     <p class="muted">
-        Same finding as the <a href="#runtime-overhead">runtime table above</a>: all four land within the same band on
-        every
-        operation (differences within normal run-to-run noise, ~±5–10%) — the network round trip dominates regardless of
-        codec. The one outlier is mongo4cats' <code>find(filter).stream</code>, ~6× slower than everything else
-        <em>and independent of codec</em> (386 vs 388 ops/s for circe vs zio-json) — confirms it's the runtime's
-        <code>Queue</code>-backed <code>Subscriber</code> bridge, not the codec.
+        Same finding as the <a href="#runtime-overhead">runtime table above</a>: every operation but the bulk reads
+        lands in the same band, inside the ~±5–15% run-to-run error, so green and red mark measured extremes rather
+        than a ranking — the network round trip dominates regardless of codec. <code>findAll</code>/<code>findStream</code> are where mongo4s pulls ahead, and that is the decode path
+        rather than the bridge. The one outlier is mongo4cats' <code>find(filter).stream</code>, ~5.5× slower than
+        its own single-document operations <em>and independent of codec</em> (397 ops/s for circe and 397 for
+        zio-json — the same number to the unit) — confirms it's the runtime's <code>Queue</code>-backed
+        <code>Subscriber</code> bridge, not the codec.
     </p>
     <table>
         <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
@@ -1405,78 +1537,81 @@ given RsBridgeConfig = RsBridgeConfig(
         </tr>
         <tr>
             <td>insertOne</td>
-            <td class="num"><span class="worst">49.0</span></td>
-            <td class="num">46.6</td>
-            <td class="num">25.3</td>
-            <td class="num"><strong class="best">24.6</strong></td>
+            <td class="num">23.8</td>
+            <td class="num"><strong class="best">21.2</strong></td>
+            <td class="num"><span class="worst">24.6</span></td>
+            <td class="num">24.0</td>
         </tr>
         <tr>
             <td>insertMany (10 docs)</td>
-            <td class="num"><span class="worst">89.9</span></td>
-            <td class="num"><strong class="best">66.5</strong></td>
-            <td class="num">80.9</td>
-            <td class="num">74.6</td>
+            <td class="num">63.6</td>
+            <td class="num"><strong class="best">37.7</strong></td>
+            <td class="num"><span class="worst">79.1</span></td>
+            <td class="num">72.8</td>
         </tr>
         <tr>
             <td>findOneById</td>
-            <td class="num"><span class="worst">60.6</span></td>
-            <td class="num">58.8</td>
-            <td class="num">39.5</td>
-            <td class="num"><strong class="best">36.6</strong></td>
+            <td class="num">35.1</td>
+            <td class="num"><strong class="best">33.0</strong></td>
+            <td class="num"><span class="worst">38.5</span></td>
+            <td class="num">35.7</td>
         </tr>
         <tr>
             <td>findOneByFilter</td>
-            <td class="num"><span class="worst">60.5</span></td>
-            <td class="num">58.7</td>
-            <td class="num">39.3</td>
-            <td class="num"><strong class="best">36.5</strong></td>
+            <td class="num">35.0</td>
+            <td class="num"><strong class="best">32.8</strong></td>
+            <td class="num"><span class="worst">38.4</span></td>
+            <td class="num">35.7</td>
         </tr>
         <tr>
             <td>findAll (~100 docs)</td>
-            <td class="num">419.4</td>
-            <td class="num"><strong class="best">241.9</strong></td>
-            <td class="num"><span class="worst">951.7</span></td>
-            <td class="num">674.8</td>
+            <td class="num">361.7</td>
+            <td class="num"><strong class="best">155.4</strong></td>
+            <td class="num"><span class="worst">923.2</span></td>
+            <td class="num">659.1</td>
         </tr>
         <tr>
             <td>findStream (~100 docs)</td>
-            <td class="num">427.5</td>
-            <td class="num"><strong class="best">240.3</strong></td>
-            <td class="num"><span class="worst">3027.2</span></td>
-            <td class="num">2746.2</td>
+            <td class="num">409.4</td>
+            <td class="num"><strong class="best">205.4</strong></td>
+            <td class="num"><span class="worst">3069.7</span></td>
+            <td class="num">2613.4</td>
         </tr>
         <tr>
             <td>updateOne</td>
-            <td class="num"><span class="worst">47.0</span></td>
-            <td class="num">46.9</td>
-            <td class="num"><strong class="best">22.4</strong></td>
-            <td class="num"><strong class="best">22.4</strong></td>
+            <td class="num">21.6</td>
+            <td class="num"><strong class="best">21.5</strong></td>
+            <td class="num"><span class="worst">21.9</span></td>
+            <td class="num">21.8</td>
         </tr>
         <tr>
             <td>deleteOne</td>
-            <td class="num"><span class="worst">94.2</span></td>
-            <td class="num">92.3</td>
-            <td class="num">45.3</td>
-            <td class="num"><strong class="best">44.8</strong></td>
+            <td class="num"><span class="worst">44.3</span></td>
+            <td class="num"><strong class="best">41.7</strong></td>
+            <td class="num">44.1</td>
+            <td class="num">43.6</td>
         </tr>
         <tr>
             <td>count</td>
-            <td class="num"><span class="worst">56.5</span></td>
-            <td class="num"><span class="worst">56.5</span></td>
-            <td class="num"><strong class="best">31.5</strong></td>
-            <td class="num"><strong class="best">31.5</strong></td>
+            <td class="num"><span class="worst">31.1</span></td>
+            <td class="num">31.1</td>
+            <td class="num">30.8</td>
+            <td class="num"><strong class="best">30.8</strong></td>
         </tr>
     </table>
     <p class="muted">
-        <strong>bson-direct allocates less than bson-medeia on every single operation</strong> — the AST-free advantage
-        measured in isolation above survives end-to-end through a real driver round trip, modestly on single-document
-        ops
-        (~4–6%) and much more on bulk reads (~42–44% less). <strong>mongo4cats allocates less than mongo4s on
-        single-document ops, but far more on bulk reads</strong> (2–13× more on findAll/findStream) — its own
-        <code>mongo4cats.bson.BsonValue</code> wrapper adds a full extra tree per document on top of org.bson's, and
-        that
-        cost multiplies with document count. Neither library is uniformly lighter — it depends on point-lookups vs bulk
-        scans.
+        <strong>bson-direct allocates less than bson-medeia wherever a document actually passes through the
+        codec</strong> — the AST-free advantage measured in isolation above survives end-to-end through a real driver
+        round trip. The gap tracks how many documents a call encodes or decodes: ~6–11% for one, 41% on
+        <code>insertMany</code>, 50–57% on <code>findAll</code>/<code>findStream</code>. On <code>updateOne</code> and
+        <code>count</code> the two are identical to three digits (21.52 against 21.57 KB, 31.12 against 31.13) — the
+        expected result rather than a surprise, since neither operation encodes or decodes an entity.
+        <strong>mongo4s now matches mongo4cats on single-document ops, and stays far lighter on bulk
+        reads</strong>: the four configurations sit within a couple of percent on single-document operations, where the driver's own per-call
+        buffers dominate, while on <code>findAll</code>/<code>findStream</code> mongo4cats allocates 2.6–15× more than
+        either mongo4s config — its own <code>mongo4cats.bson.BsonValue</code> wrapper adds a full extra tree per
+        document on top of org.bson's, and that cost multiplies with document count. This is a change from the pre-1.0
+        numbers, where mongo4s was the heavier of the two on every single-document operation.
     </p>
 
     <h2 id="design">Design notes</h2>

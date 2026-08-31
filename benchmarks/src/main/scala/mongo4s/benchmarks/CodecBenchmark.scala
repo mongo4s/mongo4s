@@ -9,7 +9,7 @@ import org.bson.BsonDocument
 
 import mongo4s.bson.BsonDocumentCodec
 import mongo4s.bson.calypso.{CalypsoDecoder, CalypsoEncoder}
-import mongo4s.bson.direct.WireCodec
+import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec}
 import mongo4s.bson.medeia.MedeiaDocumentCodec
 
 import io.circe.generic.auto.given
@@ -49,6 +49,8 @@ object CodecBenchmark:
     import mongo4s.bson.ziobson.ZioBsonInstances.given
     summon[BsonDocumentCodec[Person]]
 
+  private def directCodec: BsonDocumentCodec[Person] = DocumentCodecBridge.toDocumentCodec[Person]
+
 @State(Scope.Benchmark)
 @BenchmarkMode(Array(Mode.Throughput))
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
@@ -63,6 +65,7 @@ class CodecBenchmark:
   private val medeia    = medeiaCodec
   private val calypso   = calypsoCodec
   private val zioBsonDc = zioBsonCodec
+  private val direct    = directCodec
 
   private val circeEncoder = mongo4cats.circe.deriveJsonBsonValueEncoder[Person]
   private val circeDecoder = mongo4cats.circe.deriveJsonBsonValueDecoder[Person]
@@ -73,6 +76,7 @@ class CodecBenchmark:
   private val medeiaDoc: BsonDocument                = medeia.encodeDocument(person)
   private val calypsoDoc: BsonDocument               = calypso.encodeDocument(person)
   private val zioBsonDoc: BsonDocument               = zioBsonDc.encodeDocument(person)
+  private val directDoc: BsonDocument                = direct.encodeDocument(person)
   private val circeBson: mongo4cats.bson.BsonValue   = circeEncoder.encode(person)
   private val zioJsonBson: mongo4cats.bson.BsonValue = zioEncoder.encode(person)
 
@@ -84,6 +88,9 @@ class CodecBenchmark:
 
   @Benchmark def zioBsonEncode: BsonDocument      = zioBsonDc.encodeDocument(person)
   @Benchmark def zioBsonDecode: Either[?, Person] = zioBsonDc.decodeDocument(zioBsonDoc)
+
+  @Benchmark def directEncode: BsonDocument      = direct.encodeDocument(person)
+  @Benchmark def directDecode: Either[?, Person] = direct.decodeDocument(directDoc)
 
   @Benchmark def circeEncode: mongo4cats.bson.BsonValue = circeEncoder.encode(person)
   @Benchmark def circeDecode: Option[Person]            = circeDecoder.decode(circeBson)

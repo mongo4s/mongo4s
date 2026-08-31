@@ -1,10 +1,8 @@
 package mongo4s.examples
 
-import scala.concurrent.duration.*
-
 import cats.effect.IO
 import org.bson.types.ObjectId
-import org.bson.{BsonDocument, BsonInt32, BsonString}
+import org.bson.{BsonDocument, BsonInt32, BsonString, BsonTimestamp}
 import com.mongodb.client.model.Collation
 import com.mongodb.client.model.changestream.FullDocument
 
@@ -17,6 +15,7 @@ import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec}
 import mongo4s.operations.{Accumulator, Filter, Index, Projection, Sort, Stage, Update, WriteCommand}
 import mongo4s.{Field, MongoClient, MongoCollection, MongoDatabase, PrimaryKey, RsBridgeConfig, WithId, withTransaction}
 
+import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
 import mongo4s.bson.BsonInstances.given
 
@@ -225,8 +224,6 @@ object ReadmeSnippets:
   def allEvents(collection: MongoCollection[IO, S, User]): S[ChangeEvent[User]] =
     collection.watch()
 
-  // A change-stream pipeline matches the event envelope, not the document — so it is built from raw
-  // stages against `{operationType, fullDocument, ns, ...}`.
   val insertsOnly = WatchOptions[User](
     pipeline = Seq(Stage.raw(BsonDocument("$match", BsonDocument("operationType", BsonString("insert")))))
   )
@@ -242,6 +239,12 @@ object ReadmeSnippets:
         .withMaxAwaitTime(2.seconds)
         .withBatchSize(64)
     )
+
+  def startedAfter(collection: MongoCollection[IO, S, User], token: BsonDocument): S[ChangeEvent[User]] =
+    collection.watch(WatchOptions.default[User].startingAfter(token))
+
+  def startedAt(collection: MongoCollection[IO, S, User], timestamp: BsonTimestamp): S[ChangeEvent[User]] =
+    collection.watch(WatchOptions.default[User].startingAt(timestamp))
 
   def survivingBadDocuments(collection: MongoCollection[IO, S, User]): S[DecodeResult[ChangeEvent[User]]] =
     collection.watchAttempting()

@@ -25,8 +25,6 @@ final class OperatorsSpec extends AnyWordSpec, Matchers:
   private def json(filter: Filter[Order]): String = filter.toBson(FieldNaming.identity).toJson
 
   "$elemMatch" should {
-    // Combining conditions on the array path alone lets different elements satisfy different
-    // conditions; this is the only way to require one element to satisfy both.
     "require a single element to satisfy every condition" in {
       val filter = itemsField.elemMatch(skuField.equalTo("abc") && quantityField.gt(2))
 
@@ -85,7 +83,6 @@ final class OperatorsSpec extends AnyWordSpec, Matchers:
   }
 
   "$lookup" should {
-    // The foreign field belongs to another collection, which may use a different naming policy.
     "leave the foreign field unrenamed" in {
       val stage = Stage.lookup[Order, String]("customers", Field.of[Order, String](_.id), "orderId", "customer")
 

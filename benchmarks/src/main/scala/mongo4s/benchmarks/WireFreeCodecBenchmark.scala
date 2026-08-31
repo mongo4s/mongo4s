@@ -5,24 +5,46 @@ import java.util.concurrent.TimeUnit
 
 import org.openjdk.jmh.annotations.*
 
-import org.bson.*
 import org.bson.io.{BasicOutputBuffer, ByteBufferBsonInput}
-import org.bson.codecs.{BsonDocumentCodec as DriverBsonDocumentCodec, DecoderContext, EncoderContext}
+import org.bson.{BsonBinaryReader, BsonBinaryWriter, BsonReader, BsonType, BsonWriter, ByteBufNIO}
+import com.mongodb.MongoClientSettings
+import org.bson.codecs.{Codec, BsonDocumentCodec as DriverBsonDocumentCodec, DecoderContext, EncoderContext}
 
-import mongo4s.bson.medeia.MedeiaDocumentCodec
+import mongo4cats.bson.Document as M4CDocument
+import mongo4cats.bson.BsonValue as M4CBsonValue
+import mongo4cats.codecs.{BsonValueCodecProvider, DocumentCodecProvider}
+
+import mongo4s.bson.BsonDocumentCodec
+import mongo4s.bson.direct.WireCodec
+import mongo4s.benchmarks.CodecBenchmark.{Address, Person}
+
+import io.circe.generic.auto.given
 
 object WireFreeCodecBenchmark:
 
-  final case class Address(city: String, zip: String) derives MedeiaDocumentCodec
-  final case class Person(id: String, name: String, age: Int, score: Double, active: Boolean, tags: List[String], address: Address) derives MedeiaDocumentCodec
-
   private val driverDocCodec = DriverBsonDocumentCodec()
+  private val encoderContext = EncoderContext.builder().build()
+  private val decoderContext = DecoderContext.builder().build()
 
-  private def medeiaCodec: mongo4s.bson.BsonDocumentCodec[Person] =
+  private val defaultRegistry = MongoClientSettings.getDefaultCodecRegistry
+
+  private val bsonValueCodec: Codec[M4CBsonValue] = BsonValueCodecProvider.get(classOf[M4CBsonValue], defaultRegistry)
+  private val documentCodec: Codec[M4CDocument]   = DocumentCodecProvider.get(classOf[M4CDocument], defaultRegistry)
+
+  private def medeiaCodec: BsonDocumentCodec[Person] =
     import mongo4s.bson.medeia.MedeiaInstances.given
-    summon[mongo4s.bson.BsonDocumentCodec[Person]]
+    summon[BsonDocumentCodec[Person]]
 
-  private def encodeDirect(writer: BsonWriter, p: Person): Unit =
+  private def calypsoCodec: BsonDocumentCodec[Person] =
+    import mongo4s.bson.calypso.CalypsoInstances.given
+    summon[BsonDocumentCodec[Person]]
+
+  private def zioBsonCodec: BsonDocumentCodec[Person] =
+    import ZioSchemaBsonCodecs.given
+    import mongo4s.bson.ziobson.ZioBsonInstances.given
+    summon[BsonDocumentCodec[Person]]
+
+  private def encodeHandWritten(writer: BsonWriter, p: Person): Unit =
     writer.writeStartDocument()
     writer.writeString("id", p.id)
     writer.writeString("name", p.name)
@@ -38,7 +60,7 @@ object WireFreeCodecBenchmark:
     writer.writeEndDocument()
     writer.writeEndDocument()
 
-  private def decodeDirect(reader: BsonReader): Person =
+  private def decodeHandWritten(reader: BsonReader): Person =
     reader.readStartDocument()
     var id     = ""
     var name   = ""
@@ -71,6 +93,7 @@ object WireFreeCodecBenchmark:
         case _         => reader.skipValue()
     reader.readEndDocument()
     Person(id, name, age, score, active, tags, Address(city, zip))
+  end decodeHandWritten
 
   private def toBytes(write: BsonWriter => Unit): Array[Byte] =
     val buffer = BasicOutputBuffer()
@@ -82,16 +105,21 @@ object WireFreeCodecBenchmark:
   private def readerOf(bytes: Array[Byte]): BsonReader =
     BsonBinaryReader(ByteBufferBsonInput(ByteBufNIO(ByteBuffer.wrap(bytes))))
 
-  def encodeDirectFull(p: Person): Array[Byte]     = toBytes(w => encodeDirect(w, p))
-  def decodeDirectFull(bytes: Array[Byte]): Person = decodeDirect(readerOf(bytes))
+  private def viaDocument(codec: BsonDocumentCodec[Person], p: Person): Array[Byte] =
+    toBytes(w => driverDocCodec.encode(w, codec.encodeDocument(p), encoderContext))
 
-  def encodeMedeiaFull(p: Person): Array[Byte] =
-    toBytes(w => driverDocCodec.encode(w, medeiaCodec.encodeDocument(p), EncoderContext.builder().build()))
-
-  def decodeMedeiaFull(bytes: Array[Byte]): Person =
-    medeiaCodec.decodeDocument(driverDocCodec.decode(readerOf(bytes), DecoderContext.builder().build())) match
+  private def fromDocument(codec: BsonDocumentCodec[Person], bytes: Array[Byte]): Person =
+    codec.decodeDocument(driverDocCodec.decode(readerOf(bytes), decoderContext)) match
       case Right(p)  => p
       case Left(err) => throw err.toThrowable
+
+  private def viaBsonValue(encode: Person => M4CBsonValue, p: Person): Array[Byte] =
+    toBytes(w => bsonValueCodec.encode(w, encode(p), encoderContext))
+
+  private def fromBsonValue(decode: M4CBsonValue => Option[Person], bytes: Array[Byte]): Person =
+    decode(M4CBsonValue.document(documentCodec.decode(readerOf(bytes), decoderContext))).get
+
+end WireFreeCodecBenchmark
 
 @State(Scope.Benchmark)
 @BenchmarkMode(Array(Mode.Throughput))
@@ -104,11 +132,41 @@ class WireFreeCodecBenchmark:
 
   private val person = Person("evt-1", "bob", 30, 9.5, active = true, List("a", "b", "c"), Address("NYC", "10001"))
 
-  private val medeiaBytes = encodeMedeiaFull(person)
-  private val directBytes = encodeDirectFull(person)
+  private val wire    = summon[WireCodec[Person]]
+  private val medeia  = medeiaCodec
+  private val calypso = calypsoCodec
+  private val zioBson = zioBsonCodec
 
-  @Benchmark def medeiaFullEncode: Array[Byte] = encodeMedeiaFull(person)
-  @Benchmark def medeiaFullDecode: Person      = decodeMedeiaFull(medeiaBytes)
+  private val circeEncoder   = mongo4cats.circe.deriveJsonBsonValueEncoder[Person]
+  private val circeDecoder   = mongo4cats.circe.deriveJsonBsonValueDecoder[Person]
+  private val zioJsonEncoder = mongo4cats.zio.json.deriveJsonBsonValueEncoder[Person]
+  private val zioJsonDecoder = mongo4cats.zio.json.deriveJsonBsonValueDecoder[Person]
 
-  @Benchmark def directEncode: Array[Byte] = encodeDirectFull(person)
-  @Benchmark def directDecode: Person      = decodeDirectFull(directBytes)
+  private val wireBytes        = toBytes(w => wire.encode(w, person))
+  private val handWrittenBytes = toBytes(w => encodeHandWritten(w, person))
+  private val medeiaBytes      = viaDocument(medeia, person)
+  private val calypsoBytes     = viaDocument(calypso, person)
+  private val zioBsonBytes     = viaDocument(zioBson, person)
+  private val circeBytes       = viaBsonValue(circeEncoder.encode, person)
+  private val zioJsonBytes     = viaBsonValue(zioJsonEncoder.encode, person)
+
+  @Benchmark def wireEncode: Array[Byte] = toBytes(w => wire.encode(w, person))
+  @Benchmark def wireDecode: Person      = wire.decode(readerOf(wireBytes))
+
+  @Benchmark def handWrittenEncode: Array[Byte] = toBytes(w => encodeHandWritten(w, person))
+  @Benchmark def handWrittenDecode: Person      = decodeHandWritten(readerOf(handWrittenBytes))
+
+  @Benchmark def medeiaEncode: Array[Byte] = viaDocument(medeia, person)
+  @Benchmark def medeiaDecode: Person      = fromDocument(medeia, medeiaBytes)
+
+  @Benchmark def calypsoEncode: Array[Byte] = viaDocument(calypso, person)
+  @Benchmark def calypsoDecode: Person      = fromDocument(calypso, calypsoBytes)
+
+  @Benchmark def zioBsonEncode: Array[Byte] = viaDocument(zioBson, person)
+  @Benchmark def zioBsonDecode: Person      = fromDocument(zioBson, zioBsonBytes)
+
+  @Benchmark def circeEncode: Array[Byte] = viaBsonValue(circeEncoder.encode, person)
+  @Benchmark def circeDecode: Person      = fromBsonValue(circeDecoder.decode, circeBytes)
+
+  @Benchmark def zioJsonEncode: Array[Byte] = viaBsonValue(zioJsonEncoder.encode, person)
+  @Benchmark def zioJsonDecode: Person      = fromBsonValue(zioJsonDecoder.decode, zioJsonBytes)

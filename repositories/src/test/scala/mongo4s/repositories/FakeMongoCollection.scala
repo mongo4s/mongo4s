@@ -267,18 +267,22 @@ final class FakeMongoCollection[F[*], S[*], E](
   private def decodeProjected(document: BsonDocument, projection: Projection[E]): Option[E] =
     codec.decodeDocument(applyProjection(document, projection)).toOption
 
-  /** Enough of a projection to tell an included field from an excluded one — the shape the repository's `defaultProjection` relies on. */
-  private def applyProjection(document: BsonDocument, projection: Projection[E]): BsonDocument = projection match
-    case Projection.Everything() => document
+  private def applyProjection(document: BsonDocument, projection: Projection[E]): BsonDocument =
+    projection match
+      case Projection.Everything() => document
 
-    case Projection.Exclude(fields) =>
-      fields.foldLeft(document)((acc, path) => unsetAt(acc, storedSegments(path)))
+      case Projection.Exclude(fields) =>
+        fields.foldLeft(document)((acc, path) => unsetAt(acc, storedSegments(path)))
 
-    case Projection.Include(fields, withId) =>
-      val kept = fields.foldLeft(BsonDocument()) { (acc, path) =>
-        at(document, path).fold(acc)(value => setAt(acc, storedSegments(path), value))
-      }
-      if withId then Option(document.get("_id")).fold(kept)(id => kept.append("_id", id)) else kept
+      case Projection.Include(fields, withId) =>
+        val kept = fields.foldLeft(BsonDocument()) { (acc, path) =>
+          at(document, path).fold(acc)(value => setAt(acc, storedSegments(path), value))
+        }
+
+        if withId
+        then Option(document.get("_id")).fold(kept)(id => kept.append("_id", id))
+        else kept
+  end applyProjection
 
   private def copyOf(document: BsonDocument): BsonDocument =
     document.entrySet.asScala.foldLeft(BsonDocument())((acc, e) => acc.append(e.getKey, e.getValue))

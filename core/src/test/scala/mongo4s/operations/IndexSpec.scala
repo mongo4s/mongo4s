@@ -1,13 +1,12 @@
 package mongo4s.operations
 
-import scala.concurrent.duration.*
-
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
 import mongo4s.Field
 import mongo4s.bson.FieldNaming
 
+import scala.concurrent.duration.given
 import mongo4s.bson.BsonInstances.given
 
 object IndexSpec:
@@ -37,8 +36,6 @@ final class IndexSpec extends AnyWordSpec, Matchers:
   }
 
   "forKeyFields" should {
-    // A PrimaryKey knows its stored names, and the index that enforces it must use them verbatim —
-    // the collection's naming has already been applied when the key was declared.
     "build a unique index over stored names, untouched by naming" in {
       val index = Index.forKeyFields[User](List("user_id", "seq"))
 
@@ -61,8 +58,6 @@ final class IndexSpec extends AnyWordSpec, Matchers:
       Index.ascending(ageField).expiringAfter(30.days).expireAfter shouldBe Some(30.days)
     }
 
-    // expireAfterSeconds is an integer on the server, so anything under a second would truncate to
-    // 0 — which is not "no TTL", it is "expire the moment the date field is reached".
     "reject a TTL that would truncate to zero seconds" in {
       val thrown = the[IllegalArgumentException] thrownBy Index.ascending(ageField).expiringAfter(500.millis)
       thrown.getMessage should include("at least one second")
