@@ -9,5 +9,7 @@ trait RsBridge[F[*], S[*]]:
   def unit[A](publisher: => Publisher[A]): F[Unit]
   def stream[A](publisher: => Publisher[A])(using Streamable[S, A]): S[A]
 
+  def liveStream[A](publisher: => Publisher[A])(using Streamable[S, A]): S[A] = stream(publisher)
+
 object RsBridge:
   inline def apply[F[*], S[*]](using instance: RsBridge[F, S]): instance.type = instance

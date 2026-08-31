@@ -279,10 +279,11 @@ lazy val it = project
   .in(file("it"))
   .settings(commonSettings)
   .settings(
-    name           := "mongo4s-it",
-    scalaVersion   := Versions.scalaLast,
-    publish / skip := true,
-    Test / fork    := true,
+    name                     := "mongo4s-it",
+    scalaVersion             := Versions.scalaLast,
+    publish / skip           := true,
+    Test / fork              := true,
+    Test / parallelExecution := false,
     Test / envVars ++= sys.env
       .get("DOCKER_HOST")
       .map("DOCKER_HOST" -> _)

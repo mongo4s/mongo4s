@@ -260,7 +260,7 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
   end drop
 
   def watch(options: WatchOptions[A])(using session: Option[ClientSession])(using Streamable[S, ChangeEvent[A]]): S[ChangeEvent[A]] =
-    rs.stream(
+    rs.liveStream(
       DecodingPublisher(
         ChangeStreamSupport.configure(changeStreamPublisher(options), options),
         doc => ChangeEvent.fromDriver(doc, codec.decodeDocument),
@@ -270,7 +270,7 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
   def watchAttempting(options: WatchOptions[A])(using
       session: Option[ClientSession]
   )(using Streamable[S, DecodeResult[ChangeEvent[A]]]): S[DecodeResult[ChangeEvent[A]]] =
-    rs.stream(
+    rs.liveStream(
       AttemptingPublisher(
         ChangeStreamSupport.configure(changeStreamPublisher(options), options),
         doc => ChangeEvent.fromDriver(doc, codec.decodeDocument),

@@ -41,7 +41,7 @@ private[mongo4s] final class MongoClientImpl[F[*], S[*]](
   def watch(options: WatchOptions[BsonDocument])(using
       session: Option[ClientSession]
   )(using Streamable[S, ChangeEvent[BsonDocument]]): S[ChangeEvent[BsonDocument]] =
-    rs.stream(
+    rs.liveStream(
       DecodingPublisher(
         changeStreamPublisher(options),
         doc => ChangeEvent.fromDriver(doc, Right(_)),
@@ -51,7 +51,7 @@ private[mongo4s] final class MongoClientImpl[F[*], S[*]](
   def watchAs[A](options: WatchOptions[A])(using
       session: Option[ClientSession]
   )(using decoder: BsonDocumentDecoder[A])(using Streamable[S, ChangeEvent[A]]): S[ChangeEvent[A]] =
-    rs.stream(
+    rs.liveStream(
       DecodingPublisher(
         changeStreamPublisher(options),
         doc => ChangeEvent.fromDriver(doc, decoder.decodeDocument),
@@ -61,7 +61,7 @@ private[mongo4s] final class MongoClientImpl[F[*], S[*]](
   def watchAsAttempting[A](options: WatchOptions[A])(using
       session: Option[ClientSession]
   )(using decoder: BsonDocumentDecoder[A])(using Streamable[S, DecodeResult[ChangeEvent[A]]]): S[DecodeResult[ChangeEvent[A]]] =
-    rs.stream(
+    rs.liveStream(
       AttemptingPublisher(
         changeStreamPublisher(options),
         doc => ChangeEvent.fromDriver(doc, decoder.decodeDocument),

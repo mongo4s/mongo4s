@@ -3,9 +3,10 @@ package mongo4s.it
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 
-import mongo4s.{Effect, RsBridge, Streamable}
-import mongo4s.cats.CatsInstances.given
 import mongo4s.cats.CatsStream
+import mongo4s.{Effect, RsBridge, Streamable}
+
+import mongo4s.cats.CatsInstances.given
 
 import DirectRepositoryItSpec.Person
 

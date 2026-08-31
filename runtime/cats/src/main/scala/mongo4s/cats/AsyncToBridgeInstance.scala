@@ -22,6 +22,11 @@ trait AsyncToBridgeInstance:
         .eval(F.delay(publisher))
         .flatMap(fromPublisher[F, A](_, config.bufferSize))
 
+    override def liveStream[A](publisher: => Publisher[A])(using Streamable[CatsStream[F], A]): Stream[F, A] =
+      Stream
+        .eval(F.delay(publisher))
+        .flatMap(fromPublisher[F, A](_, 1))
+
     private def collect[A](publisher: => Publisher[A], limit: Int): F[List[A]] =
       withTimeout(
         F.fromCompletableFuture(
