@@ -181,10 +181,17 @@ final class WireCodecSpec extends AnyWordSpec, Matchers:
       intercept[BsonError.DecodingFailure](WireCodec[Person].decode(readerOf(bytesOfDocument(document))))
     }
 
-    "fail to decode a sealed trait document whose discriminator isn't the first field" in {
+    "decode a sealed trait document whose discriminator isn't the first field, since the server stores _id first" in {
       val document = BsonDocument()
+        .append("_id", BsonString("abc"))
         .append("radius", BsonDouble(2.0))
         .append(WireSumDerivation.DiscriminatorField, BsonString("Circle"))
+
+      WireCodec[Shape].decode(readerOf(bytesOfDocument(document))) shouldBe Shape.Circle(2.0)
+    }
+
+    "fail to decode a sealed trait document carrying no discriminator at all" in {
+      val document = BsonDocument().append("radius", BsonDouble(2.0))
 
       intercept[BsonError.DecodingFailure](WireCodec[Shape].decode(readerOf(bytesOfDocument(document))))
     }

@@ -3,7 +3,7 @@ package mongo4s.bson.direct
 import scala.deriving.Mirror
 import scala.compiletime.{constValue, erasedValue, summonInline}
 
-import org.bson.{BsonReader, BsonType, BsonWriter}
+import org.bson.{BsonReader, BsonReaderMark, BsonType, BsonWriter}
 
 import mongo4s.bson.BsonError
 
@@ -36,6 +36,44 @@ object WireSumDerivation:
 
     def unknown(tag: String): Nothing =
       throw BsonError.DecodingFailure(BsonError.Custom(s"Unknown subtype discriminator: $tag"))
+
+    def scanForDiscriminator(reader: BsonReader): String =
+      var tag: String = null
+      while tag == null && reader.readBsonType() != BsonType.END_OF_DOCUMENT do
+        if reader.readName() == DiscriminatorField
+        then tag = reader.readString()
+        else reader.skipValue()
+
+      if tag == null
+      then throw BsonError.DecodingFailure(BsonError.MissingField(DiscriminatorField))
+      else tag
+    end scanForDiscriminator
+
+    def rewindToDiscriminator(reader: BsonReader, start: BsonReaderMark): String =
+      start.reset()
+      val restart = reader.getMark()
+      reader.readStartDocument()
+      val tag     = scanForDiscriminator(reader)
+      restart.reset()
+      reader.readStartDocument()
+      tag
+    end rewindToDiscriminator
+
+    def readNestedValue(reader: BsonReader, tag: String, nested: WireCodec[Any]): Any =
+      var value: Any     = null
+      var found: Boolean = false
+      while reader.readBsonType() != BsonType.END_OF_DOCUMENT do
+        val name = reader.readName()
+        if !found && name == NestedValueField
+        then
+          value = nested.decode(reader)
+          found = true
+        else reader.skipValue()
+
+      if !found
+      then throw BsonError.DecodingFailure(BsonError.Custom(s"Expected '$NestedValueField' for subtype '$tag'"))
+      else value
+    end readNestedValue
 
     new WireCodec[A]:
       def encode(writer: BsonWriter, value: A): Unit =
@@ -72,30 +110,25 @@ object WireSumDerivation:
                 BsonError.Custom(s"Subtype '$tag' has a payload and cannot be read from a bare string")
               )
         else
+          val start = reader.getMark()
           reader.readStartDocument()
-          if reader.readBsonType() == BsonType.END_OF_DOCUMENT then throw BsonError.DecodingFailure(BsonError.MissingField(DiscriminatorField))
 
-          val firstName = reader.readName()
-          if firstName != DiscriminatorField then
-            throw BsonError.DecodingFailure(
-              BsonError.Custom(s"Expected discriminator field '$DiscriminatorField' first, got '$firstName'")
-            )
+          val firstName = if reader.readBsonType() == BsonType.END_OF_DOCUMENT then null else reader.readName()
 
-          val tag = reader.readString()
+          val tag =
+            if firstName == DiscriminatorField
+            then reader.readString()
+            else rewindToDiscriminator(reader, start)
+
           val idx = indexOf.getOrElse(tag, unknown(tag))
 
           val result = codecs(idx) match
             case fields: FieldCodec[Any] => fields.readFields(reader)
-            case nested                  =>
-              reader.readBsonType()
-              val name  = reader.readName()
-              if name != NestedValueField then throw BsonError.DecodingFailure(BsonError.Custom(s"Expected '$NestedValueField' for subtype '$tag', got '$name'"))
-              val value = nested.decode(reader)
-              reader.readBsonType()
-              value
+            case nested                  => readNestedValue(reader, tag, nested)
 
           reader.readEndDocument()
           result.asInstanceOf[A]
+        end if
 
   private inline def labelsOf[T <: Tuple]: List[String] =
     inline erasedValue[T] match
