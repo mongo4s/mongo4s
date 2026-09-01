@@ -25,7 +25,11 @@ object WireProductDerivation:
 
     new FieldCodec[A]:
       override def isEmpty: Boolean = labels.isEmpty
-      override def readEmpty: A     = m.fromProduct(EmptyTuple)
+
+      override def readEmpty: A =
+        if labels.isEmpty
+        then m.fromProduct(EmptyTuple)
+        else super.readEmpty
 
       def writeFields(writer: BsonWriter, value: A): Unit =
         val values = value.asInstanceOf[Product].productIterator

@@ -104,8 +104,8 @@ object WireSumDerivation:
           val idx = indexOf.getOrElse(tag, unknown(tag))
 
           codecs(idx) match
-            case fields: FieldCodec[Any] => fields.readEmpty.asInstanceOf[A]
-            case _                       =>
+            case fields: FieldCodec[Any] if fields.isEmpty => fields.readEmpty.asInstanceOf[A]
+            case _                                         =>
               throw BsonError.DecodingFailure(
                 BsonError.Custom(s"Subtype '$tag' has a payload and cannot be read from a bare string")
               )

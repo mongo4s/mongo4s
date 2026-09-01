@@ -252,4 +252,12 @@ final class WireCodecSpec extends AnyWordSpec, Matchers:
       document.get("role").asDocument.getString(WireSumDerivation.DiscriminatorField).getValue shouldBe "Custom"
       roundTrip(holder) shouldBe holder
     }
+
+    "report a bare discriminator naming a case that carries fields as a decoding error, not an index-out-of-bounds" in {
+      import EmptyCasesAsString.Holder
+
+      val document = BsonDocument().append("role", BsonString("Custom"))
+
+      intercept[BsonError.DecodingFailure](WireCodec[Holder].decode(readerOf(bytesOfDocument(document))))
+    }
   }
