@@ -5,7 +5,7 @@ import scala.annotation.targetName
 import org.bson.*
 
 import mongo4s.FieldPath
-import mongo4s.bson.FieldNaming
+import mongo4s.bson.{BsonTypeName, FieldNaming}
 
 import scala.jdk.CollectionConverters.given
 
@@ -23,7 +23,7 @@ enum Filter[E]:
   case ElemMatch[T, U](path: FieldPath, filter: Filter[U])         extends Filter[T]
   case All[T](path: FieldPath, values: List[BsonValue])            extends Filter[T]
   case Size[T](path: FieldPath, size: Int)                         extends Filter[T]
-  case Type[T](path: FieldPath, bsonType: String)                  extends Filter[T]
+  case Type[T](path: FieldPath, bsonType: BsonTypeName)            extends Filter[T]
   case Mod[T](path: FieldPath, divisor: Long, remainder: Long)     extends Filter[T]
   case Text[T](search: String, language: Option[String])           extends Filter[T]
   case Expr[T](expression: BsonDocument)                           extends Filter[T]
@@ -58,7 +58,7 @@ enum Filter[E]:
     case ElemMatch(path, filter)       => Filter.operator(naming, path, "$elemMatch", filter.toBson(naming))
     case All(path, values)             => Filter.operator(naming, path, "$all", BsonArray(values.asJava))
     case Size(path, size)              => Filter.operator(naming, path, "$size", BsonInt32(size))
-    case Type(path, bsonType)          => Filter.operator(naming, path, "$type", BsonString(bsonType))
+    case Type(path, bsonType)          => Filter.operator(naming, path, "$type", BsonString(bsonType.wireName))
     case Mod(path, divisor, remainder) =>
       Filter.operator(naming, path, "$mod", BsonArray(List[BsonValue](BsonInt64(divisor), BsonInt64(remainder)).asJava))
     case Text(search, language)        =>

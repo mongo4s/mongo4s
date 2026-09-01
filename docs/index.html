@@ -419,6 +419,7 @@ ageField.notIn(List(40, 41, 42))         // $nin
 tagsField.contains("urgent")             // array membership
 tagsField.containsAll(List("a", "b"))    // $all
 tagsField.hasSize(3)                     // $size
+scoreField.hasType(BsonTypeName.Int)     // $type — an enum, not a string
 Filter.text[User]("scala")               // $text
 Filter.expr[User](someBsonDocument)      // $expr
 

@@ -72,6 +72,19 @@ libraryDependencies += "org.mongo4s" %% "mongo4s-testkit" % "2.0.0" % Test
 
 In `1.x` it sat in `mongo4s-repositories`' test sources and was not published at all, so consumers could not use it.
 
+### `BsonTypeName` is a public enum
+
+`Field.hasType` used to take a `String` — MongoDB's `$type` alias, which a typo turns into a filter that silently
+matches nothing. It now takes `BsonTypeName`, which was internal before:
+
+```scala
+scoreField.hasType("int")                 // 1.x
+scoreField.hasType(BsonTypeName.Int)      // 2.0
+```
+
+`BsonError.TypeMismatch` carries `BsonTypeName` for both `expected` and `actual` for the same reason; the rendered
+message is unchanged.
+
 ### New methods on `MongoCollection` and `MongoDatabase`
 
 `withReadConcern`, `withWriteConcern` and `withReadPreference` are abstract, so anything implementing those traits

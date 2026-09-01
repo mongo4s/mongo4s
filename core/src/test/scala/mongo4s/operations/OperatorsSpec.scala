@@ -6,7 +6,7 @@ import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
 import mongo4s.Field
-import mongo4s.bson.FieldNaming
+import mongo4s.bson.{BsonTypeName, FieldNaming}
 
 import mongo4s.bson.BsonInstances.given
 
@@ -54,7 +54,7 @@ final class OperatorsSpec extends AnyWordSpec, Matchers:
 
   "other predicates" should {
     "render $type and $mod" in {
-      json(totalField.hasType("int")) shouldBe """{"total": {"$type": "int"}}"""
+      json(totalField.hasType(BsonTypeName.Int)) shouldBe """{"total": {"$type": "int"}}"""
       json(totalField.mod(4, 1)) shouldBe """{"total": {"$mod": [4, 1]}}"""
     }
 

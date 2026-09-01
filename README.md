@@ -202,12 +202,18 @@ tagsField.containsAll(List("a", "b"))    // $all
 tagsField.hasSize(3)                     // $size
 nameField.regex("^A")                    // $regex
 scoreField.exists                        // $exists
+scoreField.hasType(BsonTypeName.Int)     // $type
+totalField.mod(4, 1)                     // $mod
 Filter.text[User]("scala")               // $text
 Filter.expr[User](someBsonDocument)      // $expr
 ```
 
 The comparisons have symbolic aliases where they read better — `===`, `=!=`, `>`, `>=`, `<`, `<=` — spelling the
 same `Filter` as `equalTo`/`notEqualTo`/`gt`/`gte`/`lt`/`lte`.
+
+`hasType` takes a `BsonTypeName`, not a string. The values are MongoDB's own `$type` aliases — `"object"` for a
+document, `"binData"`, `"javascriptWithScope"` — which are easy to misspell into a filter that silently matches
+nothing, so the enum spells them for you. `BsonTypeName.of(bsonValue)` names the type of a value you already have.
 
 `itemsField.elemMatch(...)` is the one worth calling out: conditions combined on the array path alone can be
 satisfied by *different* elements, and `$elemMatch` is how you require one element to satisfy all of them.

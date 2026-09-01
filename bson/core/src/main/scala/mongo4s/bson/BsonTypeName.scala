@@ -2,34 +2,35 @@ package mongo4s.bson
 
 import org.bson.{BsonType, BsonValue}
 
-private[mongo4s] object BsonTypeName:
+enum BsonTypeName(val wireName: String):
+  case EndOfDocument       extends BsonTypeName("endOfDocument")
+  case Double              extends BsonTypeName("double")
+  case String              extends BsonTypeName("string")
+  case Object              extends BsonTypeName("object")
+  case Array               extends BsonTypeName("array")
+  case BinData             extends BsonTypeName("binData")
+  case Undefined           extends BsonTypeName("undefined")
+  case ObjectId            extends BsonTypeName("objectId")
+  case Bool                extends BsonTypeName("bool")
+  case Date                extends BsonTypeName("date")
+  case Null                extends BsonTypeName("null")
+  case Regex               extends BsonTypeName("regex")
+  case DbPointer           extends BsonTypeName("dbPointer")
+  case Javascript          extends BsonTypeName("javascript")
+  case Symbol              extends BsonTypeName("symbol")
+  case JavascriptWithScope extends BsonTypeName("javascriptWithScope")
+  case Int                 extends BsonTypeName("int")
+  case Timestamp           extends BsonTypeName("timestamp")
+  case Long                extends BsonTypeName("long")
+  case Decimal             extends BsonTypeName("decimal")
+  case MinKey              extends BsonTypeName("minKey")
+  case MaxKey              extends BsonTypeName("maxKey")
 
-  val EndOfDocument: String       = "endOfDocument"
-  val Double: String              = "double"
-  val String: String              = "string"
-  val Object: String              = "object"
-  val Array: String               = "array"
-  val BinData: String             = "binData"
-  val Undefined: String           = "undefined"
-  val ObjectId: String            = "objectId"
-  val Bool: String                = "bool"
-  val Date: String                = "date"
-  val Null: String                = "null"
-  val Regex: String               = "regex"
-  val DbPointer: String           = "dbPointer"
-  val Javascript: String          = "javascript"
-  val Symbol: String              = "symbol"
-  val JavascriptWithScope: String = "javascriptWithScope"
-  val Int: String                 = "int"
-  val Timestamp: String           = "timestamp"
-  val Long: String                = "long"
-  val Decimal: String             = "decimal"
-  val MinKey: String              = "minKey"
-  val MaxKey: String              = "maxKey"
+object BsonTypeName:
 
-  def of(value: BsonValue): String = of(value.getBsonType)
+  def of(value: BsonValue): BsonTypeName = of(value.getBsonType)
 
-  def of(tpe: BsonType): String = tpe match
+  def of(tpe: BsonType): BsonTypeName = tpe match
     case BsonType.END_OF_DOCUMENT       => EndOfDocument
     case BsonType.DOUBLE                => Double
     case BsonType.STRING                => String

@@ -11,7 +11,7 @@ import mongo4s.cats.{CatsStream, MongoClientResource}
 import mongo4s.results.{BulkWriteResult, UpdateResult}
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.repositories.{BaseMongoRepository, Page}
-import mongo4s.bson.{BsonDocumentCodec, DecodeResult, FieldNaming}
+import mongo4s.bson.{BsonDocumentCodec, BsonTypeName, DecodeResult, FieldNaming}
 import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec, WireCodecConfig}
 import mongo4s.operations.*
 import mongo4s.{Field, MongoClient, MongoCollection, MongoDatabase, PrimaryKey, RsBridgeConfig, WithId, withTransaction}
@@ -80,6 +80,7 @@ object ReadmeSnippets:
   val sameAs   = Filter.expr[User](BsonDocument("$gt", BsonDocument()))
   val startsA  = Field.of[User, String](_.name).regex("^A")
   val hasScore = scoreField.exists
+  val isWhole  = ageField.hasType(BsonTypeName.Int) && ageField.mod(2, 0)
 
   // --- Stored paths: map keys, array positions, _id ---
 

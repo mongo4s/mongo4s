@@ -2,7 +2,7 @@ package mongo4s
 
 import scala.annotation.targetName
 
-import mongo4s.bson.BsonEncoder
+import mongo4s.bson.{BsonEncoder, BsonTypeName}
 import mongo4s.operations.{Filter, PushOptions, Sort, Update}
 
 opaque type Field[E, A] = FieldPath
@@ -94,5 +94,5 @@ object Field:
     def hasSize(size: Int): Filter[E] = Filter.Size(field.path, size)
 
   extension [E, A](field: Field[E, A])
-    def hasType(bsonType: String): Filter[E]           = Filter.Type(field.path, bsonType)
+    def hasType(bsonType: BsonTypeName): Filter[E]     = Filter.Type(field.path, bsonType)
     def mod(divisor: Long, remainder: Long): Filter[E] = Filter.Mod(field.path, divisor, remainder)
