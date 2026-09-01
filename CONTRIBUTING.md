@@ -34,9 +34,10 @@ sbt "repositoriesTests/testOnly mongo4s.repositories.CodecRepositorySpec"
 | `bson/core` | `BsonEncoder`/`BsonDecoder`/`BsonDocumentCodec` — the scalar + document codec seam every bridge targets |
 | `bson/medeia`, `bson/zio`, `bson/calypso` | bridges from a third-party codec library into `mongo4s.bson.BsonDocumentCodec` |
 | `bson/direct` | `WireCodec` — mongo4s's own AST-free codec, no third-party dependency |
-| `core` | `MongoClient`/`MongoDatabase`/`MongoCollection`, `Field`/`Filter`/`Update`/`PrimaryKey` — runtime- and codec-agnostic |
+| `core` | `MongoClient`/`MongoDatabase`/`MongoCollection`, `Field`/`Filter`/`Update`/`PrimaryKey`/`WithId` — runtime- and codec-agnostic |
 | `runtime/cats`, `runtime/zio`, `runtime/kyo`, `runtime/rapid` | `given Effect[F]` + `given RsBridge[F, S]` per runtime |
-| `repositories` | `BaseMongoRepository`, `Repository`, `WithId`, and the in-memory `FakeMongoCollection` used for unit tests |
+| `repositories` | `BaseMongoRepository`, `Repository`, `Page` |
+| `testkit` | the in-memory `FakeMongoCollection`, published so consumers can unit-test against it too |
 | `repositories-tests` | cross-cutting tests that need more than one runtime or codec bridge in scope at once (hence pinned to the latest Scala 3, so `kyo`/`rapid`/`calypso` can all be included) |
 | `it` | tests against a real MongoDB via [Testcontainers](https://testcontainers.com/) — needs Docker |
 | `examples` | runnable end-to-end examples, one per runtime/codec combination |

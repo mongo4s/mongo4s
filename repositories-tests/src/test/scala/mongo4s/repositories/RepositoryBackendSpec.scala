@@ -6,6 +6,7 @@ import org.scalatest.matchers.should.Matchers
 import org.bson.{BsonDocument, BsonInt32, BsonString}
 
 import mongo4s.bson.*
+import mongo4s.testkit.FakeMongoCollection
 import mongo4s.operations.{Update, WriteCommand}
 import mongo4s.{Effect, Field, PrimaryKey, Streamable}
 

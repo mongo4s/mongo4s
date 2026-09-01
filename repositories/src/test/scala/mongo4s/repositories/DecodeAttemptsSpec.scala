@@ -10,6 +10,7 @@ import org.bson.{BsonDocument, BsonString}
 import mongo4s.bson.*
 import mongo4s.cats.CatsStream
 import mongo4s.operations.Filter
+import mongo4s.testkit.FakeMongoCollection
 
 import mongo4s.cats.CatsInstances.given
 

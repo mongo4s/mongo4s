@@ -1,4 +1,4 @@
-package mongo4s.repositories
+package mongo4s.testkit
 
 import scala.collection.mutable
 

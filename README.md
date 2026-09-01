@@ -858,8 +858,8 @@ repository call can join a [transaction](#sessions--transactions) the same way a
 `BaseMongoRepository` is `open`: adding a domain query means declaring it against `collection`/`Filter`/`Field`
 directly, not reimplementing what's already there.
 
-For unit tests, `FakeMongoCollection` (in `mongo4s-repositories`' test sources, reusable via
-`% "test->test;test->compile"`) implements `MongoCollection` in memory — the exact same `Filter`/`Update`/`Field` AST
+For unit tests, `FakeMongoCollection` (in `mongo4s-testkit`, a published module — add it as
+`"org.mongo4s" %% "mongo4s-testkit" % "2.0.0" % Test`) implements `MongoCollection` in memory — the exact same `Filter`/`Update`/`Field` AST
 the real driver interprets is interpreted against an in-memory buffer instead, so repository logic is testable
 without a running MongoDB. Filters, updates, sorting, paging and projections are simulated; `aggregate`, `distinct`,
 `watch`, `$text`, `$expr` and `Filter.Raw` throw `UnsupportedOperationException` naming what was asked for, rather
@@ -968,7 +968,8 @@ Published for Scala 3 under `org.mongo4s`:
 | | `mongo4s-zio` | 3.3 LTS | ZIO 2 + `zio-streams` |
 | | `mongo4s-kyo` | **3.8** | kyo 1.0.0-RC6 |
 | | `mongo4s-rapid` | **3.8** | rapid |
-| repositories | `mongo4s-repositories` | 3.3 LTS | `BaseMongoRepository`, `Repository`, `Page`, `FakeMongoCollection` |
+| repositories | `mongo4s-repositories` | 3.3 LTS | `BaseMongoRepository`, `Repository`, `Page` |
+| testkit | `mongo4s-testkit` | 3.3 LTS | `FakeMongoCollection`, an in-memory `MongoCollection` for unit tests |
 
 ### Compatibility
 

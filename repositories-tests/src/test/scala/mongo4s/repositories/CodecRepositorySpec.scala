@@ -10,6 +10,7 @@ import zio.schema.{DeriveSchema, Schema}
 import mongo4s.cats.CatsStream
 import mongo4s.{Field, PrimaryKey}
 import mongo4s.bson.BsonDocumentCodec
+import mongo4s.testkit.FakeMongoCollection
 import mongo4s.bson.medeia.MedeiaDocumentCodec
 import mongo4s.bson.calypso.{CalypsoDecoder, CalypsoEncoder}
 import mongo4s.bson.ziobson.{ZioBsonDecoder, ZioBsonEncoder}

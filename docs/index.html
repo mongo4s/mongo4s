@@ -1054,8 +1054,9 @@ users.getBy(adults, Page.first(100))  // same, as a stream</code></pre>
         directly, not reimplementing what's already there.
     </p>
     <p>
-        For unit tests, <code>FakeMongoCollection</code> (in <code>mongo4s-repositories</code>' test sources, reusable
-        via <code>% "test-&gt;test;test-&gt;compile"</code>) implements <code>MongoCollection</code> in memory — the exact
+        For unit tests, <code>FakeMongoCollection</code> (in <code>mongo4s-testkit</code>, a published module — add it
+        as <code>"org.mongo4s" %% "mongo4s-testkit" % "2.0.0" % Test</code>) implements
+        <code>MongoCollection</code> in memory — the exact
         same <code>Filter</code>/<code>Update</code>/<code>Field</code> AST the real driver interprets is interpreted
         against an in-memory buffer instead, so repository logic is testable without a running MongoDB. Filters,
         updates, sorting, paging and projections are simulated; <code>aggregate</code>, <code>distinct</code>,
@@ -1219,7 +1220,12 @@ given RsBridgeConfig = RsBridgeConfig(
         <tr>
             <td>repositories</td>
             <td><code>mongo4s-repositories</code></td>
-            <td>BaseMongoRepository, Repository, Page, FakeMongoCollection</td>
+            <td>BaseMongoRepository, Repository, Page</td>
+        </tr>
+        <tr>
+            <td>testkit</td>
+            <td><code>mongo4s-testkit</code></td>
+            <td>FakeMongoCollection, an in-memory MongoCollection for unit tests</td>
         </tr>
     </table>
 
@@ -1938,9 +1944,9 @@ given RsBridgeConfig = RsBridgeConfig(
         fake that lies is worse than no fake.
     </p>
     <p class="muted">
-        <strong>Current limitation:</strong> <code>FakeMongoCollection</code> lives in
-        <code>mongo4s-repositories</code>' <em>test</em> sources, and test artifacts are not published. It is reusable
-        inside this build but not from a released artifact.
+        It ships as its own published module, <code>mongo4s-testkit</code>, so it is usable from a consumer's own
+        tests rather than only inside this build. It depends on <code>mongo4s-core</code> alone, not on
+        <code>mongo4s-repositories</code> — a fake collection is useful whether or not you use the repository layer.
     </p>
 
     <h3 id="design-evolution">Evolving the API</h3>

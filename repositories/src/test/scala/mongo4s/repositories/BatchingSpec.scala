@@ -9,6 +9,7 @@ import cats.effect.IO
 import mongo4s.Field
 import mongo4s.cats.CatsStream
 import mongo4s.bson.BsonDocumentCodec
+import mongo4s.testkit.FakeMongoCollection
 import mongo4s.operations.{Filter, Projection, Update, WriteCommand}
 
 import mongo4s.bson.BsonInstances.given

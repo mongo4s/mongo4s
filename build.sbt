@@ -188,7 +188,15 @@ lazy val repositories = project
     name := "mongo4s-repositories",
     libraryDependencies ++= Seq(Dependencies.Cats.catsEffect3 % Test, Dependencies.Cats.catsEffect3Testing),
   )
-  .dependsOn(core, cats % Test)
+  .dependsOn(core, cats % Test, testkit % Test)
+
+lazy val testkit = project
+  .in(file("testkit"))
+  .settings(commonSettings)
+  .settings(
+    name := "mongo4s-testkit",
+  )
+  .dependsOn(core)
 
 lazy val repositoriesTests = project
   .in(file("repositories-tests"))
@@ -210,6 +218,7 @@ lazy val repositoriesTests = project
   )
   .dependsOn(
     repositories % "test->test;test->compile",
+    testkit,
     cats,
     zio,
     rapid,
@@ -323,6 +332,7 @@ lazy val root = project
     bson,
     core,
     runtime,
+    testkit,
     repositories,
     repositoriesTests,
     examples,

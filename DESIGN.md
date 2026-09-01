@@ -273,9 +273,9 @@ filters, updates, sorting, paging and projections are simulated, while `aggregat
 `$expr` and `Filter.Raw` throw `UnsupportedOperationException` naming what was asked for rather than quietly
 answering wrong. A fake that lies is worse than no fake.
 
-> **Current limitation:** `FakeMongoCollection` lives in `mongo4s-repositories`' *test* sources, and test artifacts
-> are not published. It is reusable inside this build (`% "test->test;test->compile"`) but not from a released
-> artifact.
+It ships as its own published module, `mongo4s-testkit`, so it is usable from a consumer's own tests rather than only
+inside this build. It depends on `mongo4s-core` alone, not on `mongo4s-repositories` — a fake collection is useful
+whether or not you use the repository layer.
 
 ## Evolving the API
 
