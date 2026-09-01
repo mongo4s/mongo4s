@@ -30,18 +30,28 @@ final class WatchOptionsSpec extends AnyWordSpec, Matchers:
   }
 
   "resume points" should {
-    "be mutually exclusive: resumingAfter clears startAfter" in {
-      val options = WatchOptions.default[String].startingAfter(token("a")).resumingAfter(token("b"))
+    "be mutually exclusive: resumingAfter clears startAfter and the operation time" in {
+      val options = WatchOptions.default[String].startingAfter(token("a")).startingAt(BsonTimestamp(1, 1)).resumingAfter(token("b"))
 
       options.resumeAfter shouldBe Some(token("b"))
       options.startAfter shouldBe None
+      options.startAtOperationTime shouldBe None
     }
 
-    "be mutually exclusive: startingAfter clears resumeAfter" in {
-      val options = WatchOptions.default[String].resumingAfter(token("a")).startingAfter(token("b"))
+    "be mutually exclusive: startingAfter clears resumeAfter and the operation time" in {
+      val options = WatchOptions.default[String].resumingAfter(token("a")).startingAt(BsonTimestamp(1, 1)).startingAfter(token("b"))
 
       options.startAfter shouldBe Some(token("b"))
       options.resumeAfter shouldBe None
+      options.startAtOperationTime shouldBe None
+    }
+
+    "be mutually exclusive: startingAt clears both tokens" in {
+      val options = WatchOptions.default[String].resumingAfter(token("a")).startingAt(BsonTimestamp(1, 1))
+
+      options.startAtOperationTime shouldBe Some(BsonTimestamp(1, 1))
+      options.resumeAfter shouldBe None
+      options.startAfter shouldBe None
     }
 
     "expose resumeAfter as a one-step constructor" in {

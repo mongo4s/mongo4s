@@ -27,13 +27,13 @@ final case class WatchOptions[E](
     copy(fullDocumentBeforeChange = Some(value))
 
   def resumingAfter(token: BsonDocument): WatchOptions[E] =
-    copy(resumeAfter = Some(token), startAfter = None)
+    copy(resumeAfter = Some(token), startAfter = None, startAtOperationTime = None)
 
   def startingAfter(token: BsonDocument): WatchOptions[E] =
-    copy(startAfter = Some(token), resumeAfter = None)
+    copy(startAfter = Some(token), resumeAfter = None, startAtOperationTime = None)
 
   def startingAt(time: BsonTimestamp): WatchOptions[E] =
-    copy(startAtOperationTime = Some(time))
+    copy(startAtOperationTime = Some(time), resumeAfter = None, startAfter = None)
 
   def withMaxAwaitTime(value: FiniteDuration): WatchOptions[E] =
     copy(maxAwaitTime = Some(value))
