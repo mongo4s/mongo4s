@@ -36,6 +36,18 @@ final class IndexSpec extends AnyWordSpec, Matchers:
       index.keysToBson(FieldNaming.identity).toJson shouldBe """{"age": 1, "firstName": -1}"""
     }
 
+    "render hashed and geospatial indexes as their own markers" in {
+      Index.hashed(nameField).keysToBson(FieldNaming.identity).toJson shouldBe """{"firstName": "hashed"}"""
+      Index.geo2dsphere(nameField).keysToBson(FieldNaming.identity).toJson shouldBe """{"firstName": "2dsphere"}"""
+      Index.empty[User].geo2d(nameField).keysToBson(FieldNaming.identity).toJson shouldBe """{"firstName": "2d"}"""
+    }
+
+    "index a wildcard path, which needs no direction of its own" in {
+      val index = Index.ascending(Field.stored[User, Any]("$**"))
+
+      index.keysToBson(FieldNaming.snakeCase).toJson shouldBe """{"$**": 1}"""
+    }
+
     "render a text index as a marker rather than a direction" in {
       Index.empty[User].text(bioField).keysToBson(FieldNaming.identity).toJson shouldBe """{"bio": "text"}"""
     }

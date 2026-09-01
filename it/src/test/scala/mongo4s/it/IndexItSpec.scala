@@ -154,3 +154,24 @@ final class IndexItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndA
       program.asserting(_ shouldBe true)
     }
   }
+
+  "the index types the server validates" should {
+    "accept hashed, 2dsphere, wildcard and hidden specifications" in {
+      val program =
+        for
+          people   <- collection("index_types")
+          _        <- people.createIndex(Index.hashed(nameField).named("by_hash"))
+          _        <- people.createIndex(Index.geo2dsphere(Field.stored[Person, Any]("location")).named("by_area"))
+          _        <- people.createIndex(Index.ascending(Field.stored[Person, Any]("$**")).named("by_anything"))
+          _        <- people.createIndex(Index.ascending(ageField).named("by_age").withHidden)
+          existing <- people.listIndexes
+        yield byName(existing)
+
+      program.asserting { indexes =>
+        indexes.keySet should contain allOf ("by_hash", "by_area", "by_anything", "by_age")
+        indexes("by_hash").getDocument("key").getString("name").getValue shouldBe "hashed"
+        indexes("by_area").getDocument("key").getString("location").getValue shouldBe "2dsphere"
+        indexes("by_age").getBoolean("hidden").getValue shouldBe true
+      }
+    }
+  }

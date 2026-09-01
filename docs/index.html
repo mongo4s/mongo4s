@@ -659,6 +659,10 @@ collection.createIndex(Index.unique(idField))
 collection.createIndex(Index.ascending(createdAtField).expiringAfter(30.days))     // TTL
 collection.createIndex(Index.ascending(ageField).where(ageField.gte(18)))          // partial
 collection.createIndex(Index.empty[User].text(bioField).withSparse)
+collection.createIndex(Index.hashed(idField))                                      // sharding
+collection.createIndex(Index.geo2dsphere(Field.stored[User, Any]("location")))     // also geo2d
+collection.createIndex(Index.ascending(ageField).withHidden)                       // ignored by the planner
+collection.createIndex(Index.ascending(Field.stored[User, Any]("$**")))            // wildcard
 
 collection.listIndexes  // F[List[BsonDocument]], as the server reports them
 collection.dropIndex("name_age")</code></pre>

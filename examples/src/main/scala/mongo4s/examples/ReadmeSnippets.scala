@@ -218,6 +218,10 @@ object ReadmeSnippets:
       _      <- collection.createIndex(Index.ascending(ageField).expiringAfter(30.days))
       _      <- collection.createIndex(Index.ascending(ageField).where(adults))
       _      <- collection.createIndex(Index.empty[User].text(Field.of[User, String](_.name)).withSparse)
+      _      <- collection.createIndex(Index.hashed(Field.of[User, String](_.id)))
+      _      <- collection.createIndex(Index.geo2dsphere(Field.stored[User, Any]("location")))
+      _      <- collection.createIndex(Index.ascending(ageField).withHidden)
+      _      <- collection.createIndex(Index.ascending(Field.stored[User, Any]("$**")))
       listed <- collection.listIndexes
       _      <- collection.dropIndex("name_age")
     yield listed

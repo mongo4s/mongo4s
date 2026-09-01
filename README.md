@@ -539,6 +539,10 @@ collection.createIndex(Index.unique(idField))
 collection.createIndex(Index.ascending(createdAtField).expiringAfter(30.days)) // TTL
 collection.createIndex(Index.ascending(ageField).where(ageField.gte(18))) // partial
 collection.createIndex(Index.empty[User].text(bioField).withSparse)
+collection.createIndex(Index.hashed(idField)) // sharding
+collection.createIndex(Index.geo2dsphere(Field.stored[User, Any]("location"))) // also geo2d
+collection.createIndex(Index.ascending(ageField).withHidden) // built, but ignored by the planner
+collection.createIndex(Index.ascending(Field.stored[User, Any]("$**"))) // wildcard: just a stored path
 
 collection.listIndexes // F[List[BsonDocument]], as the server reports them
 collection.dropIndex("name_age")
@@ -546,6 +550,10 @@ collection.dropIndex("name_age")
 
 Keys are ordered — a compound index is only usable by queries that respect that order. `createIndex` returns the
 name the server gave it, and is idempotent, so it's safe on every start.
+
+A wildcard index needs no API of its own: `$**` is an ordinary stored path, so `Field.stored` builds it and the
+collection's `FieldNaming` leaves it alone. `withWildcardProjection` narrows which fields such an index covers, and
+`withCollation` attaches one to any index.
 
 `expireAfterSeconds` is a whole number on the server, so a sub-second `TTL` is rejected rather than silently truncated
 to "expire immediately".

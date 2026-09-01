@@ -234,11 +234,13 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
 
   def createIndex(index: Index[A])(using session: Option[ClientSession]): F[String] =
     F.suspend {
-      val options = IndexOptions().unique(index.unique).sparse(index.sparse)
+      val options = IndexOptions().unique(index.unique).sparse(index.sparse).hidden(index.hidden)
 
       index.name.foreach(options.name)
       index.expireAfter.foreach(duration => options.expireAfter(duration.toSeconds, TimeUnit.SECONDS))
       index.partialFilter.foreach(filter => options.partialFilterExpression(filter.toBson(naming)))
+      index.collation.foreach(options.collation)
+      index.wildcardProjection.foreach(options.wildcardProjection)
 
       val keys = index.keysToBson(naming)
 
