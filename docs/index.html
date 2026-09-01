@@ -847,6 +847,12 @@ Contact("bob", None) // {"name": "bob"} — no "email" key at all</code></pre>
         after it, and <code>Update.set(field, None)</code> still writes <code>null</code> because
         <code>$set: null</code> and <code>$unset</code> are different intents (<code>field.unset</code> is the latter).
     </p>
+    <p class="muted">
+        A nested <code>Option</code> does not survive a round-trip on either codec path, with or without the flag:
+        <code>Some(None)</code> is written as <code>null</code> and reads back as <code>None</code>, because BSON has
+        one null and both layers map onto it. To tell "absent" from "present but empty", model it as an
+        <code>enum</code> or a wrapper case class rather than <code>Option[Option[A]]</code>.
+    </p>
 
     <h4>Hand-writing a codec: contramap/map/emap/imap</h4>
     <p>

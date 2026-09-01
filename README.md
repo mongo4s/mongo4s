@@ -677,6 +677,11 @@ field no longer includes those documents. Where either matters, `withOmitNoneFie
 given WireCodecConfig = WireCodecConfig.Default.withOmitNoneFields(false)
 ```
 
+A nested `Option` does not survive a round-trip, with or without the flag: `Some(None)` is written as `null` and reads
+back as `None`, because BSON has one null and both layers map onto it. This is true of the AST path
+(`BsonEncoder`/`BsonDecoder`) as well. If you need to tell "absent" from "present but empty", model it as an `enum`
+or a wrapper case class rather than `Option[Option[A]]`.
+
 The flag governs *fields of a derived product* only. A `None` inside an array is still written as `null` regardless,
 because dropping an element would shift every position after it. `Update.set(field, None)` also still writes `null` —
 that is `BsonEncoder`, not `WireCodec`, and `$set: null` and `$unset` are different intents; use `field.unset` for
