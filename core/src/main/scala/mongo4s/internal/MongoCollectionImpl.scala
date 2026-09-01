@@ -33,7 +33,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
         case None    => underlying.insertOne(encoded)
 
       F.map(rs.one(publisher)) { result =>
-        InsertOneResult(Option(result.getInsertedId))
+        InsertOneResult.fromDriver(result)
       }
     }
 
@@ -49,7 +49,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
           case None    => underlying.insertMany(encoded)
 
         F.map(rs.one(publisher)) { result =>
-          InsertManyResult.fromDriver(result.getInsertedIds)
+          InsertManyResult.fromDriver(result)
         }
       }
 
@@ -67,7 +67,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
         case Some(s) => underlying.replaceOne(s, filter.toBson(naming), codec.encodeDocument(replacement), options)
         case None    => underlying.replaceOne(filter.toBson(naming), codec.encodeDocument(replacement), options)
 
-      F.map(rs.one(publisher))(updateResult)
+      F.map(rs.one(publisher))(UpdateResult.fromDriver)
     }
 
   def updateOne(filter: Filter[A], update: Update[A], upsert: Boolean)(using session: Option[ClientSession]): F[UpdateResult] =
@@ -78,7 +78,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
         case Some(s) => underlying.updateOne(s, filter.toBson(naming), update.toBson(naming), options)
         case None    => underlying.updateOne(filter.toBson(naming), update.toBson(naming), options)
 
-      F.map(rs.one(publisher))(updateResult)
+      F.map(rs.one(publisher))(UpdateResult.fromDriver)
     }
 
   def updateMany(
@@ -93,7 +93,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
         case Some(s) => underlying.updateMany(s, filter.toBson(naming), update.toBson(naming), options)
         case None    => underlying.updateMany(filter.toBson(naming), update.toBson(naming), options)
 
-      F.map(rs.one(publisher))(updateResult)
+      F.map(rs.one(publisher))(UpdateResult.fromDriver)
     }
 
   def deleteOne(filter: Filter[A])(using session: Option[ClientSession]): F[DeleteResult] =
@@ -103,7 +103,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
         case None    => underlying.deleteOne(filter.toBson(naming))
 
       F.map(rs.one(publisher)) { result =>
-        DeleteResult(result.getDeletedCount)
+        DeleteResult.fromDriver(result)
       }
     }
 
@@ -114,7 +114,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
         case None    => underlying.deleteMany(filter.toBson(naming))
 
       F.map(rs.one(publisher)) { result =>
-        DeleteResult(result.getDeletedCount)
+        DeleteResult.fromDriver(result)
       }
     }
 
@@ -211,7 +211,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
           case Some(s) => underlying.bulkWrite(s, models, options)
           case None    => underlying.bulkWrite(models, options)
 
-        F.map(rs.one(publisher))(bulkResult)
+        F.map(rs.one(publisher))(BulkWriteResult.fromDriver)
       }
 
   def aggregate[B](pipeline: Seq[Stage[A]])(using session: Option[ClientSession])(using codec: BsonDocumentCodec[B]): AggregateQuery[F, S, B] =
@@ -314,22 +314,6 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       case None           => F.pure(None)
       case Some(document) => F.map(Effect.fromEither(codec.decodeDocument(document)))(Some(_))
     }
-
-  private def updateResult(result: com.mongodb.client.result.UpdateResult): UpdateResult =
-    UpdateResult(
-      matchedCount = result.getMatchedCount,
-      modifiedCount = result.getModifiedCount,
-      upsertedId = Option(result.getUpsertedId),
-    )
-
-  private def bulkResult(result: com.mongodb.bulk.BulkWriteResult): BulkWriteResult =
-    BulkWriteResult(
-      insertedCount = result.getInsertedCount.toLong,
-      matchedCount = result.getMatchedCount.toLong,
-      modifiedCount = result.getModifiedCount.toLong,
-      deletedCount = result.getDeletedCount.toLong,
-      upsertedIds = result.getUpserts.asScala.map(upsert => upsert.getIndex -> upsert.getId).toMap,
-    )
 
   private def query(filter: Filter[A], session: Option[ClientSession]): FindQuery[F, S, A] =
     FindQueryImpl(

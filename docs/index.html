@@ -462,6 +462,12 @@ Update.rename(oldField, newField)  // $rename — also currentDate, popFirst/pop
     </p>
     <pre><code>val result = collection.updateOne(filter, update, upsert = true)
 result.map(r =&gt; if r.wasUpserted then r.upsertedId else None)</code></pre>
+    <p class="muted">
+        Under an unacknowledged write concern (<code>w=0</code>) the server sends nothing back, so every write result
+        comes back empty — zero counts, <code>None</code> for the ids. That is indistinguishable from a write that
+        matched nothing, which is the trade <code>w=0</code> makes. Nothing throws, so the write path stays usable;
+        if you need to tell the two apart, do not use <code>w=0</code>.
+    </p>
     <p>
         <code>find(...).all</code> fails the whole query if any document does not decode. A collection is rarely
         written by one version of one service, though, and when it isn't, a document that doesn't fit is a fact about

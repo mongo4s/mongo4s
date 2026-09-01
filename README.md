@@ -290,6 +290,11 @@ result.map(r => if r.wasUpserted then r.upsertedId else None)
 `DeleteResult` carries `deletedCount`; `BulkWriteResult` carries all four counts plus `upsertedIds`, keyed by the
 position of the command that produced it. `InsertOneResult`/`InsertManyResult` carry the stored `_id`s.
 
+Under an unacknowledged write concern (`w=0`) the server sends nothing back, so every one of these comes back empty —
+zero counts, `None` for the ids. That is indistinguishable from a write that matched nothing, which is the trade
+`w=0` makes: the driver has no answer to report. Nothing throws, so the write path stays usable; if you need to tell
+the two apart, do not use `w=0`.
+
 ### Reads that survive bad documents
 
 `find(...).all` fails the whole query if any document does not decode. A collection is rarely written by one version
