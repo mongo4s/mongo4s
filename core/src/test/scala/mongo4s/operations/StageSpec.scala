@@ -61,6 +61,36 @@ final class StageSpec extends AnyWordSpec, Matchers:
         """{"$lookup": {"from": "users", "localField": "user_id", "foreignField": "user_id", "as": "user"}}"""
     }
 
+    "render $out and $merge as a bare name while nothing else is set" in {
+      Stage.out[Order]("archive").toBson(FieldNaming.identity).toJson shouldBe """{"$out": "archive"}"""
+      Stage.merge[Order]("archive").toBson(FieldNaming.identity).toJson shouldBe """{"$merge": "archive"}"""
+    }
+
+    "name the database when one is given" in {
+      Stage.out[Order]("archive", OutOptions.default.inDatabase("cold")).toBson(FieldNaming.identity).toJson shouldBe
+        """{"$out": {"db": "cold", "coll": "archive"}}"""
+    }
+
+    "render a single $merge on-field as a string and several as an array" in {
+      val one  = MergeOptions.default.onFields(List("user_id"))
+      val many = MergeOptions.default.onFields(List("user_id", "seq"))
+
+      Stage.merge[Order]("archive", one).toBson(FieldNaming.identity).toJson shouldBe
+        """{"$merge": {"into": "archive", "on": "user_id"}}"""
+      Stage.merge[Order]("archive", many).toBson(FieldNaming.identity).toJson shouldBe
+        """{"$merge": {"into": "archive", "on": ["user_id", "seq"]}}"""
+    }
+
+    "carry the whenMatched and whenNotMatched policies" in {
+      val options = MergeOptions.default
+        .inDatabase("cold")
+        .whenMatched(MergeOptions.WhenMatched.KeepExisting)
+        .whenNotMatched(MergeOptions.WhenNotMatched.Discard)
+
+      Stage.merge[Order]("archive", options).toBson(FieldNaming.identity).toJson shouldBe
+        """{"$merge": {"into": {"db": "cold", "coll": "archive"}, "whenMatched": "keepExisting", "whenNotMatched": "discard"}}"""
+    }
+
     "pass a Raw stage through untouched" in {
       val document = BsonDocument("$sample", BsonDocument("size", org.bson.BsonInt32(10)))
       Stage.raw[Order](document).toBson(FieldNaming.identity) shouldBe document

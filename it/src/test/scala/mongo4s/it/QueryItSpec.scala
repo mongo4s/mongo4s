@@ -115,6 +115,26 @@ final class QueryItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndA
       program.asserting(_ shouldBe List("alice", "bob", "carol"))
     }
 
+    "run a $merge that names its target database and keeps existing documents" in {
+      val program =
+        for
+          client   <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database <- client.getDatabase("query_it")
+          source   <- database.getCollection[Person]("merge_source")
+          _        <- source.insertMany(people)
+          options   = MergeOptions.default
+                        .inDatabase("query_it")
+                        .onFields(List("_id"))
+                        .whenMatched(MergeOptions.WhenMatched.KeepExisting)
+                        .whenNotMatched(MergeOptions.WhenNotMatched.Insert)
+          _        <- source.aggregate[Person](Seq(Stage.matching(ageField.gte(18)), Stage.merge("merge_target", options))).first
+          target   <- database.getCollection[Person]("merge_target")
+          written  <- target.find(ageField.gte(0)).all
+        yield written.map(_.name).sorted
+
+      program.asserting(_ shouldBe List("alice", "bob", "carol"))
+    }
+
     "accept allowDiskUse, maxTime and comment" in {
       val program =
         for

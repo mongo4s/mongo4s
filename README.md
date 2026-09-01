@@ -509,6 +509,27 @@ val byAge = Seq(
 `$replaceRoot`/`$facet`/`$sample`/`$unionWith`/`$out`/`$merge`,
 with `Stage.raw(document)` as the escape hatch for anything else.
 
+`$out` and `$merge` write the pipeline's result into a collection, and both take options that stay out of the way
+until you need them — with none set they render as the bare collection name the server also accepts:
+
+```scala
+Stage.out[Order]("archive")                                        // {"$out": "archive"}
+Stage.out[Order]("archive", OutOptions.default.inDatabase("cold")) // {"$out": {"db": "cold", "coll": "archive"}}
+
+Stage.merge[Order](
+  "archive",
+  MergeOptions.default
+    .onFields(List("user_id", "seq"))
+    .whenMatched(MergeOptions.WhenMatched.KeepExisting)
+    .whenNotMatched(MergeOptions.WhenNotMatched.Insert),
+)
+```
+
+`on` names fields of the **target** collection, so it is a list of stored names rather than `Field` values — the
+target's shape is not `A`. A single field renders as a string and several as an array, which is what the server
+expects. Note that `aggregate(...).first` does not append its usual `$limit` after a terminal stage, since the server
+rejects anything following `$out`/`$merge`.
+
 Two things about the typing. `A` is the pipeline's *starting* document type and never changes down the pipeline — a
 `$group` or `$project` invents a new shape, but the stages after it are still typed against `A`, and the pipeline's
 real output type is stated once, at `aggregate[B]`. And a field belonging to a stage's own output — `_id` after a

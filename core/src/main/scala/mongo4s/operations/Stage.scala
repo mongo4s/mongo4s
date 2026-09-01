@@ -22,8 +22,8 @@ enum Stage[E]:
   case Sample(size: Int)
   case UnionWith(collection: String)
   case Facet(facets: List[(String, List[Stage[E]])])
-  case Out(collection: String)
-  case Merge(collection: String)
+  case Out(collection: String, options: OutOptions)
+  case Merge(collection: String, options: MergeOptions)
 
   case Raw(document: BsonDocument)
 
@@ -73,9 +73,9 @@ enum Stage[E]:
       }
       BsonDocument("$facet", document)
 
-    case Stage.Out(collection)   => BsonDocument("$out", BsonString(collection))
-    case Stage.Merge(collection) => BsonDocument("$merge", BsonString(collection))
-    case Stage.Raw(document)     => document
+    case Stage.Out(collection, options)   => BsonDocument("$out", Stage.outTarget(collection, options))
+    case Stage.Merge(collection, options) => BsonDocument("$merge", Stage.mergeTarget(collection, options))
+    case Stage.Raw(document)              => document
 
 object Stage:
   def matching[E](filter: Filter[E]): Stage[E]        = MatchStage(filter)
@@ -110,7 +110,33 @@ object Stage:
 
   def facet[E](facets: (String, List[Stage[E]])*): Stage[E] = Facet(facets.toList)
 
-  def out[E](collection: String): Stage[E]   = Out(collection)
-  def merge[E](collection: String): Stage[E] = Merge(collection)
+  def out[E](collection: String, options: OutOptions = OutOptions.default): Stage[E] = Out(collection, options)
+
+  def merge[E](collection: String, options: MergeOptions = MergeOptions.default): Stage[E] = Merge(collection, options)
+
+  private def outTarget(collection: String, options: OutOptions): BsonValue =
+    options.database match
+      case None           => BsonString(collection)
+      case Some(database) => BsonDocument("db", BsonString(database)).append("coll", BsonString(collection))
+
+  private def mergeTarget(collection: String, options: MergeOptions): BsonValue =
+    if options.isEmpty
+    then BsonString(collection)
+    else
+      val into = options.database match
+        case None           => BsonString(collection): BsonValue
+        case Some(database) => BsonDocument("db", BsonString(database)).append("coll", BsonString(collection))
+
+      val document = BsonDocument("into", into)
+
+      if options.on.sizeIs == 1 then document.append("on", BsonString(options.on.head)): Unit
+      else if options.on.nonEmpty then document.append("on", BsonArray(options.on.map(BsonString.apply).asJava)): Unit
+
+      options.whenMatched.foreach(value => document.append("whenMatched", BsonString(value.wireName)): Unit)
+      options.whenNotMatched.foreach(value => document.append("whenNotMatched", BsonString(value.wireName)): Unit)
+      options.let.foreach(value => document.append("let", value): Unit)
+
+      document
+  end mergeTarget
 
   def raw[E](document: BsonDocument): Stage[E] = Raw(document)

@@ -632,6 +632,21 @@ val byAge = Seq(
         with <code>Stage.raw(document)</code> as the escape hatch for anything else.
     </p>
     <p>
+        <code>$out</code> and <code>$merge</code> write the pipeline's result into a collection, and both take options
+        that stay out of the way until you need them — with none set they render as the bare collection name:
+    </p>
+    <pre><code>Stage.out[Order]("archive", OutOptions.default.inDatabase("cold"))
+
+Stage.merge[Order]("archive", MergeOptions.default
+  .onFields(List("user_id", "seq"))
+  .whenMatched(MergeOptions.WhenMatched.KeepExisting)
+  .whenNotMatched(MergeOptions.WhenNotMatched.Insert))</code></pre>
+    <p class="muted">
+        <code>on</code> names fields of the <strong>target</strong> collection, so it is a list of stored names rather
+        than <code>Field</code> values — the target's shape is not <code>A</code>. A single field renders as a string
+        and several as an array, as the server expects.
+    </p>
+    <p>
         Two things about the typing. <code>A</code> is the pipeline's <em>starting</em> document type and never changes
         down the pipeline — a <code>$group</code> or <code>$project</code> invents a new shape, but the stages after it
         are still typed against <code>A</code>, and the real output type is stated once, at <code>aggregate[B]</code>.
