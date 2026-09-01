@@ -778,6 +778,16 @@ yield ()</code></pre>
         entity declares cannot be read back</strong> through a direct collection. Use <code>getCollection</code> with a
         <code>BsonDocumentCodec</code>, or model the projected shape as its own type, when you need partial reads.
     </p>
+    <p>
+        Strictness extends to BSON numeric types. A <code>Long</code> field is read with <code>readInt64</code>, an
+        <code>Int</code> with <code>readInt32</code>, a <code>Double</code> with <code>readDouble</code> — the exact
+        type the encoder writes. So a document that stores <code>42</code> as an Int32 (written by
+        <code>mongosh</code>, by a <code>$inc</code>, or by another client) decodes fine through
+        <code>getCollection</code>, whose <code>BsonDecoder[Long]</code> accepts any whole number, and
+        <strong>fails</strong> through <code>getDirectCollection</code>. The failure is an ordinary
+        <code>BsonError</code>, so <code>attempting</code> reports it per document like any other decode error. If a
+        collection holds mixed numeric widths for the same field, read it through <code>getCollection</code>.
+    </p>
     <p class="muted">
         <code>aggregate</code>/<code>distinct</code> still go through
         <code>BsonDocumentCodec</code>/<code>BsonDecoder</code>

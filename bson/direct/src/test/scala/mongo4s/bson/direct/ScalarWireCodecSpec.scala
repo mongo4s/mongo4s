@@ -7,11 +7,11 @@ import scala.compiletime.testing.typeChecks
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
+import org.bson.*
 import org.bson.io.{BasicOutputBuffer, ByteBufferBsonInput}
-import org.bson.{BsonBinaryReader, BsonBinaryWriter, BsonDocument, BsonString, ByteBufNIO}
 import org.bson.codecs.{BsonDocumentCodec as DriverBsonDocumentCodec, DecoderContext, EncoderContext}
 
-import mongo4s.bson.{BsonError, BsonEncoder}
+import mongo4s.bson.{BsonError, BsonEncoder, BsonDecoder}
 
 object ScalarWireCodecSpec:
 
@@ -33,10 +33,9 @@ object ScalarWireCodecSpec:
 
   final case class Address(city: String, zip: String) derives WireCodec
 
-  // ScalarWireCodec values are only ever legal nested inside a document field (a bare scalar can't be
-  // written to the root of a real BSON document) — these holders exercise that real usage shape.
   final case class EventIdHolder(id: EventId) derives WireCodec
   final case class ProviderHolder(provider: Provider) derives WireCodec
+  final case class CounterHolder(count: Long) derives WireCodec
 
 final class ScalarWireCodecSpec extends AnyWordSpec, Matchers:
   import ScalarWireCodecSpec.*
@@ -90,6 +89,28 @@ final class ScalarWireCodecSpec extends AnyWordSpec, Matchers:
 
     "produce a working BsonEncoder that only exercises the encode direction" in {
       BsonEncoder[Provider].encode(Provider.Adyen) shouldBe BsonString("adyen")
+    }
+  }
+
+  "wire numeric decoding" should {
+    "reject an Int32 stored where the model declares a Long, unlike the lenient BsonDecoder path" in {
+      val document = documentOf(CounterHolder(7L))
+      document.put("count", BsonInt32(7))
+
+      BsonDecoder[Long].decode(BsonInt32(7)) shouldBe Right(7L)
+
+      val decoded = DocumentCodecBridge.toDocumentCodec[CounterHolder].decodeDocument(document)
+
+      decoded.isLeft shouldBe true
+    }
+
+    "surface that rejection as a BsonError rather than a raw driver exception" in {
+      val document = documentOf(CounterHolder(7L))
+      document.put("count", BsonInt32(7))
+
+      DocumentCodecBridge.toDocumentCodec[CounterHolder].decodeDocument(document) match
+        case Left(error)  => error.message should include("INT64")
+        case Right(value) => fail(s"expected a decoding failure, got $value")
     }
   }
 

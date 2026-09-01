@@ -600,6 +600,13 @@ supplies a default — which `Option` does. So a **projection that drops a field
 back** through a direct collection. Use `getCollection` with a `BsonDocumentCodec`, or model the projected shape as
 its own type, when you need partial reads.
 
+Strictness extends to BSON numeric types. A `Long` field is read with `readInt64`, an `Int` with `readInt32`, a
+`Double` with `readDouble` — the exact type the encoder writes. So a document that stores `42` as an Int32 (written
+by `mongosh`, by a `$inc`, or by another client) decodes fine through `getCollection`, whose `BsonDecoder[Long]`
+accepts any whole number, and **fails** through `getDirectCollection`. The failure is an ordinary `BsonError`, so
+`attempting` reports it per document like any other decode error. If a collection holds mixed numeric widths for the
+same field, read it through `getCollection`.
+
 `aggregate`/`distinct` still go through `BsonDocumentCodec`/`BsonDecoder` on a direct collection (their output shape
 isn't `A`, and they're not the hot path); everything else — `Filter`/`Update`/`Field` construction — is identical
 regardless of which codec backs the collection.
