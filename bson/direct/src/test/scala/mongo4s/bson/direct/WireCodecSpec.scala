@@ -46,6 +46,13 @@ object WireCodecSpec:
 
     final case class Holder(role: Role) derives WireCodec
 
+  object DiscriminatorCollision:
+    sealed trait Node derives WireCodec
+
+    object Node:
+      final case class Raw(_type: String, body: String) extends Node derives WireCodec
+      final case class Plain(body: String)              extends Node derives WireCodec
+
   object NullsForAbsentOptions:
     given WireCodecConfig = WireCodecConfig.Default.withOmitNoneFields(false)
     final case class LegacyContact(name: String, email: Option[String]) derives WireCodec
@@ -259,5 +266,11 @@ final class WireCodecSpec extends AnyWordSpec, Matchers:
       val document = BsonDocument().append("role", BsonString("Custom"))
 
       intercept[BsonError.DecodingFailure](WireCodec[Holder].decode(readerOf(bytesOfDocument(document))))
+    }
+
+    "refuse a subtype that declares a field of its own colliding with the discriminator" in {
+      import DiscriminatorCollision.Node
+
+      an[IllegalArgumentException] should be thrownBy documentOf(Node.Raw("x", "y"): Node)
     }
   }

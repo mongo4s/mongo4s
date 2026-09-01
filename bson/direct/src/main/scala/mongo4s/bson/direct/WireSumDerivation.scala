@@ -31,8 +31,21 @@ object WireSumDerivation:
       encodeEmptyCasesAsString: Boolean,
       codecsThunk: () => Array[WireCodec[Any]],
   ): WireCodec[A] =
-    lazy val codecs: Array[WireCodec[Any]] = codecsThunk()
-    val indexOf: Map[String, Int]          = discriminators.zipWithIndex.toMap
+    lazy val codecs: Array[WireCodec[Any]] =
+      val built = codecsThunk()
+      var i     = 0
+      while i < built.length do
+        built(i) match
+          case fields: FieldCodec[Any] =>
+            require(
+              !fields.fieldNames.contains(DiscriminatorField),
+              s"subtype '${discriminators(i)}' declares a field named '$DiscriminatorField', which collides with the sum discriminator",
+            )
+          case _                       => ()
+        i += 1
+      built
+
+    val indexOf: Map[String, Int] = discriminators.zipWithIndex.toMap
 
     def unknown(tag: String): Nothing =
       throw BsonError.DecodingFailure(BsonError.Custom(s"Unknown subtype discriminator: $tag"))

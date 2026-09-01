@@ -24,7 +24,8 @@ object WireProductDerivation:
     val indexOf: Map[String, Int]          = labels.zipWithIndex.toMap
 
     new FieldCodec[A]:
-      override def isEmpty: Boolean = labels.isEmpty
+      override def fieldNames: Array[String] = labels
+      override def isEmpty: Boolean          = labels.isEmpty
 
       override def readEmpty: A =
         if labels.isEmpty
