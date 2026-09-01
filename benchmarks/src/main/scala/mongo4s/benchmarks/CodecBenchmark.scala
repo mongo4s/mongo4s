@@ -8,9 +8,9 @@ import zio.json.JsonCodec
 import org.bson.BsonDocument
 
 import mongo4s.bson.BsonDocumentCodec
-import mongo4s.bson.calypso.{CalypsoDecoder, CalypsoEncoder}
-import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec}
 import mongo4s.bson.medeia.MedeiaDocumentCodec
+import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec}
+import mongo4s.bson.calypso.{CalypsoDecoder, CalypsoEncoder}
 
 import io.circe.generic.auto.given
 

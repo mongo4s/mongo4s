@@ -103,7 +103,10 @@ trait DefaultBsonDecoderInstances:
     then Right(value.asObjectId.getValue)
     else Left(BsonError.typeMismatch(BsonTypeName.ObjectId, value))
 
-  given [A](using decoder: BsonDecoder[A]): BsonDecoder[Option[A]] = value => if value.isNull then Right(None) else decoder.decode(value).map(Some(_))
+  given [A](using decoder: BsonDecoder[A]): BsonDecoder[Option[A]] = value =>
+    if value.isNull
+    then Right(None)
+    else decoder.decode(value).map(Some(_))
 
   given [A](using decoder: BsonDecoder[A]): BsonDecoder[List[A]] = value =>
     if value.isArray
@@ -117,11 +120,14 @@ trait DefaultBsonDecoderInstances:
         }
     else Left(BsonError.typeMismatch(BsonTypeName.Array, value))
 
-  given [A](using decoder: BsonDecoder[A]): BsonDecoder[Vector[A]] = value => summon[BsonDecoder[List[A]]].decode(value).map(_.toVector)
+  given [A](using decoder: BsonDecoder[A]): BsonDecoder[Vector[A]] =
+    value => summon[BsonDecoder[List[A]]].decode(value).map(_.toVector)
 
-  given [A](using decoder: BsonDecoder[A]): BsonDecoder[Seq[A]] = value => summon[BsonDecoder[List[A]]].decode(value)
+  given [A](using decoder: BsonDecoder[A]): BsonDecoder[Seq[A]] =
+    value => summon[BsonDecoder[List[A]]].decode(value)
 
-  given [A](using decoder: BsonDecoder[A]): BsonDecoder[Set[A]] = value => summon[BsonDecoder[List[A]]].decode(value).map(_.toSet)
+  given [A](using decoder: BsonDecoder[A]): BsonDecoder[Set[A]] =
+    value => summon[BsonDecoder[List[A]]].decode(value).map(_.toSet)
 
   given [A](using decoder: BsonDecoder[A]): BsonDecoder[Map[String, A]] = value =>
     if value.isDocument

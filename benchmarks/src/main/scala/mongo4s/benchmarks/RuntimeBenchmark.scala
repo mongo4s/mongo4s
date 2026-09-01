@@ -9,16 +9,16 @@ import cats.effect.IO
 import rapid.Task as RapidTask
 import zio.{Exit, Runtime, Scope as ZScope, Task, Unsafe}
 import kyo.{AllowUnsafe, Duration as KyoDuration, KyoApp, Sync as KyoSync}
-import mongo4cats.circe.deriveCirceCodecProvider
+import mongo4cats.zio.ZMongoClient
 import mongo4cats.codecs.MongoCodecProvider
+import mongo4cats.circe.deriveCirceCodecProvider
 import mongo4cats.client.{GenericMongoClient, MongoClient as M4CClient}
 import mongo4cats.operations.{Filter as M4CFilter, Update as M4CUpdate}
-import mongo4cats.zio.ZMongoClient
 
 import mongo4s.zio.ZioStream
 import mongo4s.cats.CatsStream
-import mongo4s.kyo.{KIO, KStream}
 import mongo4s.rapid.RapidStream
+import mongo4s.kyo.{KIO, KStream}
 import mongo4s.{Field, MongoClient as Mongo4sClient, Streamable}
 import mongo4s.benchmarks.CodecBenchmark.{Address, Person}
 
@@ -26,9 +26,9 @@ import scala.concurrent.duration.given
 import cats.effect.unsafe.implicits.given
 import io.circe.generic.auto.given
 import mongo4s.zio.ZioInstances.given
+import mongo4s.kyo.KyoInstances.given
 import mongo4s.bson.BsonInstances.given
 import mongo4s.cats.CatsInstances.given
-import mongo4s.kyo.KyoInstances.given
 import mongo4s.rapid.RapidInstances.given
 import mongo4s.bson.medeia.MedeiaInstances.given
 

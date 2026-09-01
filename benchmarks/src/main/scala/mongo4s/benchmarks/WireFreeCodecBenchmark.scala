@@ -5,17 +5,17 @@ import java.util.concurrent.TimeUnit
 
 import org.openjdk.jmh.annotations.*
 
+import com.mongodb.MongoClientSettings
 import org.bson.io.{BasicOutputBuffer, ByteBufferBsonInput}
 import org.bson.{BsonBinaryReader, BsonBinaryWriter, BsonReader, BsonType, BsonWriter, ByteBufNIO}
-import com.mongodb.MongoClientSettings
 import org.bson.codecs.{Codec, BsonDocumentCodec as DriverBsonDocumentCodec, DecoderContext, EncoderContext}
 
 import mongo4cats.bson.Document as M4CDocument
 import mongo4cats.bson.BsonValue as M4CBsonValue
 import mongo4cats.codecs.{BsonValueCodecProvider, DocumentCodecProvider}
 
-import mongo4s.bson.BsonDocumentCodec
 import mongo4s.bson.direct.WireCodec
+import mongo4s.bson.BsonDocumentCodec
 import mongo4s.benchmarks.CodecBenchmark.{Address, Person}
 
 import io.circe.generic.auto.given

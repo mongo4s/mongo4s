@@ -6,8 +6,8 @@ import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
 import org.bson.io.{BasicOutputBuffer, ByteBufferBsonInput}
-import org.bson.{BsonBinaryReader, BsonBinaryWriter, ByteBufNIO}
 import org.bson.{BsonDocument, BsonDocumentReader, BsonString}
+import org.bson.{BsonBinaryReader, BsonBinaryWriter, ByteBufNIO}
 import cats.data.{Chain, Ior, NonEmptyList, NonEmptyMap, NonEmptySet, NonEmptyVector}
 
 import mongo4s.bson.direct.WireCodec
