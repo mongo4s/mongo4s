@@ -188,7 +188,7 @@ lazy val repositories = project
     name := "mongo4s-repositories",
     libraryDependencies ++= Seq(Dependencies.Cats.catsEffect3 % Test, Dependencies.Cats.catsEffect3Testing),
   )
-  .dependsOn(core, cats % Test, testkit % Test)
+  .dependsOn(core)
 
 lazy val testkit = project
   .in(file("testkit"))
@@ -196,7 +196,7 @@ lazy val testkit = project
   .settings(
     name := "mongo4s-testkit",
   )
-  .dependsOn(core)
+  .dependsOn(core, repositories)
 
 lazy val repositoriesTests = project
   .in(file("repositories-tests"))
@@ -208,6 +208,7 @@ lazy val repositoriesTests = project
     mimaPreviousArtifacts := Set.empty,
     libraryDependencies ++= Seq(
       Dependencies.Cats.catsEffect3,
+      Dependencies.Cats.catsEffect3Testing,
       Dependencies.Codecs.medeia,
       Dependencies.Codecs.zioBson,
       Dependencies.Codecs.calypso,
@@ -217,7 +218,7 @@ lazy val repositoriesTests = project
     ),
   )
   .dependsOn(
-    repositories % "test->test;test->compile",
+    repositories,
     testkit,
     cats,
     zio,

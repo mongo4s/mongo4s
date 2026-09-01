@@ -1225,7 +1225,7 @@ given RsBridgeConfig = RsBridgeConfig(
         <tr>
             <td>testkit</td>
             <td><code>mongo4s-testkit</code></td>
-            <td>FakeMongoCollection, an in-memory MongoCollection for unit tests</td>
+            <td>FakeMongoCollection, FakeRepository — in-memory doubles for unit tests</td>
         </tr>
     </table>
 
@@ -1945,8 +1945,9 @@ given RsBridgeConfig = RsBridgeConfig(
     </p>
     <p class="muted">
         It ships as its own published module, <code>mongo4s-testkit</code>, so it is usable from a consumer's own
-        tests rather than only inside this build. It depends on <code>mongo4s-core</code> alone, not on
-        <code>mongo4s-repositories</code> — a fake collection is useful whether or not you use the repository layer.
+        tests rather than only inside this build. Alongside it, <code>FakeRepository</code> is a
+        <code>BaseMongoRepository</code> over a <code>FakeMongoCollection</code> — the real repository logic, only the
+        collection faked, so the fake cannot drift from what production does.
     </p>
 
     <h3 id="design-evolution">Evolving the API</h3>

@@ -274,8 +274,9 @@ filters, updates, sorting, paging and projections are simulated, while `aggregat
 answering wrong. A fake that lies is worse than no fake.
 
 It ships as its own published module, `mongo4s-testkit`, so it is usable from a consumer's own tests rather than only
-inside this build. It depends on `mongo4s-core` alone, not on `mongo4s-repositories` — a fake collection is useful
-whether or not you use the repository layer.
+inside this build. Alongside it, `FakeRepository` is a `BaseMongoRepository` over a `FakeMongoCollection` — the real
+repository logic, only the collection faked. Nothing about repository behaviour is reimplemented for tests, so the
+fake cannot drift from what production does; the only thing standing in for MongoDB is the storage underneath.
 
 ## Evolving the API
 

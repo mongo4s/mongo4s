@@ -37,7 +37,7 @@ sbt "repositoriesTests/testOnly mongo4s.repositories.CodecRepositorySpec"
 | `core` | `MongoClient`/`MongoDatabase`/`MongoCollection`, `Field`/`Filter`/`Update`/`PrimaryKey`/`WithId` — runtime- and codec-agnostic |
 | `runtime/cats`, `runtime/zio`, `runtime/kyo`, `runtime/rapid` | `given Effect[F]` + `given RsBridge[F, S]` per runtime |
 | `repositories` | `BaseMongoRepository`, `Repository`, `Page` |
-| `testkit` | the in-memory `FakeMongoCollection`, published so consumers can unit-test against it too |
+| `testkit` | `FakeMongoCollection` and `FakeRepository`, published so consumers can unit-test against them too |
 | `repositories-tests` | cross-cutting tests that need more than one runtime or codec bridge in scope at once (hence pinned to the latest Scala 3, so `kyo`/`rapid`/`calypso` can all be included) |
 | `it` | tests against a real MongoDB via [Testcontainers](https://testcontainers.com/) — needs Docker |
 | `examples` | runnable end-to-end examples, one per runtime/codec combination |
@@ -72,9 +72,10 @@ before assuming the default is safe there. If the runtime can't derive a `Tag`-l
 
 ## Tests
 
-- Unit tests for `core`/`repositories` run against `FakeMongoCollection`, an in-memory
+- Unit tests for `core` and the repository layer run against `FakeMongoCollection`, an in-memory
   implementation interpreting the same `Filter`/`Update` AST the real driver does - no MongoDB
-  required.
+  required. The repository specs live in `repositories-tests` rather than `repositories`, because
+  `testkit` depends on `repositories` and a test dependency the other way would be a cycle.
 - `it/` and the `*DirectRepositoryItSpec`/`RepositoryItSpec` families run against a real MongoDB
   started via Testcontainers - you need Docker running locally to execute these
   (`sbt it/test`).

@@ -969,7 +969,7 @@ Published for Scala 3 under `org.mongo4s`:
 | | `mongo4s-kyo` | **3.8** | kyo 1.0.0-RC6 |
 | | `mongo4s-rapid` | **3.8** | rapid |
 | repositories | `mongo4s-repositories` | 3.3 LTS | `BaseMongoRepository`, `Repository`, `Page` |
-| testkit | `mongo4s-testkit` | 3.3 LTS | `FakeMongoCollection`, an in-memory `MongoCollection` for unit tests |
+| testkit | `mongo4s-testkit` | 3.3 LTS | `FakeMongoCollection`, `FakeRepository` — in-memory doubles for unit tests |
 
 ### Compatibility
 

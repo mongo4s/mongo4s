@@ -118,7 +118,7 @@ open class BaseMongoRepository[F[*], S[*], E, K](
   end batchedResults
 
 object BaseMongoRepository:
-  private val DefaultBatchSize: Int = 500
+  val DefaultBatchSize: Int = 500
 
   def create[F[*], S[*], E, K](
       database: MongoDatabase[F, S],
