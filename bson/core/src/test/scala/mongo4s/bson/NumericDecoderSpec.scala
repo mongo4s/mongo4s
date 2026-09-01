@@ -38,6 +38,21 @@ final class NumericDecoderSpec extends AnyWordSpec, Matchers:
     "reject a fractional value" in {
       BsonDecoder[Long].decode(BsonDouble(3.5)).isLeft shouldBe true
     }
+
+    "read a whole Decimal128 exactly rather than routing it through Double" in {
+      val value = Decimal128(java.math.BigDecimal("9007199254740993"))
+
+      BsonDecoder[Long].decode(BsonDecimal128(value)) shouldBe Right(9007199254740993L)
+    }
+
+    "reject a Double sitting exactly on 2^63, which is one past Long's range" in {
+      BsonDecoder[Long].decode(BsonDouble(9.223372036854776e18)).isLeft shouldBe true
+    }
+
+    "report a non-finite Decimal128 as an error rather than throwing" in {
+      BsonDecoder[Long].decode(BsonDecimal128(Decimal128.NaN)).isLeft shouldBe true
+      BsonDecoder[Long].decode(BsonDecimal128(Decimal128.POSITIVE_INFINITY)).isLeft shouldBe true
+    }
   }
 
   "BsonDecoder[BigDecimal]" should {
@@ -48,5 +63,14 @@ final class NumericDecoderSpec extends AnyWordSpec, Matchers:
     "read a Decimal128 exactly" in {
       val value = BigDecimal("1.2345678901234567890123456789")
       BsonDecoder[BigDecimal].decode(BsonDecimal128(Decimal128(value.bigDecimal))) shouldBe Right(value)
+    }
+
+    "report a non-finite Decimal128 as an error rather than throwing" in {
+      BsonDecoder[BigDecimal].decode(BsonDecimal128(Decimal128.NaN)).isLeft shouldBe true
+      BsonDecoder[BigDecimal].decode(BsonDecimal128(Decimal128.NEGATIVE_INFINITY)).isLeft shouldBe true
+    }
+
+    "read a negative zero as plain zero, since BigDecimal has no signed zero" in {
+      BsonDecoder[BigDecimal].decode(BsonDecimal128(Decimal128.NEGATIVE_ZERO)) shouldBe Right(BigDecimal(0))
     }
   }

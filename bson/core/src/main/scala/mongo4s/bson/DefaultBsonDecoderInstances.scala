@@ -4,7 +4,7 @@ import java.util.UUID
 import java.time.Instant
 
 import org.bson.*
-import org.bson.types.ObjectId
+import org.bson.types.{Decimal128, ObjectId}
 
 import scala.jdk.CollectionConverters.given
 
@@ -14,9 +14,28 @@ trait DefaultBsonDecoderInstances:
     val asDouble = value.asNumber.doubleValue
     if asDouble != Math.rint(asDouble)
     then Left(BsonError.InvalidValue(s"$asDouble is not a whole number and cannot be read as $target"))
-    else if asDouble < Long.MinValue.toDouble || asDouble > Long.MaxValue.toDouble
+    else if asDouble < Long.MinValue.toDouble || asDouble >= Long.MaxValue.toDouble
     then Left(BsonError.InvalidValue(s"$asDouble is out of range for $target"))
     else Right(asDouble.toLong)
+
+  private def bigDecimalOf(decimal: Decimal128, target: String): Either[BsonError, BigDecimal] =
+    if decimal.isNaN || decimal.isInfinite
+    then Left(BsonError.InvalidValue(s"$decimal has no decimal value and cannot be read as $target"))
+    else
+      try Right(BigDecimal(decimal.bigDecimalValue))
+      catch case _: ArithmeticException => Right(BigDecimal(0))
+
+  private def wholeDecimal(decimal: BigDecimal, target: String): Either[BsonError, Long] =
+    if !decimal.isWhole
+    then Left(BsonError.InvalidValue(s"$decimal is not a whole number and cannot be read as $target"))
+    else if !decimal.isValidLong
+    then Left(BsonError.InvalidValue(s"$decimal is out of range for $target"))
+    else Right(decimal.toLongExact)
+
+  private def longNumber(value: BsonValue, target: String): Either[BsonError, Long] =
+    if value.isDecimal128
+    then bigDecimalOf(value.asDecimal128.decimal128Value, target).flatMap(wholeDecimal(_, target))
+    else wholeNumber(value, target)
 
   given BsonDecoder[BsonValue] = value => Right(value)
 
@@ -36,7 +55,7 @@ trait DefaultBsonDecoderInstances:
     else if value.isInt32
     then Right(value.asInt32.getValue)
     else
-      wholeNumber(value, "Int").flatMap: whole =>
+      longNumber(value, "Int").flatMap: whole =>
         if whole < Int.MinValue || whole > Int.MaxValue
         then Left(BsonError.InvalidValue(s"$whole is out of range for Int"))
         else Right(whole.toInt)
@@ -46,7 +65,7 @@ trait DefaultBsonDecoderInstances:
     then Left(BsonError.typeMismatch(BsonTypeName.Long, value))
     else if value.isInt32 || value.isInt64
     then Right(value.asNumber.longValue)
-    else wholeNumber(value, "Long")
+    else longNumber(value, "Long")
 
   given BsonDecoder[Double] = value =>
     if value.isNumber
@@ -54,7 +73,7 @@ trait DefaultBsonDecoderInstances:
     else Left(BsonError.typeMismatch(BsonTypeName.Double, value))
 
   given BsonDecoder[BigDecimal] = value =>
-    if value.isDecimal128 then Right(BigDecimal(value.asDecimal128.decimal128Value.bigDecimalValue))
+    if value.isDecimal128 then bigDecimalOf(value.asDecimal128.decimal128Value, "BigDecimal")
     else if value.isInt32 then Right(BigDecimal(value.asInt32.getValue))
     else if value.isInt64 then Right(BigDecimal(value.asInt64.getValue))
     else if value.isDouble then Right(BigDecimal(value.asDouble.getValue))
