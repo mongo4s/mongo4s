@@ -53,10 +53,19 @@ write `import some.library.Encoder as ...` themselves.
 
 ## Adding a new runtime backend
 
-A runtime backend needs a `given Effect[F]` (`pure`/`delay`/`map`/`flatMap`/`raiseError`) and a
-`given RsBridge[F, S]` (`one`/`option`/`list`/`unit`/`stream`, bridging a
-`org.reactivestreams.Publisher[A]` into `F[A]`/`S[A]`) — see `runtime/cats` for the reference
-implementation. If the runtime can't derive a `Tag`-like witness for a fully generic type parameter
+A runtime backend needs a `given Effect[F]` (`pure`/`delay`/`map`/`flatMap`/`raiseError`/
+`handleErrorWith`/`guaranteeCase` — those seven are the abstract members; everything else has a
+default and may be overridden) and a `given RsBridge[F, S]` (`one`/`option`/`list`/`unit`/`stream`,
+bridging a `org.reactivestreams.Publisher[A]` into `F[A]`/`S[A]`) — see `runtime/cats` for the
+reference implementation.
+
+**Override `bracketCase` if the runtime has a real bracket primitive.** Its default is
+`flatMap(acquire)(a => guaranteeCase(use(a))(…))`, which registers the finalizer only *after*
+acquisition has already returned — a fiber cancelled in that window drops the resource. `cats` and
+`zio` override it with primitives that acquire uninterruptibly; `kyo` and `rapid` do not, because
+their own bracket helpers (`Sync.acquireReleaseWith`, and rapid's `guarantee`) are built the same
+`acquire.map(register)` way, so overriding would buy nothing. Check what the runtime actually offers
+before assuming the default is safe there. If the runtime can't derive a `Tag`-like witness for a fully generic type parameter
 (as with kyo), gate `stream` behind `mongo4s.Streamable[S, A]` rather than throwing — see
 `runtime/kyo/KyoBridgeInstance.scala` for how that constraint is satisfied and threaded through.
 
