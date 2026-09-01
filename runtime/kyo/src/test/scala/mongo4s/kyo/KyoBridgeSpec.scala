@@ -6,7 +6,7 @@ import org.scalatest.matchers.should.Matchers
 import kyo.{AllowUnsafe, Duration, KyoApp, Sync}
 import org.reactivestreams.{Publisher, Subscriber, Subscription}
 
-import mongo4s.{Effect, RsBridge, RsBridgeConfig, RsBridgeError}
+import mongo4s.{Effect, RsBridge, RsBridgeConfig, RsBridgeError, Streamable}
 
 import scala.concurrent.duration.given
 import mongo4s.kyo.KyoInstances.given
@@ -60,6 +60,14 @@ final class KyoBridgeSpec extends AnyWordSpec, Matchers:
     "drain to unit" in {
       run(bridge.unit(ListPublisher(List(1, 2)))) shouldBe ()
     }
+    "explain itself when handed a Streamable it did not derive, rather than failing as a bad cast" in {
+      val error = intercept[UnsupportedOperationException] {
+        bridge.stream(ListPublisher(List(1, 2, 3)))(using Streamable.instance[KStream, Int])
+      }
+
+      error.getMessage should include("Tag")
+    }
+
     "stream all elements" in {
       run(bridge.stream(ListPublisher(List(1, 2, 3))).run).toList shouldBe List(1, 2, 3)
     }

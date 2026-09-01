@@ -53,7 +53,14 @@ trait KyoBridgeInstance:
       )
 
     def stream[A](publisher: => Publisher[A])(using ev: Streamable[KStream, A]): KStream[A] =
-      val streamable = ev.asInstanceOf[KyoBridgeInstance.KyoStreamable[A]]
+      val streamable = ev match
+        case derived: KyoBridgeInstance.KyoStreamable[A @unchecked] => derived
+        case _                                                      =>
+          throw UnsupportedOperationException(
+            "mongo4s-kyo streams need the Streamable it derives itself, which carries the kyo Tag for the element " +
+              "type; Streamable.instance carries no Tag and cannot drive a kyo Stream. Call the streaming method at " +
+              "a concrete element type so the given can be derived."
+          )
 
       given Tag[Emit[Chunk[A]]] = streamable.emitTag
       given Tag[Poll[Chunk[A]]] = streamable.pollTag
