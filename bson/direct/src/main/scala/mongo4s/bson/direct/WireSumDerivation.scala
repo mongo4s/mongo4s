@@ -24,6 +24,7 @@ object WireSumDerivation:
       config.encodeEmptyCasesAsString,
       () => codecsOf[mirror.MirroredElemTypes].toArray.asInstanceOf[Array[WireCodec[Any]]],
     )
+  end derived
 
   private def make[A](
       mirror: Mirror.SumOf[A],
@@ -34,7 +35,9 @@ object WireSumDerivation:
     lazy val codecs: Array[WireCodec[Any]] =
       val built = codecsThunk()
       var i     = 0
-      while i < built.length do
+
+      while i < built.length
+      do
         built(i) match
           case fields: FieldCodec[Any] =>
             require(
@@ -44,15 +47,18 @@ object WireSumDerivation:
           case _                       => ()
         i += 1
       built
+    end codecs
 
-    val indexOf: Map[String, Int] = discriminators.zipWithIndex.toMap
+    val indexOf = discriminators.zipWithIndex.toMap[String, Int]
 
     def unknown(tag: String): Nothing =
       throw BsonError.DecodingFailure(BsonError.Custom(s"Unknown subtype discriminator: $tag"))
 
     def scanForDiscriminator(reader: BsonReader): String =
       var tag: String = null
-      while tag == null && reader.readBsonType() != BsonType.END_OF_DOCUMENT do
+
+      while tag == null && reader.readBsonType() != BsonType.END_OF_DOCUMENT
+      do
         if reader.readName() == DiscriminatorField
         then tag = reader.readString()
         else reader.skipValue()
@@ -64,7 +70,7 @@ object WireSumDerivation:
 
     def rewindToDiscriminator(reader: BsonReader, start: BsonReaderMark): String =
       start.reset()
-      val restart = reader.getMark()
+      val restart = reader.getMark
       reader.readStartDocument()
       val tag     = scanForDiscriminator(reader)
       restart.reset()
@@ -73,9 +79,11 @@ object WireSumDerivation:
     end rewindToDiscriminator
 
     def readNestedValue(reader: BsonReader, tag: String, nested: WireCodec[Any]): Any =
-      var value: Any     = null
-      var found: Boolean = false
-      while reader.readBsonType() != BsonType.END_OF_DOCUMENT do
+      var value: Any = null
+      var found      = false
+
+      while reader.readBsonType() != BsonType.END_OF_DOCUMENT
+      do
         val name = reader.readName()
         if !found && name == NestedValueField
         then
@@ -110,9 +118,11 @@ object WireSumDerivation:
             writer.writeName(NestedValueField)
             nested.encode(writer, value)
             writer.writeEndDocument()
+      end encode
 
       def decode(reader: BsonReader): A =
-        if reader.getCurrentBsonType == BsonType.STRING then
+        if reader.getCurrentBsonType == BsonType.STRING
+        then
           val tag = reader.readString()
           val idx = indexOf.getOrElse(tag, unknown(tag))
 
@@ -123,10 +133,13 @@ object WireSumDerivation:
                 BsonError.Custom(s"Subtype '$tag' has a payload and cannot be read from a bare string")
               )
         else
-          val start = reader.getMark()
+          val start = reader.getMark
           reader.readStartDocument()
 
-          val firstName = if reader.readBsonType() == BsonType.END_OF_DOCUMENT then null else reader.readName()
+          val firstName =
+            if reader.readBsonType() == BsonType.END_OF_DOCUMENT
+            then null
+            else reader.readName()
 
           val tag =
             if firstName == DiscriminatorField
@@ -141,7 +154,7 @@ object WireSumDerivation:
 
           reader.readEndDocument()
           result.asInstanceOf[A]
-        end if
+      end decode
 
   private inline def labelsOf[T <: Tuple]: List[String] =
     inline erasedValue[T] match

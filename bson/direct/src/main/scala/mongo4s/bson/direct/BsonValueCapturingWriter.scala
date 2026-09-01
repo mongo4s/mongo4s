@@ -12,7 +12,8 @@ private[direct] final class BsonValueCapturingWriter extends AbstractBsonWriter(
   private var captured: BsonValue = uninitialized
 
   def result: BsonValue =
-    if captured == null then throw IllegalStateException("ScalarWireCodec.toBsonEncoder: the codec wrote nothing")
+    if captured == null
+    then throw IllegalStateException("ScalarWireCodec.toBsonEncoder: the codec wrote nothing")
     else captured
 
   private def capture(value: BsonValue): Unit = captured = value

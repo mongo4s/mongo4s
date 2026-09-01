@@ -2,8 +2,8 @@ package mongo4s.internal
 
 import scala.concurrent.duration.FiniteDuration
 
-import org.bson.{BsonDocument, BsonInt32}
 import org.bson.conversions.Bson
+import org.bson.{BsonDocument, BsonInt32}
 import org.reactivestreams.Publisher
 import com.mongodb.client.model.Collation
 import com.mongodb.reactivestreams.client.{AggregatePublisher, ClientSession, MongoCollection as RSMongoCollection}
@@ -54,9 +54,10 @@ private[mongo4s] final class AggregateQueryImpl[F[*], S[*], A](
       then pipeline :+ BsonDocument("$limit", BsonInt32(1))
       else pipeline
 
-    val base: AggregatePublisher[BsonDocument] = session match
-      case Some(s) => collection.aggregate(s, stages.asJava, classOf[BsonDocument])
-      case None    => collection.aggregate(stages.asJava, classOf[BsonDocument])
+    val base: AggregatePublisher[BsonDocument] =
+      session match
+        case Some(s) => collection.aggregate(s, stages.asJava, classOf[BsonDocument])
+        case None    => collection.aggregate(stages.asJava, classOf[BsonDocument])
 
     var aggregate = base
     allowDiskUse.foreach(allow => aggregate = aggregate.allowDiskUse(allow))

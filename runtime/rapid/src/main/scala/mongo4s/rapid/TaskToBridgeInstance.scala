@@ -21,12 +21,14 @@ trait TaskToBridgeInstance:
         case Some(d) =>
           task.attempt
             .timeout(d)
-            .handleError:
+            .handleError {
               case _: TimeoutException => Task.error(RsBridgeError.Timeout(d))
               case other               => Task.error(other)
-            .flatMap:
+            }
+            .flatMap {
               case Success(value) => Task.pure(value)
               case Failure(error) => Task.error(error)
+            }
         case None    => task
 
     private def liftEither[A](either: Either[RsBridgeError, A]): Task[A] =
@@ -54,7 +56,11 @@ trait TaskToBridgeInstance:
       )
 
     def option[A](publisher: => Publisher[A]): Task[Option[A]] =
-      withTimeout(probe(publisher).flatMap(xs => liftEither(RsBridgeSupport.selectOption(xs, config.strictSingleResult))))
+      withTimeout(
+        probe(publisher).flatMap { xs =>
+          liftEither(RsBridgeSupport.selectOption(xs, config.strictSingleResult))
+        }
+      )
 
     private def probe[A](publisher: => Publisher[A]): Task[List[A]] =
       stream(publisher).take(RsBridgeSupport.SingleResultProbe).toList

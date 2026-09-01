@@ -27,10 +27,13 @@ private[mongo4s] final class AttemptingPublisher[Src, A](
               catch case NonFatal(error) => Left(BsonError.fromThrowable(error))
 
             downstream.onNext(decoded)
+        end onNext
 
         def onError(error: Throwable): Unit =
-          if terminated.compareAndSet(false, true) then downstream.onError(error)
+          if terminated.compareAndSet(false, true)
+          then downstream.onError(error)
 
         def onComplete(): Unit =
-          if terminated.compareAndSet(false, true) then downstream.onComplete()
+          if terminated.compareAndSet(false, true)
+          then downstream.onComplete()
     )

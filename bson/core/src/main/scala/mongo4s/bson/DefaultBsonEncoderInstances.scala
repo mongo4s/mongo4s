@@ -46,5 +46,6 @@ trait DefaultBsonEncoderInstances:
     values => BsonArray(values.toList.map(encoder.encode).asJava)
 
   given [A](using encoder: BsonEncoder[A]): BsonEncoder[Map[String, A]] = values =>
-    values.foldLeft(BsonDocument()): (document, entry) =>
+    values.foldLeft(BsonDocument()) { (document, entry) =>
       document.append(entry._1, encoder.encode(entry._2))
+    }

@@ -41,7 +41,11 @@ trait TaskToBridgeInstance:
       )
 
     def option[A](publisher: => Publisher[A]): Task[Option[A]] =
-      withTimeout(probe(publisher).flatMap(xs => ZIO.fromEither(RsBridgeSupport.selectOption(xs, config.strictSingleResult))))
+      withTimeout(
+        probe(publisher).flatMap { xs =>
+          ZIO.fromEither(RsBridgeSupport.selectOption(xs, config.strictSingleResult))
+        }
+      )
 
     private def probe[A](publisher: => Publisher[A]): Task[List[A]] =
       sourceOf(publisher).take(RsBridgeSupport.SingleResultProbe).runCollect.map(_.toList)

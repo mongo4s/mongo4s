@@ -29,6 +29,7 @@ final case class Index[E](
       s"TTL must be at least one second — MongoDB stores expireAfterSeconds as a whole number, and $duration would truncate to 0 (expire immediately)",
     )
     copy(expireAfter = Some(duration))
+  end expiringAfter
 
   def where(filter: Filter[E]): Index[E] = copy(partialFilter = Some(filter))
 

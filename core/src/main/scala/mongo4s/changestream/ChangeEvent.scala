@@ -24,13 +24,13 @@ object ChangeEvent:
       full   <- sequence(Option(document.getFullDocument).map(decode))
       before <- sequence(Option(document.getFullDocumentBeforeChange).map(decode))
     yield ChangeEvent(
-      document.getOperationType,
-      Option(document.getDocumentKey),
-      full,
-      before,
-      Option(document.getUpdateDescription),
-      document.getResumeToken,
-      Option(document.getClusterTime),
+      operationType = document.getOperationType,
+      documentKey = Option(document.getDocumentKey),
+      fullDocument = full,
+      fullDocumentBeforeChange = before,
+      updateDescription = Option(document.getUpdateDescription),
+      resumeToken = document.getResumeToken,
+      clusterTime = Option(document.getClusterTime),
     )
 
   private def sequence[E, A](o: Option[Either[E, A]]): Either[E, Option[A]] =

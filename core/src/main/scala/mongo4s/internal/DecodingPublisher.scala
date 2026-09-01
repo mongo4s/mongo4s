@@ -35,7 +35,8 @@ private[mongo4s] final class DecodingPublisher[Src, A](
             decoded match
               case Right(decodedValue) => downstream.onNext(decodedValue)
               case Left(error)         =>
-                if terminated.compareAndSet(false, true) then
+                if terminated.compareAndSet(false, true)
+                then
                   subscription.cancel()
                   downstream.onError(error.toThrowable)
         end onNext

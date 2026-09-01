@@ -49,12 +49,18 @@ enum Stage[E]:
           .append("as", BsonString(as)),
       )
     case Stage.Group(by, accumulators)                    =>
-      val group = BsonDocument("_id", by.fold(BsonNull.VALUE: BsonValue)(path => BsonString("$" + path.render(naming))))
+      val group = BsonDocument(
+        "_id",
+        by.fold(BsonNull.VALUE: BsonValue)(path => BsonString("$" + path.render(naming)))
+      )
       accumulators.foreach((name, accumulator) => group.append(name, accumulator.toBson(naming)))
       BsonDocument("$group", group)
 
     case Stage.AddFields(fields) =>
-      BsonDocument("$addFields", fields.foldLeft(BsonDocument())((acc, entry) => acc.append(entry._1, entry._2)))
+      BsonDocument(
+        "$addFields",
+        fields.foldLeft(BsonDocument())((acc, entry) => acc.append(entry._1, entry._2))
+      )
 
     case Stage.ReplaceRoot(path)     => BsonDocument("$replaceRoot", BsonDocument("newRoot", BsonString("$" + path.render(naming))))
     case Stage.Sample(size)          => BsonDocument("$sample", BsonDocument("size", BsonInt32(size)))
@@ -62,8 +68,9 @@ enum Stage[E]:
 
     case Stage.Facet(facets) =>
       val document = BsonDocument()
-      facets.foreach: (name, stages) =>
+      facets.foreach { (name, stages) =>
         document.append(name, BsonArray(stages.map(_.toBson(naming)).asJava))
+      }
       BsonDocument("$facet", document)
 
     case Stage.Out(collection)   => BsonDocument("$out", BsonString(collection))

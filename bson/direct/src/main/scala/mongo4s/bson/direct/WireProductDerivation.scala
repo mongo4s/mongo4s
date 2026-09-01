@@ -11,17 +11,28 @@ object WireProductDerivation:
 
   inline def derived[A](using m: Mirror.ProductOf[A], config: WireCodecConfig): WireCodec[A] =
     val labels: Array[String] = labelsOf[m.MirroredElemLabels].toArray.map(config.fieldNaming.apply)
-    require(labels.distinct.length == labels.length, s"WireCodecConfig.fieldNaming produced duplicate field names: ${labels.mkString(", ")}")
-    make[A](m, labels, config.omitNoneFields, () => codecsOf[m.MirroredElemTypes].toArray.asInstanceOf[Array[WireCodec[Any]]])
+
+    require(
+      labels.distinct.length == labels.length,
+      s"WireCodecConfig.fieldNaming produced duplicate field names: ${labels.mkString(", ")}",
+    )
+
+    make[A](
+      mirror = m,
+      labels = labels,
+      omitAbsentFields = config.omitNoneFields,
+      codecsThunk = () => codecsOf[m.MirroredElemTypes].toArray.asInstanceOf[Array[WireCodec[Any]]]
+    )
+  end derived
 
   private def make[A](
-      m: Mirror.ProductOf[A],
+      mirror: Mirror.ProductOf[A],
       labels: Array[String],
       omitAbsentFields: Boolean,
       codecsThunk: () => Array[WireCodec[Any]],
   ): WireCodec[A] =
-    lazy val codecs: Array[WireCodec[Any]] = codecsThunk()
-    val indexOf: Map[String, Int]          = labels.zipWithIndex.toMap
+    lazy val codecs = codecsThunk()
+    val indexOf     = labels.zipWithIndex.toMap[String, Int]
 
     new FieldCodec[A]:
       override def fieldNames: Array[String] = labels
@@ -29,7 +40,7 @@ object WireProductDerivation:
 
       override def readEmpty: A =
         if labels.isEmpty
-        then m.fromProduct(EmptyTuple)
+        then mirror.fromProduct(EmptyTuple)
         else super.readEmpty
 
       def writeFields(writer: BsonWriter, value: A): Unit =
@@ -37,10 +48,14 @@ object WireProductDerivation:
         var i      = 0
         while values.hasNext do
           val field = values.next()
-          if !(omitAbsentFields && codecs(i).isAbsent(field)) then
+
+          if !(omitAbsentFields && codecs(i).isAbsent(field))
+          then
             writer.writeName(labels(i))
             codecs(i).encode(writer, field)
+
           i += 1
+      end writeFields
 
       def readFields(reader: BsonReader): A =
         val values = new Array[Any](labels.length)
@@ -51,11 +66,14 @@ object WireProductDerivation:
             case None      => reader.skipValue()
 
         var i = 0
-        while i < values.length do
-          if values(i) == null then values(i) = codecs(i).defaultOnMissing.getOrElse(throw BsonError.DecodingFailure(BsonError.MissingField(labels(i))))
+        while i < values.length
+        do
+          if values(i) == null
+          then values(i) = codecs(i).defaultOnMissing.getOrElse(throw BsonError.DecodingFailure(BsonError.MissingField(labels(i))))
           i += 1
 
-        m.fromProduct(Tuple.fromArray(values))
+        mirror.fromProduct(Tuple.fromArray(values))
+      end readFields
 
   private inline def labelsOf[T <: Tuple]: List[String] =
     inline erasedValue[T] match

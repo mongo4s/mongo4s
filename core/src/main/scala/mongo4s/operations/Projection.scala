@@ -27,7 +27,9 @@ enum Projection[E]:
         else document.append("_id", BsonInt32(0))
 
       case Exclude(fields) =>
-        fields.foldLeft(BsonDocument())((acc, path) => acc.append(path.render(naming), BsonInt32(0)))
+        fields.foldLeft(BsonDocument()) { (acc, path) =>
+          acc.append(path.render(naming), BsonInt32(0))
+        }
 
 object Projection:
   private val IdPath: FieldPath = FieldPath.literal("_id")

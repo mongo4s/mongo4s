@@ -30,7 +30,10 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
   private val typedCollection: RSMongoCollection[A] =
     underlying
       .withCodecRegistry(
-        CodecRegistries.fromRegistries(CodecRegistries.fromCodecs(DriverCodecBridge.toDriverCodec[A]), underlying.getCodecRegistry)
+        CodecRegistries.fromRegistries(
+          CodecRegistries.fromCodecs(DriverCodecBridge.toDriverCodec[A]),
+          underlying.getCodecRegistry,
+        )
       )
       .withDocumentClass(tag.runtimeClass.asInstanceOf[Class[A]])
 

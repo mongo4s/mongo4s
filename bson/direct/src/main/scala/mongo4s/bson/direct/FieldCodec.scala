@@ -13,9 +13,11 @@ private[direct] trait FieldCodec[A] extends WireCodec[A]:
     writer.writeStartDocument()
     writeFields(writer, value)
     writer.writeEndDocument()
+  end encode
 
   def decode(reader: BsonReader): A =
     reader.readStartDocument()
     val result = readFields(reader)
     reader.readEndDocument()
     result
+  end decode

@@ -16,6 +16,7 @@ trait ScalarWireCodec[A] extends WireCodec[A]:
       val writer = BsonValueCapturingWriter()
       encode(writer, value)
       writer.result
+  end toBsonEncoder
 
 object ScalarWireCodec:
   inline def apply[A](using instance: ScalarWireCodec[A]): ScalarWireCodec[A] = instance

@@ -26,16 +26,22 @@ private[mongo4s] object PublisherCollector:
     val buffer          = ListBuffer.empty[A]
     var received        = 0
 
-    future.whenComplete: (_, _) =>
+    future.whenComplete { (_, _) =>
       val subscription = subscriptionRef.getAndSet(null)
-      if subscription ne null then subscription.cancel()
+
+      if subscription ne null
+      then subscription.cancel()
+    }
 
     publisher.subscribe(
       new Subscriber[A]:
         def onSubscribe(subscription: Subscription): Unit =
           subscriptionRef.set(subscription)
-          if future.isDone then subscription.cancel()
+
+          if future.isDone
+          then subscription.cancel()
           else subscription.request(if limit == Int.MaxValue then Long.MaxValue else limit.toLong)
+        end onSubscribe
 
         def onNext(value: A): Unit =
           if !terminated.get

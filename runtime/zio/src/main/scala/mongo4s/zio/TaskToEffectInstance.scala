@@ -22,22 +22,31 @@ trait TaskToEffectInstance:
           case None        => ZIO.refailCause(cause)
 
     def guaranteeCase[A](fa: Task[A])(finalizer: ExitCase => Task[Unit]): Task[A] =
-      ZIO.uninterruptibleMask: restore =>
-        restore(fa).exit.flatMap: exit =>
+      ZIO.uninterruptibleMask { restore =>
+        restore(fa).exit.flatMap { exit =>
           runFinalizer(TaskToEffectInstance.exitCaseOf(exit), finalizer).foldCauseZIO(
-            finalizerCause => if exit.isSuccess then ZIO.refailCause(finalizerCause) else ZIO.suspendSucceed(exit),
+            finalizerCause =>
+              if exit.isSuccess
+              then ZIO.refailCause(finalizerCause)
+              else ZIO.suspendSucceed(exit),
             _ => ZIO.suspendSucceed(exit),
           )
+        }
+      }
 
     override def bracketCase[A, B](acquire: Task[A])(use: A => Task[B])(release: (A, ExitCase) => Task[Unit]): Task[B] =
       ZIO.acquireReleaseExitWith(acquire) { (a: A, exit: Exit[Throwable, B]) =>
-        runFinalizer(TaskToEffectInstance.exitCaseOf(exit), exitCase => release(a, exitCase)).ignore
+        runFinalizer(
+          TaskToEffectInstance.exitCaseOf(exit),
+          exitCase => release(a, exitCase),
+        ).ignore
       }(use)
 
 object TaskToEffectInstance extends TaskToEffectInstance:
 
   private def errorOf(cause: Cause[Throwable]): Option[Throwable] =
-    if cause.isInterrupted then None
+    if cause.isInterrupted
+    then None
     else cause.failureOption.orElse(cause.defects.headOption)
 
   private def exitCaseOf[A](exit: Exit[Throwable, A]): ExitCase = exit match

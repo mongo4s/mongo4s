@@ -26,7 +26,12 @@ final class WireCodecConfig private (
       encodeEmptyCasesAsString: Boolean = encodeEmptyCasesAsString,
       omitNoneFields: Boolean = omitNoneFields,
   ): WireCodecConfig =
-    new WireCodecConfig(fieldNaming, discriminatorNaming, encodeEmptyCasesAsString, omitNoneFields)
+    new WireCodecConfig(
+      fieldNaming = fieldNaming,
+      discriminatorNaming = discriminatorNaming,
+      encodeEmptyCasesAsString = encodeEmptyCasesAsString,
+      omitNoneFields = omitNoneFields
+    )
 
 object WireCodecConfig:
   val Default: WireCodecConfig = new WireCodecConfig(

@@ -8,9 +8,9 @@ import com.mongodb.client.model.Collation
 import com.mongodb.reactivestreams.client.{ClientSession, FindPublisher, MongoCollection as RSMongoCollection}
 
 import mongo4s.{RsBridge, Streamable}
-import mongo4s.bson.{BsonDocumentCodec, DecodeResult, FieldNaming}
 import mongo4s.queries.{DecodeAttempts, FindQuery}
 import mongo4s.operations.{Filter, Projection, Sort}
+import mongo4s.bson.{BsonDocumentCodec, DecodeResult, FieldNaming}
 
 private[mongo4s] final class DirectFindQueryImpl[F[*], S[*], A](
     collection: RSMongoCollection[A],
@@ -54,6 +54,7 @@ private[mongo4s] final class DirectFindQueryImpl[F[*], S[*], A](
       case None    => documentCollection.find(filter.toBson(naming))
 
     AttemptingPublisher(configure(base, effectiveLimit), documentCodec.decodeDocument)
+  end attemptingPublisher
 
   private def publisher(effectiveLimit: Option[Int]): Publisher[A] =
     val base: FindPublisher[A] = session match

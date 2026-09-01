@@ -10,6 +10,7 @@ private[direct] trait WireIterableLowPriorityInstances:
       writer.writeStartArray()
       values.foreach(inner.encode(writer, _))
       writer.writeEndArray()
+    end encode
 
     def decode(reader: BsonReader): C[A] =
       reader.readStartArray()
@@ -17,3 +18,4 @@ private[direct] trait WireIterableLowPriorityInstances:
       while reader.readBsonType() != BsonType.END_OF_DOCUMENT do builder += inner.decode(reader)
       reader.readEndArray()
       builder.result()
+    end decode

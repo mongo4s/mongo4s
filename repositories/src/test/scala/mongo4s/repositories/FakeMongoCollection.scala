@@ -250,6 +250,7 @@ final class FakeMongoCollection[F[*], S[*], E](
       case Nil         => Some(current)
       case seg :: rest => if current.isDocument then Option(current.asDocument.get(seg)).flatMap(go(_, rest)) else None
     go(document, storedSegments(path))
+  end at
 
   private def applyUpdate(document: BsonDocument, update: Update[E]): BsonDocument = update match
     case Update.Set(path, value)  => setAt(document, storedSegments(path), value)
@@ -258,11 +259,12 @@ final class FakeMongoCollection[F[*], S[*], E](
       val current = at(document, path).map(_.asNumber.longValue).getOrElse(0L)
       setAt(document, storedSegments(path), org.bson.BsonInt64(current + amount.asNumber.longValue))
     case Update.Combine(updates)  => updates.foldLeft(document)(applyUpdate)
-    case other                    =>
-      throw UnsupportedOperationException(s"FakeMongoCollection: $other is not simulated")
+    case other                    => throw UnsupportedOperationException(s"FakeMongoCollection: $other is not simulated")
 
   private def upsertedId(document: BsonDocument): BsonValue =
-    Option(document.get("_id")).orElse(Option(document.get("id"))).getOrElse(BsonString(document.toJson))
+    Option(document.get("_id"))
+      .orElse(Option(document.get("id")))
+      .getOrElse(BsonString(document.toJson))
 
   private def decodeProjected(document: BsonDocument, projection: Projection[E]): Option[E] =
     codec.decodeDocument(applyProjection(document, projection)).toOption
@@ -334,24 +336,31 @@ final class FakeMongoCollection[F[*], S[*], E](
       def stream(using Streamable[S, DecodeResult[E]]): S[DecodeResult[E]] = emitAttempts(documents.map(codec.decodeDocument))
 
     private def documents: List[BsonDocument] =
-      val ordered   = if ordering.isEmpty then matching(filter) else matching(filter).sortWith(before)
+      val ordered =
+        if ordering.isEmpty
+        then matching(filter)
+        else matching(filter).sortWith(before)
+
       val afterSkip = skipped.fold(ordered)(ordered.drop)
       limited.fold(afterSkip)(afterSkip.take).map(applyProjection(_, projection))
+    end documents
 
     private def results: List[E] =
-      documents.map(document => codec.decodeDocument(document).fold(error => throw error.toThrowable, identity))
+      documents.map { document =>
+        codec
+          .decodeDocument(document)
+          .fold(error => throw error.toThrowable, identity)
+      }
 
     private def before(left: BsonDocument, right: BsonDocument): Boolean =
-      ordering.fields.view
-        .map: (path, ascending) =>
-          val comparison = (at(left, path), at(right, path)) match
-            case (Some(l), Some(r)) => BsonOrdering.compare(l, r)
-            case (None, Some(_))    => -1
-            case (Some(_), None)    => 1
-            case (None, None)       => 0
-          if ascending then comparison else -comparison
-        .find(_ != 0)
-        .exists(_ < 0)
+      ordering.fields.view.map { (path, ascending) =>
+        val comparison = (at(left, path), at(right, path)) match
+          case (Some(l), Some(r)) => BsonOrdering.compare(l, r)
+          case (None, Some(_))    => -1
+          case (Some(_), None)    => 1
+          case (None, None)       => 0
+        if ascending then comparison else -comparison
+      }.find(_ != 0).exists(_ < 0)
 
 private object BsonOrdering:
   def compare(a: BsonValue, b: BsonValue): Int =

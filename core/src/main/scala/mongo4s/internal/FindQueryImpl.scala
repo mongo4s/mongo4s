@@ -57,6 +57,7 @@ private[mongo4s] final class FindQueryImpl[F[*], S[*], A](
     then find = find.sort(sort.toBson(naming))
     if !projection.isEmpty
     then find = find.projection(projection.toBson(naming))
+
     skip.foreach(n => find = find.skip(n))
     effectiveLimit.foreach(n => find = find.limit(n))
 

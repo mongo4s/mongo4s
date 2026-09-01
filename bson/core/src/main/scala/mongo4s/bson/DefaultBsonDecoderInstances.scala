@@ -55,10 +55,11 @@ trait DefaultBsonDecoderInstances:
     else if value.isInt32
     then Right(value.asInt32.getValue)
     else
-      longNumber(value, "Int").flatMap: whole =>
+      longNumber(value, "Int").flatMap { whole =>
         if whole < Int.MinValue || whole > Int.MaxValue
         then Left(BsonError.InvalidValue(s"$whole is out of range for Int"))
         else Right(whole.toInt)
+      }
 
   given BsonDecoder[Long] = value =>
     if !value.isNumber
@@ -73,10 +74,14 @@ trait DefaultBsonDecoderInstances:
     else Left(BsonError.typeMismatch(BsonTypeName.Double, value))
 
   given BsonDecoder[BigDecimal] = value =>
-    if value.isDecimal128 then bigDecimalOf(value.asDecimal128.decimal128Value, "BigDecimal")
-    else if value.isInt32 then Right(BigDecimal(value.asInt32.getValue))
-    else if value.isInt64 then Right(BigDecimal(value.asInt64.getValue))
-    else if value.isDouble then Right(BigDecimal(value.asDouble.getValue))
+    if value.isDecimal128
+    then bigDecimalOf(value.asDecimal128.decimal128Value, "BigDecimal")
+    else if value.isInt32
+    then Right(BigDecimal(value.asInt32.getValue))
+    else if value.isInt64
+    then Right(BigDecimal(value.asInt64.getValue))
+    else if value.isDouble
+    then Right(BigDecimal(value.asDouble.getValue))
     else Left(BsonError.typeMismatch(BsonTypeName.Decimal, value))
 
   given BsonDecoder[Instant] = value =>
@@ -101,13 +106,15 @@ trait DefaultBsonDecoderInstances:
   given [A](using decoder: BsonDecoder[A]): BsonDecoder[Option[A]] = value => if value.isNull then Right(None) else decoder.decode(value).map(Some(_))
 
   given [A](using decoder: BsonDecoder[A]): BsonDecoder[List[A]] = value =>
-    if value.isArray then
+    if value.isArray
+    then
       value.asArray.getValues.asScala.toList
-        .foldRight[Either[BsonError, List[A]]](Right(Nil)): (element, acc) =>
+        .foldRight[Either[BsonError, List[A]]](Right(Nil)) { (element, acc) =>
           for
             tail <- acc
             head <- decoder.decode(element)
           yield head :: tail
+        }
     else Left(BsonError.typeMismatch(BsonTypeName.Array, value))
 
   given [A](using decoder: BsonDecoder[A]): BsonDecoder[Vector[A]] = value => summon[BsonDecoder[List[A]]].decode(value).map(_.toVector)
@@ -117,11 +124,13 @@ trait DefaultBsonDecoderInstances:
   given [A](using decoder: BsonDecoder[A]): BsonDecoder[Set[A]] = value => summon[BsonDecoder[List[A]]].decode(value).map(_.toSet)
 
   given [A](using decoder: BsonDecoder[A]): BsonDecoder[Map[String, A]] = value =>
-    if value.isDocument then
+    if value.isDocument
+    then
       value.asDocument.entrySet.asScala.toList
-        .foldRight[Either[BsonError, Map[String, A]]](Right(Map.empty)): (entry, acc) =>
+        .foldRight[Either[BsonError, Map[String, A]]](Right(Map.empty)) { (entry, acc) =>
           for
             tail    <- acc
             decoded <- decoder.decode(entry.getValue).left.map(BsonError.Nested(entry.getKey, _))
           yield tail.updated(entry.getKey, decoded)
+        }
     else Left(BsonError.typeMismatch(BsonTypeName.Object, value))

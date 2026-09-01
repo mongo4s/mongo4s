@@ -29,6 +29,9 @@ object BsonError:
     TypeMismatch(expected, BsonTypeName.of(actual))
 
   def fromThrowable(cause: Throwable): BsonError =
-    Thrown(Option(cause.getMessage).getOrElse(cause.getClass.getName), cause)
+    Thrown(
+      Option(cause.getMessage).getOrElse(cause.getClass.getName),
+      cause
+    )
 
   def fromMessage(reason: String): BsonError = Custom(reason)
