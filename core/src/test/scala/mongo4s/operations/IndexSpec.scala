@@ -30,6 +30,12 @@ final class IndexSpec extends AnyWordSpec, Matchers:
       Index.ascending(nameField).keysToBson(FieldNaming.snakeCase).toJson shouldBe """{"first_name": 1}"""
     }
 
+    "let the last mention of a field win its priority, not just its direction" in {
+      val index = Index.ascending(nameField).ascending(ageField).descending(nameField)
+
+      index.keysToBson(FieldNaming.identity).toJson shouldBe """{"age": 1, "firstName": -1}"""
+    }
+
     "render a text index as a marker rather than a direction" in {
       Index.empty[User].text(bioField).keysToBson(FieldNaming.identity).toJson shouldBe """{"bio": "text"}"""
     }

@@ -33,7 +33,7 @@ final case class Index[E](
   def where(filter: Filter[E]): Index[E] = copy(partialFilter = Some(filter))
 
   def keysToBson(naming: FieldNaming): BsonDocument =
-    keys.foldLeft(BsonDocument()) { (document, entry) =>
+    keys.reverse.distinctBy(_._1).reverse.foldLeft(BsonDocument()) { (document, entry) =>
       val (path, direction) = entry
 
       document.append(path.render(naming), direction.toBson)
