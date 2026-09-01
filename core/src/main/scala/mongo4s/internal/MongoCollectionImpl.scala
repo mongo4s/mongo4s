@@ -49,7 +49,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
           case None    => underlying.insertMany(encoded)
 
         F.map(rs.one(publisher)) { result =>
-          InsertManyResult(result.getInsertedIds.values.asScala.toList)
+          InsertManyResult.fromDriver(result.getInsertedIds)
         }
       }
 

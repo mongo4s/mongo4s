@@ -59,7 +59,7 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
           case None    => typedCollection.insertMany(documentsList)
 
         F.map(rs.one(publisher)) { result =>
-          InsertManyResult(result.getInsertedIds.values.asScala.toList)
+          InsertManyResult.fromDriver(result.getInsertedIds)
         }
       }
 
