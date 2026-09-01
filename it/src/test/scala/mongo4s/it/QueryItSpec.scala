@@ -100,6 +100,21 @@ final class QueryItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndA
       seeded("first").flatMap(_.aggregate[Person](Seq(Stage.sortBy(Sort.asc(nameField)))).first).asserting(_ shouldBe Some(Person("alice", 25)))
     }
 
+    "leave a $out pipeline alone in first, since the server rejects any stage after it" in {
+      val program =
+        for
+          client   <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database <- client.getDatabase("query_it")
+          source   <- database.getCollection[Person]("aggregate_out_source")
+          _        <- source.insertMany(people)
+          _        <- source.aggregate[Person](Seq(Stage.matching(ageField.gte(18)), Stage.out("aggregate_out_target"))).first
+          target   <- database.getCollection[Person]("aggregate_out_target")
+          written  <- target.find(ageField.gte(0)).all
+        yield written.map(_.name).sorted
+
+      program.asserting(_ shouldBe List("alice", "bob", "carol"))
+    }
+
     "accept allowDiskUse, maxTime and comment" in {
       val program =
         for

@@ -43,9 +43,15 @@ private[mongo4s] final class AggregateQueryImpl[F[*], S[*], A](
 
   private def publisher(limited: Boolean): Publisher[A] = DecodingPublisher(documents(limited), codec.decodeDocument)
 
+  private def writesToCollection: Boolean =
+    pipeline.lastOption match
+      case Some(document: BsonDocument) => document.keySet.asScala.exists(AggregateQueryImpl.TerminalStages.contains)
+      case _                            => false
+
   private def documents(limited: Boolean): AggregatePublisher[BsonDocument] =
     val stages =
-      if limited then pipeline :+ BsonDocument("$limit", BsonInt32(1))
+      if limited && !writesToCollection
+      then pipeline :+ BsonDocument("$limit", BsonInt32(1))
       else pipeline
 
     val base: AggregatePublisher[BsonDocument] = session match
@@ -68,3 +74,6 @@ private[mongo4s] final class AggregateQueryImpl[F[*], S[*], A](
       options: QueryOptions = options,
   ): AggregateQueryImpl[F, S, A] =
     AggregateQueryImpl(collection, pipeline, codec, allowDiskUse, session, options)
+
+private[mongo4s] object AggregateQueryImpl:
+  private val TerminalStages = Set("$out", "$merge")
