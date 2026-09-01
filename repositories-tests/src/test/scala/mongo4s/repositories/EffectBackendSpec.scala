@@ -159,6 +159,22 @@ trait EffectBackendSpec[F[*]] extends AnyWordSpec, Matchers:
       released.get shouldBe 0
     }
 
+    "raise the release's error when use succeeded, matching guaranteeCase" in {
+      val releaseError = Boom("release-only")
+
+      runAttempt(F.bracket(F.pure("resource"))(_ => F.pure(1))(_ => F.raiseError[Unit](releaseError))) shouldBe Left(releaseError)
+    }
+
+    "let use's error win when release also fails" in {
+      val useError     = Boom("use")
+      val releaseError = Boom("release")
+
+      val result = runAttempt(F.bracket(F.pure("resource"))(_ => F.raiseError[Int](useError))(_ => F.raiseError[Unit](releaseError)))
+
+      result shouldBe Left(useError)
+      useError.getSuppressed.toList should contain(releaseError)
+    }
+
     "expose the exit case to bracketCase" in {
       val observed = AtomicReference[Option[ExitCase]](None)
       val boom     = Boom("bracket-case")

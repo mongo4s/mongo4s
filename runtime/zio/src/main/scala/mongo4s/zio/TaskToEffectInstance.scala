@@ -35,12 +35,22 @@ trait TaskToEffectInstance:
       }
 
     override def bracketCase[A, B](acquire: Task[A])(use: A => Task[B])(release: (A, ExitCase) => Task[Unit]): Task[B] =
-      ZIO.acquireReleaseExitWith(acquire) { (a: A, exit: Exit[Throwable, B]) =>
-        runFinalizer(
-          TaskToEffectInstance.exitCaseOf(exit),
-          exitCase => release(a, exitCase),
-        ).ignore
-      }(use)
+      ZIO.uninterruptibleMask { restore =>
+        acquire.flatMap { a =>
+          restore(use(a)).exit.flatMap { exit =>
+            runFinalizer(
+              TaskToEffectInstance.exitCaseOf(exit),
+              exitCase => release(a, exitCase),
+            ).foldCauseZIO(
+              finalizerCause =>
+                if exit.isSuccess
+                then ZIO.refailCause(finalizerCause)
+                else ZIO.suspendSucceed(exit),
+              _ => ZIO.suspendSucceed(exit),
+            )
+          }
+        }
+      }
 
 object TaskToEffectInstance extends TaskToEffectInstance:
 
