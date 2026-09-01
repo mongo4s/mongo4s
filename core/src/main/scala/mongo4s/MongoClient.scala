@@ -40,10 +40,16 @@ trait MongoClient[F[*], S[*]]:
 object MongoClient:
 
   def fromClient[F[*], S[*]](client: RSMongoClient)(using F: Effect[F], rs: RsBridge[F, S]): F[MongoClient[F, S]] =
-    F.pure(MongoClientImpl(client))
+    F.pure {
+      MongoClientImpl(client)
+    }
 
   def fromSettings[F[*], S[*]](settings: MongoClientSettings)(using F: Effect[F], rs: RsBridge[F, S]): F[MongoClient[F, S]] =
-    F.delay(MongoClientImpl(MongoClients.create(settings)))
+    F.delay {
+      MongoClientImpl(MongoClients.create(settings))
+    }
 
   def fromConnectionString[F[*], S[*]](connectionString: String)(using F: Effect[F], rs: RsBridge[F, S]): F[MongoClient[F, S]] =
-    F.delay(MongoClientImpl(MongoClients.create(connectionString)))
+    F.delay {
+      MongoClientImpl(MongoClients.create(connectionString))
+    }

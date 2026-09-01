@@ -29,8 +29,20 @@ final class CountOptions private (
       skip: Option[Int] = skip,
       maxTime: Option[FiniteDuration] = maxTime,
   ): CountOptions =
-    new CountOptions(collation, hint, limit, skip, maxTime)
+    new CountOptions(
+      collation = collation,
+      hint = hint,
+      limit = limit,
+      skip = skip,
+      maxTime = maxTime,
+    )
 
 object CountOptions:
   val default: CountOptions =
-    new CountOptions(collation = None, hint = None, limit = None, skip = None, maxTime = None)
+    new CountOptions(
+      collation = None,
+      hint = None,
+      limit = None,
+      skip = None,
+      maxTime = None,
+    )

@@ -2,8 +2,8 @@ package mongo4s.operations
 
 import scala.concurrent.duration.FiniteDuration
 
-import org.bson.{BsonDocument, BsonValue, BsonInt32, BsonString}
 import com.mongodb.client.model.Collation
+import org.bson.{BsonDocument, BsonValue, BsonInt32, BsonString}
 
 import mongo4s.bson.FieldNaming
 import mongo4s.{Field, FieldPath}
@@ -44,6 +44,7 @@ final class Index[E] private (
       s"TTL must be at least one second — MongoDB stores expireAfterSeconds as a whole number, and $duration would truncate to 0 (expire immediately)",
     )
     copy(expireAfter = Some(duration))
+  end expiringAfter
 
   def keysToBson(naming: FieldNaming): BsonDocument =
     keys.reverse.distinctBy(_._1).reverse.foldLeft(BsonDocument()) { (document, entry) =>
@@ -63,7 +64,17 @@ final class Index[E] private (
       collation: Option[Collation] = collation,
       wildcardProjection: Option[BsonDocument] = wildcardProjection,
   ): Index[E] =
-    new Index(keys, unique, sparse, hidden, name, expireAfter, partialFilter, collation, wildcardProjection)
+    new Index(
+      keys = keys,
+      unique = unique,
+      sparse = sparse,
+      hidden = hidden,
+      name = name,
+      expireAfter = expireAfter,
+      partialFilter = partialFilter,
+      collation = collation,
+      wildcardProjection = wildcardProjection,
+    )
 
 object Index:
 

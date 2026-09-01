@@ -29,7 +29,13 @@ final class MergeOptions private (
       whenNotMatched: Option[MergeOptions.WhenNotMatched] = whenNotMatched,
       let: Option[BsonDocument] = let,
   ): MergeOptions =
-    new MergeOptions(database, on, whenMatched, whenNotMatched, let)
+    new MergeOptions(
+      database = database,
+      on = on,
+      whenMatched = whenMatched,
+      whenNotMatched = whenNotMatched,
+      let = let,
+    )
 
 object MergeOptions:
 
@@ -45,4 +51,10 @@ object MergeOptions:
     case Fail    extends WhenNotMatched("fail")
 
   val default: MergeOptions =
-    new MergeOptions(database = None, on = Nil, whenMatched = None, whenNotMatched = None, let = None)
+    new MergeOptions(
+      database = None,
+      on = Nil,
+      whenMatched = None,
+      whenNotMatched = None,
+      let = None,
+    )

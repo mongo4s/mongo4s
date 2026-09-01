@@ -1,8 +1,9 @@
 package mongo4s.operations
 
-import org.bson.{BsonDocument, BsonString}
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
+
+import org.bson.{BsonDocument, BsonString}
 
 import mongo4s.Field
 import mongo4s.bson.FieldNaming

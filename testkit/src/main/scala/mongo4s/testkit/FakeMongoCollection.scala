@@ -42,148 +42,163 @@ final class FakeMongoCollection[F[*], S[*], E](
     if arrayFilters.nonEmpty
     then throw UnsupportedOperationException(s"FakeMongoCollection: $operation with arrayFilters is not simulated")
 
-  def insertOne(document: E)(using session: Option[ClientSession]): F[InsertOneResult] = F.delay {
-    val encoded = codec.encodeDocument(document)
-    storage += encoded
-    InsertOneResult(Option(encoded.get("_id")))
-  }
+  def insertOne(document: E)(using session: Option[ClientSession]): F[InsertOneResult] =
+    F.delay {
+      val encoded = codec.encodeDocument(document)
+      storage += encoded
+      InsertOneResult(Option(encoded.get("_id")))
+    }
 
-  def insertMany(documents: Seq[E])(using session: Option[ClientSession]): F[InsertManyResult] = F.delay {
-    val encoded = documents.map(codec.encodeDocument)
-    storage ++= encoded
-    InsertManyResult(encoded.flatMap(d => Option(d.get("_id"))).toList)
-  }
+  def insertMany(documents: Seq[E])(using session: Option[ClientSession]): F[InsertManyResult] =
+    F.delay {
+      val encoded = documents.map(codec.encodeDocument)
+      storage ++= encoded
+      InsertManyResult(encoded.flatMap(d => Option(d.get("_id"))).toList)
+    }
 
   def find(filter: Filter[E])(using session: Option[ClientSession]): FindQuery[F, S, E] = FakeFindQuery(filter)
 
-  def replaceOne(filter: Filter[E], replacement: E, options: ReplaceOptions)(using session: Option[ClientSession]): F[UpdateResult] = F.delay {
-    matching(filter).headOption match
-      case Some(existing)         =>
-        storage(storage.indexOf(existing)) = codec.encodeDocument(replacement)
-        UpdateResult(matchedCount = 1, modifiedCount = 1, upsertedId = None)
-      case None if options.upsert =>
-        val encoded = codec.encodeDocument(replacement)
-        storage += encoded
-        UpdateResult(matchedCount = 0, modifiedCount = 0, upsertedId = Option(encoded.get("_id")))
-      case None                   => UpdateResult.none
-  }
+  def replaceOne(filter: Filter[E], replacement: E, options: ReplaceOptions)(using session: Option[ClientSession]): F[UpdateResult] =
+    F.delay {
+      matching(filter).headOption match
+        case Some(existing)         =>
+          storage(storage.indexOf(existing)) = codec.encodeDocument(replacement)
+          UpdateResult(matchedCount = 1, modifiedCount = 1, upsertedId = None)
+        case None if options.upsert =>
+          val encoded = codec.encodeDocument(replacement)
+          storage += encoded
+          UpdateResult(matchedCount = 0, modifiedCount = 0, upsertedId = Option(encoded.get("_id")))
+        case None                   => UpdateResult.none
+    }
 
-  def updateOne(filter: Filter[E], update: Update[E], options: UpdateOptions)(using session: Option[ClientSession]): F[UpdateResult] = F.delay {
-    requireNoArrayFilters(options.arrayFilters, "updateOne")
-    matching(filter).headOption match
-      case Some(existing)         =>
-        storage(storage.indexOf(existing)) = applyUpdate(existing, update)
-        UpdateResult(matchedCount = 1, modifiedCount = 1, upsertedId = None)
-      case None if options.upsert =>
-        throw UnsupportedOperationException("FakeMongoCollection: updateOne with upsert is not simulated")
-      case None                   => UpdateResult.none
-  }
+  def updateOne(filter: Filter[E], update: Update[E], options: UpdateOptions)(using session: Option[ClientSession]): F[UpdateResult] =
+    F.delay {
+      requireNoArrayFilters(options.arrayFilters, "updateOne")
 
-  def updateMany(filter: Filter[E], update: Update[E], options: UpdateOptions)(using session: Option[ClientSession]): F[UpdateResult] = F.delay {
-    requireNoArrayFilters(options.arrayFilters, "updateMany")
-    val matches = matching(filter)
-    matches.foreach(doc => storage(storage.indexOf(doc)) = applyUpdate(doc, update))
-    if matches.isEmpty && options.upsert then throw UnsupportedOperationException("FakeMongoCollection: updateMany with upsert is not simulated")
-    UpdateResult(matchedCount = matches.size.toLong, modifiedCount = matches.size.toLong, upsertedId = None)
-  }
+      matching(filter).headOption match
+        case Some(existing)         =>
+          storage(storage.indexOf(existing)) = applyUpdate(existing, update)
+          UpdateResult(matchedCount = 1, modifiedCount = 1, upsertedId = None)
+        case None if options.upsert =>
+          throw UnsupportedOperationException("FakeMongoCollection: updateOne with upsert is not simulated")
+        case None                   => UpdateResult.none
+    }
+
+  def updateMany(filter: Filter[E], update: Update[E], options: UpdateOptions)(using session: Option[ClientSession]): F[UpdateResult] =
+    F.delay {
+      requireNoArrayFilters(options.arrayFilters, "updateMany")
+
+      val matches = matching(filter)
+      matches.foreach(doc => storage(storage.indexOf(doc)) = applyUpdate(doc, update))
+      if matches.isEmpty && options.upsert then throw UnsupportedOperationException("FakeMongoCollection: updateMany with upsert is not simulated")
+      UpdateResult(matchedCount = matches.size.toLong, modifiedCount = matches.size.toLong, upsertedId = None)
+    }
 
   def findOneAndUpdate(filter: Filter[E], update: Update[E], options: FindOneAndUpdateOptions[E])(using
       session: Option[ClientSession]
-  ): F[Option[E]] = F.delay {
-    requireNoArrayFilters(options.arrayFilters, "findOneAndUpdate")
-    matching(filter).headOption match
-      case None if options.upsert => throw UnsupportedOperationException("FakeMongoCollection: findOneAndUpdate with upsert is not simulated")
-      case None                   => None
-      case Some(existing)         =>
-        val updated = applyUpdate(existing, update)
-        storage(storage.indexOf(existing)) = updated
-        decodeProjected(if options.returnUpdated then updated else existing, options.projection)
-  }
+  ): F[Option[E]] =
+    F.delay {
+      requireNoArrayFilters(options.arrayFilters, "findOneAndUpdate")
+
+      matching(filter).headOption match
+        case None if options.upsert => throw UnsupportedOperationException("FakeMongoCollection: findOneAndUpdate with upsert is not simulated")
+        case None                   => None
+        case Some(existing)         =>
+          val updated = applyUpdate(existing, update)
+          storage(storage.indexOf(existing)) = updated
+          decodeProjected(if options.returnUpdated then updated else existing, options.projection)
+    }
 
   def findOneAndReplace(filter: Filter[E], replacement: E, options: FindOneAndReplaceOptions[E])(using
       session: Option[ClientSession]
-  ): F[Option[E]] = F.delay {
-    matching(filter).headOption match
-      case None if options.upsert => throw UnsupportedOperationException("FakeMongoCollection: findOneAndReplace with upsert is not simulated")
-      case None                   => None
-      case Some(existing)         =>
-        val encoded = codec.encodeDocument(replacement)
-        storage(storage.indexOf(existing)) = encoded
-        decodeProjected(if options.returnUpdated then encoded else existing, options.projection)
-  }
-
-  def findOneAndDelete(filter: Filter[E], options: FindOneAndDeleteOptions[E])(using session: Option[ClientSession]): F[Option[E]] = F.delay {
-    matching(filter).headOption.flatMap { existing =>
-      storage -= existing
-      decodeProjected(existing, options.projection)
+  ): F[Option[E]] =
+    F.delay {
+      matching(filter).headOption match
+        case None if options.upsert => throw UnsupportedOperationException("FakeMongoCollection: findOneAndReplace with upsert is not simulated")
+        case None                   => None
+        case Some(existing)         =>
+          val encoded = codec.encodeDocument(replacement)
+          storage(storage.indexOf(existing)) = encoded
+          decodeProjected(if options.returnUpdated then encoded else existing, options.projection)
     }
-  }
 
-  def deleteOne(filter: Filter[E], options: DeleteOptions)(using session: Option[ClientSession]): F[DeleteResult] = F.delay {
-    matching(filter).headOption match
-      case Some(existing) => storage -= existing; DeleteResult(1)
-      case None           => DeleteResult.none
-  }
+  def findOneAndDelete(filter: Filter[E], options: FindOneAndDeleteOptions[E])(using session: Option[ClientSession]): F[Option[E]] =
+    F.delay {
+      matching(filter).headOption.flatMap { existing =>
+        storage -= existing
+        decodeProjected(existing, options.projection)
+      }
+    }
 
-  def deleteMany(filter: Filter[E], options: DeleteOptions)(using session: Option[ClientSession]): F[DeleteResult] = F.delay {
-    val matches = matching(filter)
-    storage --= matches
-    DeleteResult(matches.size.toLong)
-  }
+  def deleteOne(filter: Filter[E], options: DeleteOptions)(using session: Option[ClientSession]): F[DeleteResult] =
+    F.delay {
+      matching(filter).headOption match
+        case Some(existing) => storage -= existing; DeleteResult(1)
+        case None           => DeleteResult.none
+    }
 
-  def count(filter: Filter[E], options: CountOptions)(using session: Option[ClientSession]): F[Long] = F.delay {
-    val matches = matching(filter).size.toLong
-    val skipped = options.skip.fold(matches)(skip => math.max(0L, matches - skip))
-    options.limit.fold(skipped)(limit => math.min(skipped, limit.toLong))
-  }
+  def deleteMany(filter: Filter[E], options: DeleteOptions)(using session: Option[ClientSession]): F[DeleteResult] =
+    F.delay {
+      val matches = matching(filter)
+      storage --= matches
+      DeleteResult(matches.size.toLong)
+    }
+
+  def count(filter: Filter[E], options: CountOptions)(using session: Option[ClientSession]): F[Long] =
+    F.delay {
+      val matches = matching(filter).size.toLong
+      val skipped = options.skip.fold(matches)(skip => math.max(0L, matches - skip))
+      options.limit.fold(skipped)(limit => math.min(skipped, limit.toLong))
+    }
 
   def estimatedCount: F[Long] = F.delay(storage.size.toLong)
 
-  def bulkWrite(commands: Seq[WriteCommand[E]], ordered: Boolean)(using session: Option[ClientSession]): F[BulkWriteResult] = F.delay {
-    var inserted = 0L
-    var matched  = 0L
-    var modified = 0L
-    var deleted  = 0L
+  def bulkWrite(commands: Seq[WriteCommand[E]], ordered: Boolean)(using session: Option[ClientSession]): F[BulkWriteResult] =
+    F.delay {
+      var inserted = 0L
+      var matched  = 0L
+      var modified = 0L
+      var deleted  = 0L
 
-    val upserted = mutable.Map.empty[Int, BsonValue]
+      val upserted = mutable.Map.empty[Int, BsonValue]
 
-    commands.zipWithIndex.foreach {
-      case (WriteCommand.InsertOne(document), _)                =>
-        storage += codec.encodeDocument(document)
-        inserted += 1
-      case (WriteCommand.ReplaceOne(filter, value, options), i) =>
-        matching(filter).headOption match
-          case Some(existing)         =>
-            storage(storage.indexOf(existing)) = codec.encodeDocument(value)
+      commands.zipWithIndex.foreach {
+        case (WriteCommand.InsertOne(document), _)                =>
+          storage += codec.encodeDocument(document)
+          inserted += 1
+        case (WriteCommand.ReplaceOne(filter, value, options), i) =>
+          matching(filter).headOption match
+            case Some(existing)         =>
+              storage(storage.indexOf(existing)) = codec.encodeDocument(value)
+              matched += 1
+              modified += 1
+            case None if options.upsert =>
+              val encoded = codec.encodeDocument(value)
+              storage += encoded
+              upserted += (i -> upsertedId(encoded))
+            case None                   => ()
+        case (WriteCommand.UpdateOne(filter, update, _), _)       =>
+          matching(filter).headOption.foreach { doc =>
+            storage(storage.indexOf(doc)) = applyUpdate(doc, update)
             matched += 1
             modified += 1
-          case None if options.upsert =>
-            val encoded = codec.encodeDocument(value)
-            storage += encoded
-            upserted += (i -> upsertedId(encoded))
-          case None                   => ()
-      case (WriteCommand.UpdateOne(filter, update, _), _)       =>
-        matching(filter).headOption.foreach { doc =>
-          storage(storage.indexOf(doc)) = applyUpdate(doc, update)
-          matched += 1
-          modified += 1
-        }
-      case (WriteCommand.UpdateMany(filter, update, _), _)      =>
-        matching(filter).foreach { doc =>
-          storage(storage.indexOf(doc)) = applyUpdate(doc, update)
-          matched += 1
-          modified += 1
-        }
-      case (WriteCommand.DeleteOne(filter), _)                  =>
-        matching(filter).headOption.foreach { doc => storage -= doc; deleted += 1 }
-      case (WriteCommand.DeleteMany(filter), _)                 =>
-        val matches = matching(filter)
-        storage --= matches
-        deleted += matches.size
-    }
+          }
+        case (WriteCommand.UpdateMany(filter, update, _), _)      =>
+          matching(filter).foreach { doc =>
+            storage(storage.indexOf(doc)) = applyUpdate(doc, update)
+            matched += 1
+            modified += 1
+          }
+        case (WriteCommand.DeleteOne(filter), _)                  =>
+          matching(filter).headOption.foreach { doc => storage -= doc; deleted += 1 }
+        case (WriteCommand.DeleteMany(filter), _)                 =>
+          val matches = matching(filter)
+          storage --= matches
+          deleted += matches.size
+      }
 
-    BulkWriteResult(inserted, matched, modified, deleted, upserted.toMap)
-  }
+      BulkWriteResult(inserted, matched, modified, deleted, upserted.toMap)
+    }
 
   def aggregate[B](pipeline: Seq[Stage[E]])(using session: Option[ClientSession])(using BsonDocumentCodec[B]): AggregateQuery[F, S, B] =
     throw UnsupportedOperationException("FakeMongoCollection: aggregate is not simulated")
@@ -195,16 +210,21 @@ final class FakeMongoCollection[F[*], S[*], E](
   ): DistinctQuery[F, S, B] =
     throw UnsupportedOperationException("FakeMongoCollection: distinct is not simulated")
 
-  def createIndex(index: Index[E])(using session: Option[ClientSession]): F[String] = F.delay {
-    createdIndexes += index
-    index.name.getOrElse(index.keysToBson(naming).keySet.asScala.mkString("_"))
-  }
+  def createIndex(index: Index[E])(using session: Option[ClientSession]): F[String] =
+    F.delay {
+      createdIndexes += index
+      index.name.getOrElse(index.keysToBson(naming).keySet.asScala.mkString("_"))
+    }
 
   def listIndexes(using session: Option[ClientSession]): F[List[BsonDocument]] =
-    F.delay(createdIndexes.map(_.keysToBson(naming)).toList)
+    F.delay {
+      createdIndexes.map(_.keysToBson(naming)).toList
+    }
 
   def dropIndex(indexName: String)(using session: Option[ClientSession]): F[Unit] =
-    F.delay(createdIndexes.filterInPlace(_.name.forall(_ != indexName)))
+    F.delay {
+      createdIndexes.filterInPlace(_.name.forall(_ != indexName))
+    }
 
   def drop(using session: Option[ClientSession]): F[Unit] = F.delay { storage.clear(); createdIndexes.clear() }
 
@@ -303,7 +323,9 @@ final class FakeMongoCollection[F[*], S[*], E](
   end applyProjection
 
   private def copyOf(document: BsonDocument): BsonDocument =
-    document.entrySet.asScala.foldLeft(BsonDocument())((acc, e) => acc.append(e.getKey, e.getValue))
+    document.entrySet.asScala.foldLeft(BsonDocument()) { (acc, e) =>
+      acc.append(e.getKey, e.getValue)
+    }
 
   private def setAt(document: BsonDocument, segments: List[String], value: BsonValue): BsonDocument =
     segments match

@@ -21,7 +21,6 @@ final class UpdateSpec extends AnyWordSpec, Matchers:
   import UpdateSpec.{Note, Person}
   import UpdateSpec.Note.given
 
-  // Deliberately suffixed: `tags` alone would shadow AnyWordSpec's own member.
   private val nameField  = Field.of[Person, String](_.name)
   private val ageField   = Field.of[Person, Int](_.age)
   private val tagsField  = Field.of[Person, List[String]](_.tags)
@@ -42,8 +41,6 @@ final class UpdateSpec extends AnyWordSpec, Matchers:
   }
 
   "Update.Raw" should {
-    // BsonDocument.append is put, so a raw $set used to replace a typed one outright and drop the
-    // typed field with no error at all.
     "merge into an operator that is already present rather than replacing it" in {
       val raw = Update.Raw[Person](BsonDocument("$set", BsonDocument("age", BsonInt32(1))))
 
@@ -68,9 +65,6 @@ final class UpdateSpec extends AnyWordSpec, Matchers:
       an[IllegalArgumentException] should be thrownBy json(Update.set(nameField, "bob").and(raw))
     }
 
-    // Rendering used to hand the caller's own nested document to the target, so the next typed
-    // operator wrote straight into it: the raw value came back permanently carrying fields it never
-    // declared, and a second render under a different naming emitted both spellings of the field.
     "leave the caller's document untouched when it is rendered" in {
       val document = BsonDocument("$set", BsonDocument("age", BsonInt32(1)))
       val update   = Update.Raw[Person](document).and(Update.set(nameField, "bob"))
@@ -145,8 +139,6 @@ final class UpdateSpec extends AnyWordSpec, Matchers:
       json(Update.max(ageField, 150)) shouldBe """{"$max": {"age": 150}}"""
     }
 
-    // An Option field takes the unwrapped value. There is deliberately no NumericValue[Option[A]]:
-    // None has no numeric encoding, and $inc by zero is a write that quietly does nothing.
     "take the unwrapped value for an optional field" in {
       json(Update.inc(scoreField, 5L)) shouldBe """{"$inc": {"score": 5}}"""
       json(scoreField.max(100L)) shouldBe """{"$max": {"score": 100}}"""

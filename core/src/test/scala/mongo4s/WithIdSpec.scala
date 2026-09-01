@@ -59,7 +59,6 @@ final class WithIdSpec extends AnyWordSpec with Matchers:
       pk.eqFilter(oid).toBson(FieldNaming.identity).toJson shouldBe s"""{"_id": {"$$oid": "${oid.toHexString}"}}"""
     }
 
-    // The key's type is irrelevant — what makes it a primary key is that the codec writes it to _id.
     "work for a non-ObjectId key" in {
       final case class Doc(slug: String)
       val pk = PrimaryKey.storedId[Doc, String](_.slug)

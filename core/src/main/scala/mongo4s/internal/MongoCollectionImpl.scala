@@ -331,37 +331,48 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
 
   private def driverUpdate(options: UpdateOptions): DriverUpdateOptions =
     val driverOptions = DriverUpdateOptions().upsert(options.upsert)
-    if options.arrayFilters.nonEmpty then driverOptions.arrayFilters(options.arrayFilters.map(_.toBson(naming)).asJava): Unit
+
+    if options.arrayFilters.nonEmpty
+    then driverOptions.arrayFilters(options.arrayFilters.map(_.toBson(naming)).asJava): Unit
+
     options.collation.foreach(value => driverOptions.collation(value))
     options.hint.foreach(value => driverOptions.hint(value))
     options.comment.foreach(value => driverOptions.comment(value))
     options.bypassDocumentValidation.foreach(value => driverOptions.bypassDocumentValidation(value))
+
     driverOptions
+  end driverUpdate
 
   private def driverReplace(options: ReplaceOptions): DriverReplaceOptions =
     val driverOptions = DriverReplaceOptions().upsert(options.upsert)
+
     options.collation.foreach(value => driverOptions.collation(value))
     options.hint.foreach(value => driverOptions.hint(value))
     options.comment.foreach(value => driverOptions.comment(value))
     options.bypassDocumentValidation.foreach(value => driverOptions.bypassDocumentValidation(value))
+
     driverOptions
   end driverReplace
 
   private def driverDelete(options: DeleteOptions): DriverDeleteOptions =
     val driverOptions = DriverDeleteOptions()
+
     options.collation.foreach(value => driverOptions.collation(value))
     options.hint.foreach(value => driverOptions.hint(value))
     options.comment.foreach(value => driverOptions.comment(value))
+
     driverOptions
   end driverDelete
 
   private def driverCount(options: CountOptions): DriverCountOptions =
     val driverOptions = DriverCountOptions()
+
     options.collation.foreach(value => driverOptions.collation(value))
     options.hint.foreach(value => driverOptions.hint(value))
     options.limit.foreach(value => driverOptions.limit(value))
     options.skip.foreach(value => driverOptions.skip(value))
     options.maxTime.foreach(value => driverOptions.maxTime(value.toMillis, TimeUnit.MILLISECONDS))
+
     driverOptions
   end driverCount
 
@@ -373,6 +384,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
     if !options.sort.isEmpty then driverOptions.sort(options.sort.toBson(naming)): Unit
     if !options.projection.isEmpty then driverOptions.projection(options.projection.toBson(naming)): Unit
     if options.arrayFilters.nonEmpty then driverOptions.arrayFilters(options.arrayFilters.map(_.toBson(naming)).asJava): Unit
+
     driverOptions
   end driverFindOneAndUpdate
 
@@ -383,6 +395,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
 
     if !options.sort.isEmpty then driverOptions.sort(options.sort.toBson(naming)): Unit
     if !options.projection.isEmpty then driverOptions.projection(options.projection.toBson(naming)): Unit
+
     driverOptions
   end driverFindOneAndReplace
 
@@ -391,6 +404,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
 
     if !options.sort.isEmpty then driverOptions.sort(options.sort.toBson(naming)): Unit
     if !options.projection.isEmpty then driverOptions.projection(options.projection.toBson(naming)): Unit
+
     driverOptions
   end driverFindOneAndDelete
 

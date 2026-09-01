@@ -21,7 +21,9 @@ enum Projection[E]:
       case Everything() => BsonDocument()
 
       case Include(fields, withId) =>
-        val document = fields.foldLeft(BsonDocument())((acc, path) => acc.append(path.render(naming), BsonInt32(1)))
+        val document = fields.foldLeft(BsonDocument()) { (acc, path) =>
+          acc.append(path.render(naming), BsonInt32(1))
+        }
         if withId
         then document
         else document.append("_id", BsonInt32(0))

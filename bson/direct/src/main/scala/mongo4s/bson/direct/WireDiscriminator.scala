@@ -30,11 +30,13 @@ private[bson] object WireDiscriminator:
   def readValue[T](reader: BsonReader, codec: WireDecoder[T]): T =
     var value: Option[T] = None
 
-    while reader.readBsonType() != BsonType.END_OF_DOCUMENT do
+    while reader.readBsonType() != BsonType.END_OF_DOCUMENT
+    do
       val name = reader.readName()
       if value.isEmpty && name == ValueField
       then value = Some(codec.decode(reader))
       else reader.skipValue()
+    end while
 
     value.getOrElse(throw BsonError.DecodingFailure(BsonError.MissingField(ValueField)))
   end readValue
@@ -43,10 +45,12 @@ private[bson] object WireDiscriminator:
     reader.skipValue()
 
     var tag: String = null
-    while tag == null && reader.readBsonType() != BsonType.END_OF_DOCUMENT do
+    while tag == null && reader.readBsonType() != BsonType.END_OF_DOCUMENT
+    do
       if reader.readName() == Field
       then tag = reader.readString()
       else reader.skipValue()
+    end while
 
     if tag == null
     then throw BsonError.DecodingFailure(BsonError.MissingField(Field))

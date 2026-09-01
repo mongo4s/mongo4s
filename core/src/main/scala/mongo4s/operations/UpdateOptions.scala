@@ -31,7 +31,14 @@ final class UpdateOptions private (
       comment: Option[String] = comment,
       bypassDocumentValidation: Option[Boolean] = bypassDocumentValidation,
   ): UpdateOptions =
-    new UpdateOptions(upsert, arrayFilters, collation, hint, comment, bypassDocumentValidation)
+    new UpdateOptions(
+      upsert = upsert,
+      arrayFilters = arrayFilters,
+      collation = collation,
+      hint = hint,
+      comment = comment,
+      bypassDocumentValidation = bypassDocumentValidation,
+    )
 
 object UpdateOptions:
   val default: UpdateOptions =

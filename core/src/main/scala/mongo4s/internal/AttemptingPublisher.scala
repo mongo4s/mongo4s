@@ -21,7 +21,8 @@ private[mongo4s] final class AttemptingPublisher[Src, A](
         def onSubscribe(subscription: Subscription): Unit = downstream.onSubscribe(subscription)
 
         def onNext(value: Src): Unit =
-          if !terminated.get then
+          if !terminated.get
+          then
             val decoded =
               try decode(value)
               catch case NonFatal(error) => Left(BsonError.fromThrowable(error))

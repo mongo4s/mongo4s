@@ -31,6 +31,12 @@ final class ReplaceOptions private (
 
 object ReplaceOptions:
   val default: ReplaceOptions =
-    new ReplaceOptions(upsert = false, collation = None, hint = None, comment = None, bypassDocumentValidation = None)
+    new ReplaceOptions(
+      upsert = false,
+      collation = None,
+      hint = None,
+      comment = None,
+      bypassDocumentValidation = None,
+    )
 
   val upsert: ReplaceOptions = default.withUpsert

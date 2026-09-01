@@ -59,18 +59,23 @@ object WireProductDerivation:
 
       def readFields(reader: BsonReader): A =
         val values = new Array[Any](labels.length)
-        while reader.readBsonType() != BsonType.END_OF_DOCUMENT do
+
+        while reader.readBsonType() != BsonType.END_OF_DOCUMENT
+        do
           val name = reader.readName()
           indexOf.get(name) match
             case Some(idx) => values(idx) = codecs(idx).decode(reader)
             case None      => reader.skipValue()
+        end while
 
         var i = 0
+
         while i < values.length
         do
           if values(i) == null
           then values(i) = codecs(i).defaultOnMissing.getOrElse(throw BsonError.DecodingFailure(BsonError.MissingField(labels(i))))
           i += 1
+        end while
 
         mirror.fromProduct(Tuple.fromArray(values))
       end readFields

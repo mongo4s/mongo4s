@@ -19,7 +19,16 @@ final class DeleteOptions private (
       hint: Option[BsonDocument] = hint,
       comment: Option[String] = comment,
   ): DeleteOptions =
-    new DeleteOptions(collation, hint, comment)
+    new DeleteOptions(
+      collation = collation,
+      hint = hint,
+      comment = comment
+    )
 
 object DeleteOptions:
-  val default: DeleteOptions = new DeleteOptions(collation = None, hint = None, comment = None)
+  val default: DeleteOptions =
+    new DeleteOptions(
+      collation = None,
+      hint = None,
+      comment = None,
+    )

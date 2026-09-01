@@ -4,9 +4,9 @@ import org.bson.BsonValue
 import org.bson.types.ObjectId
 import com.mongodb.reactivestreams.client.ClientSession
 
+import mongo4s.operations.*
 import mongo4s.bson.{BsonDocumentCodec, BsonEncoder, FieldNaming}
 import mongo4s.results.{BulkWriteResult, DeleteResult, UpdateResult}
-import mongo4s.operations.*
 import mongo4s.{Effect, Field, MongoCollection, MongoDatabase, PrimaryKey, Streamable, WithId}
 
 open class BaseMongoRepository[F[*], S[*], E, K](
@@ -110,11 +110,11 @@ open class BaseMongoRepository[F[*], S[*], E, K](
     val chunks  = values.grouped(batchSize).toList
     val offsets = chunks.scanLeft(0)(_ + _.size)
 
-    F.map(
+    F.map {
       Effect.traverse(chunks.zip(offsets)) { (chunk, offset) =>
         F.map(f(chunk))(result => List(result.shiftUpsertedIds(offset)))
       }
-    )(BulkWriteResult.combine)
+    }(BulkWriteResult.combine)
   end batchedResults
 
 object BaseMongoRepository:

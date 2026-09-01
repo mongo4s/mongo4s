@@ -43,6 +43,7 @@ private[mongo4s] final class DistinctQueryImpl[F[*], S[*], A](
       case None    => collection.distinct(field, filter, classOf[BsonValue])
 
     var distinct = base
+
     options.collation.foreach(value => distinct = distinct.collation(value))
     options.maxTimeMillis.foreach(millis => distinct = distinct.maxTime(millis, QueryOptions.MillisUnit))
     options.batchSize.foreach(n => distinct = distinct.batchSize(n))

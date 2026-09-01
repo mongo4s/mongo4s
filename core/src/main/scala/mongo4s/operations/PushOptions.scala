@@ -22,8 +22,18 @@ final class PushOptions[A] private (
       sortScalars: Option[Boolean] = sortScalars,
       position: Option[Int] = position,
   ): PushOptions[A] =
-    new PushOptions(slice, sort, sortScalars, position)
+    new PushOptions(
+      slice = slice,
+      sort = sort,
+      sortScalars = sortScalars,
+      position = position,
+    )
 
 object PushOptions:
   def default[A]: PushOptions[A] =
-    new PushOptions(slice = None, sort = None, sortScalars = None, position = None)
+    new PushOptions(
+      slice = None,
+      sort = None,
+      sortScalars = None,
+      position = None,
+    )

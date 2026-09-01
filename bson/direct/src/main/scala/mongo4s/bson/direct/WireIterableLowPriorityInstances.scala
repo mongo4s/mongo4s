@@ -15,7 +15,10 @@ private[direct] trait WireIterableLowPriorityInstances:
     def decode(reader: BsonReader): C[A] =
       reader.readStartArray()
       val builder = factory.newBuilder
-      while reader.readBsonType() != BsonType.END_OF_DOCUMENT do builder += inner.decode(reader)
+
+      while reader.readBsonType() != BsonType.END_OF_DOCUMENT
+      do builder += inner.decode(reader)
+
       reader.readEndArray()
       builder.result()
     end decode

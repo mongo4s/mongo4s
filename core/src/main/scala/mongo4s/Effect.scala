@@ -22,10 +22,17 @@ trait Effect[F[*]]:
           else unit
     }
 
-  def suspend[A](fa: => F[A]): F[A]                    = flatMap(delay(()))(_ => fa)
-  def unit: F[Unit]                                    = pure(())
-  def void[A](fa: F[A]): F[Unit]                       = map(fa)(_ => ())
-  def attempt[A](fa: F[A]): F[Either[Throwable, A]]    = handleErrorWith(map(fa)(a => Right(a): Either[Throwable, A]))(error => pure(Left(error)))
+  def suspend[A](fa: => F[A]): F[A] = flatMap(delay(()))(_ => fa)
+  def unit: F[Unit]                 = pure(())
+  def void[A](fa: F[A]): F[Unit]    = map(fa)(_ => ())
+
+  def attempt[A](fa: F[A]): F[Either[Throwable, A]] =
+    handleErrorWith(
+      map(fa) { a =>
+        Right(a): Either[Throwable, A]
+      }
+    )(error => pure(Left(error)))
+
   def guarantee[A](fa: F[A])(finalizer: F[Unit]): F[A] = guaranteeCase(fa)(_ => finalizer)
 
   def onError[A](fa: F[A])(f: Throwable => F[Unit]): F[A] =

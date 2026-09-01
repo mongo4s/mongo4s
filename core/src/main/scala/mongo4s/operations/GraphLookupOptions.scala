@@ -22,4 +22,8 @@ final class GraphLookupOptions[B] private (
 
 object GraphLookupOptions:
   def default[B]: GraphLookupOptions[B] =
-    new GraphLookupOptions(maxDepth = None, depthField = None, restrictSearch = None)
+    new GraphLookupOptions(
+      maxDepth = None,
+      depthField = None,
+      restrictSearch = None,
+    )

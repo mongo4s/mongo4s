@@ -201,13 +201,16 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
     if commands.isEmpty
     then F.pure(BulkWriteResult.none)
     else
-      F.suspend:
-        val models    = commands.iterator.map(toModel).toList.asJava
-        val options   = BulkWriteOptions().ordered(ordered)
+      F.suspend {
+        val models  = commands.iterator.map(toModel).toList.asJava
+        val options = BulkWriteOptions().ordered(ordered)
+
         val publisher = session match
           case Some(s) => typedCollection.bulkWrite(s, models, options)
           case None    => typedCollection.bulkWrite(models, options)
+
         F.map(rs.one(publisher))(BulkWriteResult.fromDriver)
+      }
   end bulkWrite
 
   def aggregate[B](pipeline: Seq[Stage[A]])(using session: Option[ClientSession])(using codec: BsonDocumentCodec[B]): AggregateQuery[F, S, B] =
@@ -323,37 +326,48 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
 
   private def driverUpdate(options: UpdateOptions): DriverUpdateOptions =
     val driverOptions = DriverUpdateOptions().upsert(options.upsert)
-    if options.arrayFilters.nonEmpty then driverOptions.arrayFilters(options.arrayFilters.map(_.toBson(naming)).asJava): Unit
+
+    if options.arrayFilters.nonEmpty
+    then driverOptions.arrayFilters(options.arrayFilters.map(_.toBson(naming)).asJava): Unit
+
     options.collation.foreach(value => driverOptions.collation(value))
     options.hint.foreach(value => driverOptions.hint(value))
     options.comment.foreach(value => driverOptions.comment(value))
     options.bypassDocumentValidation.foreach(value => driverOptions.bypassDocumentValidation(value))
+
     driverOptions
+  end driverUpdate
 
   private def driverReplace(options: ReplaceOptions): DriverReplaceOptions =
     val driverOptions = DriverReplaceOptions().upsert(options.upsert)
+
     options.collation.foreach(value => driverOptions.collation(value))
     options.hint.foreach(value => driverOptions.hint(value))
     options.comment.foreach(value => driverOptions.comment(value))
     options.bypassDocumentValidation.foreach(value => driverOptions.bypassDocumentValidation(value))
+
     driverOptions
   end driverReplace
 
   private def driverDelete(options: DeleteOptions): DriverDeleteOptions =
     val driverOptions = DriverDeleteOptions()
+
     options.collation.foreach(value => driverOptions.collation(value))
     options.hint.foreach(value => driverOptions.hint(value))
     options.comment.foreach(value => driverOptions.comment(value))
+
     driverOptions
   end driverDelete
 
   private def driverCount(options: CountOptions): DriverCountOptions =
     val driverOptions = DriverCountOptions()
+
     options.collation.foreach(value => driverOptions.collation(value))
     options.hint.foreach(value => driverOptions.hint(value))
     options.limit.foreach(value => driverOptions.limit(value))
     options.skip.foreach(value => driverOptions.skip(value))
     options.maxTime.foreach(value => driverOptions.maxTime(value.toMillis, TimeUnit.MILLISECONDS))
+
     driverOptions
   end driverCount
 
@@ -365,6 +379,7 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
     if !options.sort.isEmpty then driverOptions.sort(options.sort.toBson(naming)): Unit
     if !options.projection.isEmpty then driverOptions.projection(options.projection.toBson(naming)): Unit
     if options.arrayFilters.nonEmpty then driverOptions.arrayFilters(options.arrayFilters.map(_.toBson(naming)).asJava): Unit
+
     driverOptions
   end driverFindOneAndUpdate
 
@@ -375,6 +390,7 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
 
     if !options.sort.isEmpty then driverOptions.sort(options.sort.toBson(naming)): Unit
     if !options.projection.isEmpty then driverOptions.projection(options.projection.toBson(naming)): Unit
+
     driverOptions
   end driverFindOneAndReplace
 
@@ -383,6 +399,7 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
 
     if !options.sort.isEmpty then driverOptions.sort(options.sort.toBson(naming)): Unit
     if !options.projection.isEmpty then driverOptions.projection(options.projection.toBson(naming)): Unit
+
     driverOptions
   end driverFindOneAndDelete
 

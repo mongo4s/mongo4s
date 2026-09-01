@@ -26,6 +26,7 @@ private[mongo4s] object FieldMacro:
               s"got: ${whole.show}. " +
               s"To reference a stored name directly — including inside an array — use Field.stored."
           )
+    end verifyField
 
     def segmentsOf(term: Term): List[String] =
       def loop(current: Term, acc: List[String]): List[String] = current match

@@ -2,9 +2,9 @@ package mongo4s.repositories
 
 import com.mongodb.reactivestreams.client.ClientSession
 
+import mongo4s.operations.*
 import mongo4s.bson.BsonEncoder
 import mongo4s.{Field, Streamable}
-import mongo4s.operations.*
 import mongo4s.results.{BulkWriteResult, DeleteResult, UpdateResult}
 
 trait Repository[F[*], S[*], E, K]:
