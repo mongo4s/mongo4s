@@ -99,6 +99,8 @@ Two steps are easy to forget because nothing fails when they are missed:
 - **Record any deliberate break.** A break inside a major version needs a filter in `mima.sbt` and an entry in
   [COMPATIBILITY.md](COMPATIBILITY.md). A major release needs no filters, but its migration guide still belongs
   there.
+- **Add the release to [CHANGELOG.md](CHANGELOG.md)**, in Added / Changed / Fixed order. The GitHub release notes
+  can be the same content in prose; the changelog is the version that stays with the source.
 
 ## Opening a pull request
 

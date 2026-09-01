@@ -44,6 +44,7 @@ flowchart LR
 * [Modules](#modules)
 * [Benchmarks](#benchmarks)
 * [Design notes](#design-notes)
+* [Changelog](CHANGELOG.md)
 * [Roadmap](ROADMAP.md)
 * [Contributing](#contributing)
 
@@ -1147,7 +1148,8 @@ immutable options value, which is what lets new options arrive in a `2.x` minor 
 catches every change; none of them is silent.
 
 Full policy, the 1.x → 2.0 migration guide and the Scala-version rules: **[COMPATIBILITY.md](COMPATIBILITY.md)**.
-What is not covered yet and how it will land: **[ROADMAP.md](ROADMAP.md)**.
+What changed in each release: **[CHANGELOG.md](CHANGELOG.md)**. What is not covered yet and how it will land:
+**[ROADMAP.md](ROADMAP.md)**.
 
 ## Benchmarks
 
