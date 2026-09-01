@@ -432,6 +432,7 @@ itemsField.elemMatch(skuField.equalTo("abc") &amp;&amp; qtyField.gt(2))  // one 
     <pre><code>ageField.set(31)                   // $set
 ageField.inc(1)                    // $inc — also $mul, $min, $max
 tagsField.push("vip")              // $push — also $pull, $addToSet, and the $each variants
+tagsField.pushAll(List("vip"), PushOptions.default[String].sortedAscending.withSlice(10))
 Update.setOnInsert(nameField, "")  // $setOnInsert, for merge-style upserts
 Update.rename(oldField, newField)  // $rename — also currentDate, popFirst/popLast</code></pre>
     <p class="muted">

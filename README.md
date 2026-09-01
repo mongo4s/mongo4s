@@ -247,6 +247,20 @@ Update.set(nameField, "bob").and(Update.Raw[User](BsonDocument("$bit", BsonDocum
 Rendering never mutates the document you handed to `Raw`, so the same value can be reused across updates and
 rendered under more than one `FieldNaming`.
 
+#### Pushing onto arrays
+
+`pushAll` takes a `PushOptions[A]` carrying MongoDB's `$each` modifiers — `$slice`, `$sort` and `$position`. The
+classic use is a capped, ordered log kept by the server:
+
+```scala
+tagsField.pushAll(List("vip"), PushOptions.default[String].sortedAscending.withSlice(10))
+// {"$push": {"tags": {"$each": ["vip"], "$slice": 10, "$sort": 1}}}
+```
+
+`$sort` has two shapes and they are mutually exclusive, so setting one clears the other: `sortedAscending`/
+`sortedDescending` for arrays of scalars, which the server sorts as bare values, and `sortedBy(Sort[A])` for arrays of
+documents — `PushOptions.default[Note].sortedBy(Sort.desc(rankField))` renders `"$sort": {"rank": -1}`.
+
 #### Updating array elements
 
 The positional operators are path segments, so `/` builds them — `$[]` updates every element and needs nothing else:

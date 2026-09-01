@@ -13,7 +13,7 @@ import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.repositories.{BaseMongoRepository, Page}
 import mongo4s.bson.{BsonDocumentCodec, DecodeResult, FieldNaming}
 import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec, WireCodecConfig}
-import mongo4s.operations.{Accumulator, Filter, Index, Projection, Sort, Stage, Update, UpdateOptions, WriteCommand}
+import mongo4s.operations.*
 import mongo4s.{Field, MongoClient, MongoCollection, MongoDatabase, PrimaryKey, RsBridgeConfig, WithId, withTransaction}
 
 import scala.concurrent.duration.given
@@ -94,7 +94,10 @@ object ReadmeSnippets:
   val birthday = ageField.inc(1)
   val bestYet  = scoreField.max(100L) // an Option[Long] field takes a plain Long
   val tagged   = tagsField.push("vip")
-  val combined = Update.combine(setAge, birthday, tagged)
+
+  // $each modifiers keep the array capped and ordered on the server rather than in the application.
+  val recentTags = tagsField.pushAll(List("vip"), PushOptions.default[String].sortedAscending.withSlice(10))
+  val combined   = Update.combine(setAge, birthday, tagged)
 
   // Raw carries operators the AST does not model, and merges with the typed ones rather than replacing them.
   val withBit = Update

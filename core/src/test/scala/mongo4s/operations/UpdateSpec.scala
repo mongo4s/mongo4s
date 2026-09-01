@@ -6,21 +6,28 @@ import org.scalatest.matchers.should.Matchers
 import org.bson.{BsonDocument, BsonInt32, BsonString}
 
 import mongo4s.Field
-import mongo4s.bson.FieldNaming
+import mongo4s.bson.{BsonEncoder, FieldNaming}
 
 import mongo4s.bson.BsonInstances.given
 
 object UpdateSpec:
-  final case class Person(name: String, age: Int, tags: List[String], score: Option[Long])
+  final case class Note(text: String, rank: Int)
+  final case class Person(name: String, age: Int, tags: List[String], score: Option[Long], notes: List[Note])
+
+  object Note:
+    given BsonEncoder[Note] = note => BsonDocument().append("text", BsonString(note.text)).append("rank", BsonInt32(note.rank))
 
 final class UpdateSpec extends AnyWordSpec, Matchers:
-  import UpdateSpec.Person
+  import UpdateSpec.{Note, Person}
+  import UpdateSpec.Note.given
 
   // Deliberately suffixed: `tags` alone would shadow AnyWordSpec's own member.
   private val nameField  = Field.of[Person, String](_.name)
   private val ageField   = Field.of[Person, Int](_.age)
   private val tagsField  = Field.of[Person, List[String]](_.tags)
   private val scoreField = Field.of[Person, Option[Long]](_.score)
+  private val notesField = Field.of[Person, List[Note]](_.notes)
+  private val rankField  = Field.of[Note, Int](_.rank)
 
   private def json(update: Update[Person]): String = update.toBson(FieldNaming.identity).toJson
 
@@ -104,6 +111,25 @@ final class UpdateSpec extends AnyWordSpec, Matchers:
 
     "push many values through $each" in {
       json(Update.pushAll(tagsField, List("x", "y"))) shouldBe """{"$push": {"tags": {"$each": ["x", "y"]}}}"""
+    }
+
+    "carry $position, $slice and a scalar $sort alongside $each" in {
+      val options = PushOptions.default[String].withPosition(0).withSlice(-10).sortedAscending
+
+      json(Update.pushAll(tagsField, List("x"), options)) shouldBe
+        """{"$push": {"tags": {"$each": ["x"], "$position": 0, "$slice": -10, "$sort": 1}}}"""
+    }
+
+    "sort pushed documents by one of their own fields" in {
+      val options = PushOptions.default[Note].sortedBy(Sort.desc(rankField)).withSlice(3)
+
+      json(Update.pushAll(notesField, List(Note("a", 1)), options)) shouldBe
+        """{"$push": {"notes": {"$each": [{"text": "a", "rank": 1}], "$slice": 3, "$sort": {"rank": -1}}}}"""
+    }
+
+    "let the last sort choice win, since the two shapes are mutually exclusive" in {
+      PushOptions.default[String].sortedAscending.sortedBy(Sort.empty[String]).sortScalars shouldBe None
+      PushOptions.default[String].sortedBy(Sort.empty[String]).sortedDescending.sort shouldBe None
     }
   }
 

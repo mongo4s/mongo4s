@@ -3,7 +3,7 @@ package mongo4s
 import scala.annotation.targetName
 
 import mongo4s.bson.BsonEncoder
-import mongo4s.operations.{Filter, Sort, Update}
+import mongo4s.operations.{Filter, PushOptions, Sort, Update}
 
 opaque type Field[E, A] = FieldPath
 
@@ -71,7 +71,13 @@ object Field:
     def min[A](value: A)(using NumericOf[C, A]): Update[E]  = Update.min(field, value)
     def max[A](value: A)(using NumericOf[C, A]): Update[E]  = Update.max(field, value)
 
-    def push[A](value: A)(using ElementOf[C, A], BsonEncoder[A]): Update[E]     = Update.push(field, value)
+    def push[A](value: A)(using ElementOf[C, A], BsonEncoder[A]): Update[E] = Update.push(field, value)
+
+    def pushAll[A](values: Seq[A], options: PushOptions[A] = PushOptions.default[A])(using
+        ElementOf[C, A],
+        BsonEncoder[A],
+    ): Update[E] = Update.pushAll(field, values, options)
+
     def pull[A](value: A)(using ElementOf[C, A], BsonEncoder[A]): Update[E]     = Update.pull(field, value)
     def addToSet[A](value: A)(using ElementOf[C, A], BsonEncoder[A]): Update[E] = Update.addToSet(field, value)
 
