@@ -119,19 +119,23 @@ final class FakeMongoCollection[F[*], S[*], E](
     }
   }
 
-  def deleteOne(filter: Filter[E])(using session: Option[ClientSession]): F[DeleteResult] = F.delay {
+  def deleteOne(filter: Filter[E], options: DeleteOptions)(using session: Option[ClientSession]): F[DeleteResult] = F.delay {
     matching(filter).headOption match
       case Some(existing) => storage -= existing; DeleteResult(1)
       case None           => DeleteResult.none
   }
 
-  def deleteMany(filter: Filter[E])(using session: Option[ClientSession]): F[DeleteResult] = F.delay {
+  def deleteMany(filter: Filter[E], options: DeleteOptions)(using session: Option[ClientSession]): F[DeleteResult] = F.delay {
     val matches = matching(filter)
     storage --= matches
     DeleteResult(matches.size.toLong)
   }
 
-  def count(filter: Filter[E])(using session: Option[ClientSession]): F[Long] = F.delay(matching(filter).size.toLong)
+  def count(filter: Filter[E], options: CountOptions)(using session: Option[ClientSession]): F[Long] = F.delay {
+    val matches = matching(filter).size.toLong
+    val skipped = options.skip.fold(matches)(skip => math.max(0L, matches - skip))
+    options.limit.fold(skipped)(limit => math.min(skipped, limit.toLong))
+  }
 
   def estimatedCount: F[Long] = F.delay(storage.size.toLong)
 

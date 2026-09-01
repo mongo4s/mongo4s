@@ -470,7 +470,15 @@ collection.updateOne(orderId.equalTo("1"), Update.set(lowQty, 100), UpdateOption
     </p>
     <pre><code>UpdateOptions.default                                     // nothing set
 UpdateOptions.upsert                                      // shorthand for default.withUpsert
-UpdateOptions.upsert.withArrayFilters(Seq(elementQty.lt(3)))</code></pre>
+UpdateOptions.upsert.withArrayFilters(Seq(elementQty.lt(3)))
+
+collection.deleteMany(filter, DeleteOptions.default.withCollation(caseInsensitive))
+collection.count(filter, CountOptions.default.withSkip(20).withLimit(10))</code></pre>
+    <p class="muted">
+        What each type carries today: <code>collation</code>, <code>hint</code> and <code>comment</code> everywhere;
+        <code>bypassDocumentValidation</code> on the two that write whole documents; <code>limit</code>,
+        <code>skip</code> and <code>maxTime</code> on <code>CountOptions</code>.
+    </p>
     <p class="muted">
         The <code>findOneAnd*</code> trio works the same way, except its options carry the entity type because
         <code>sort</code> and <code>projection</code> do. <code>returnUpdated</code> defaults to true, and

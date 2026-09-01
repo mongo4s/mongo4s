@@ -285,7 +285,18 @@ another parameter again:
 UpdateOptions.default                                     // nothing set
 UpdateOptions.upsert                                      // shorthand for default.withUpsert
 UpdateOptions.upsert.withArrayFilters(Seq(elementQty.lt(3)))
+UpdateOptions.default.withCollation(caseInsensitive).withComment("nightly reconcile")
 ```
+
+`deleteOne`/`deleteMany` take a `DeleteOptions` and `count` a `CountOptions`, on the same pattern:
+
+```scala
+collection.deleteMany(filter, DeleteOptions.default.withCollation(caseInsensitive))
+collection.count(filter, CountOptions.default.withSkip(20).withLimit(10))
+```
+
+What each type carries today: `collation`, `hint` and `comment` everywhere; `bypassDocumentValidation` on the two
+that write whole documents (`UpdateOptions`, `ReplaceOptions`); `limit`, `skip` and `maxTime` on `CountOptions`.
 
 Each operation family has its own options type on purpose rather than one shared bag: `upsert` means nothing on a
 delete, and a type that offered it there would let you write down a request the server cannot answer.

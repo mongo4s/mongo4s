@@ -5,6 +5,7 @@ import java.util.concurrent.TimeUnit
 import org.bson.BsonDocument
 import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
 import com.mongodb.client.model.{BulkWriteOptions, DeleteManyModel, DeleteOneModel, IndexOptions, InsertOneModel}
+import com.mongodb.client.model.{CountOptions as DriverCountOptions, DeleteOptions as DriverDeleteOptions}
 import com.mongodb.client.model.{FindOneAndDeleteOptions as DriverFindOneAndDeleteOptions, ReturnDocument}
 import com.mongodb.client.model.{FindOneAndReplaceOptions as DriverFindOneAndReplaceOptions, FindOneAndUpdateOptions as DriverFindOneAndUpdateOptions}
 import com.mongodb.client.model.{ReplaceOneModel, UpdateManyModel, UpdateOneModel, WriteModel}
@@ -110,22 +111,26 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       F.map(rs.one(publisher))(UpdateResult.fromDriver)
     }
 
-  def deleteOne(filter: Filter[A])(using session: Option[ClientSession]): F[DeleteResult] =
+  def deleteOne(filter: Filter[A], options: DeleteOptions)(using session: Option[ClientSession]): F[DeleteResult] =
     F.suspend {
+      val driverOptions = driverDelete(options)
+
       val publisher = session match
-        case Some(s) => underlying.deleteOne(s, filter.toBson(naming))
-        case None    => underlying.deleteOne(filter.toBson(naming))
+        case Some(s) => underlying.deleteOne(s, filter.toBson(naming), driverOptions)
+        case None    => underlying.deleteOne(filter.toBson(naming), driverOptions)
 
       F.map(rs.one(publisher)) { result =>
         DeleteResult.fromDriver(result)
       }
     }
 
-  def deleteMany(filter: Filter[A])(using session: Option[ClientSession]): F[DeleteResult] =
+  def deleteMany(filter: Filter[A], options: DeleteOptions)(using session: Option[ClientSession]): F[DeleteResult] =
     F.suspend {
+      val driverOptions = driverDelete(options)
+
       val publisher = session match
-        case Some(s) => underlying.deleteMany(s, filter.toBson(naming))
-        case None    => underlying.deleteMany(filter.toBson(naming))
+        case Some(s) => underlying.deleteMany(s, filter.toBson(naming), driverOptions)
+        case None    => underlying.deleteMany(filter.toBson(naming), driverOptions)
 
       F.map(rs.one(publisher)) { result =>
         DeleteResult.fromDriver(result)
@@ -179,13 +184,14 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       decodeOptional(publisher)
     }
 
-  def count(filter: Filter[A])(using session: Option[ClientSession]): F[Long] =
+  def count(filter: Filter[A], options: CountOptions)(using session: Option[ClientSession]): F[Long] =
     F.suspend {
-      val bson = filter.toBson(naming)
+      val bson          = filter.toBson(naming)
+      val driverOptions = driverCount(options)
 
       val publisher = session match
-        case Some(s) => underlying.countDocuments(s, bson)
-        case None    => underlying.countDocuments(bson)
+        case Some(s) => underlying.countDocuments(s, bson, driverOptions)
+        case None    => underlying.countDocuments(bson, driverOptions)
 
       F.map(rs.one(publisher))(_.longValue)
     }
@@ -324,10 +330,38 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
   private def driverUpdate(options: UpdateOptions): DriverUpdateOptions =
     val driverOptions = DriverUpdateOptions().upsert(options.upsert)
     if options.arrayFilters.nonEmpty then driverOptions.arrayFilters(options.arrayFilters.map(_.toBson(naming)).asJava): Unit
+    options.collation.foreach(value => driverOptions.collation(value))
+    options.hint.foreach(value => driverOptions.hint(value))
+    options.comment.foreach(value => driverOptions.comment(value))
+    options.bypassDocumentValidation.foreach(value => driverOptions.bypassDocumentValidation(value))
     driverOptions
 
   private def driverReplace(options: ReplaceOptions): DriverReplaceOptions =
-    DriverReplaceOptions().upsert(options.upsert)
+    val driverOptions = DriverReplaceOptions().upsert(options.upsert)
+    options.collation.foreach(value => driverOptions.collation(value))
+    options.hint.foreach(value => driverOptions.hint(value))
+    options.comment.foreach(value => driverOptions.comment(value))
+    options.bypassDocumentValidation.foreach(value => driverOptions.bypassDocumentValidation(value))
+    driverOptions
+  end driverReplace
+
+  private def driverDelete(options: DeleteOptions): DriverDeleteOptions =
+    val driverOptions = DriverDeleteOptions()
+    options.collation.foreach(value => driverOptions.collation(value))
+    options.hint.foreach(value => driverOptions.hint(value))
+    options.comment.foreach(value => driverOptions.comment(value))
+    driverOptions
+  end driverDelete
+
+  private def driverCount(options: CountOptions): DriverCountOptions =
+    val driverOptions = DriverCountOptions()
+    options.collation.foreach(value => driverOptions.collation(value))
+    options.hint.foreach(value => driverOptions.hint(value))
+    options.limit.foreach(value => driverOptions.limit(value))
+    options.skip.foreach(value => driverOptions.skip(value))
+    options.maxTime.foreach(value => driverOptions.maxTime(value.toMillis, TimeUnit.MILLISECONDS))
+    driverOptions
+  end driverCount
 
   private def driverFindOneAndUpdate(options: FindOneAndUpdateOptions[A]): DriverFindOneAndUpdateOptions =
     val driverOptions = DriverFindOneAndUpdateOptions()

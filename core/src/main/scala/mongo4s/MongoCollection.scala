@@ -32,8 +32,13 @@ trait MongoCollection[F[*], S[*], A]:
       session: Option[ClientSession] = None
   ): F[UpdateResult]
 
-  def deleteOne(filter: Filter[A])(using session: Option[ClientSession] = None): F[DeleteResult]
-  def deleteMany(filter: Filter[A])(using session: Option[ClientSession] = None): F[DeleteResult]
+  def deleteOne(filter: Filter[A], options: DeleteOptions = DeleteOptions.default)(using
+      session: Option[ClientSession] = None
+  ): F[DeleteResult]
+
+  def deleteMany(filter: Filter[A], options: DeleteOptions = DeleteOptions.default)(using
+      session: Option[ClientSession] = None
+  ): F[DeleteResult]
 
   def findOneAndUpdate(
       filter: Filter[A],
@@ -52,7 +57,9 @@ trait MongoCollection[F[*], S[*], A]:
       options: FindOneAndDeleteOptions[A] = FindOneAndDeleteOptions.default[A],
   )(using session: Option[ClientSession] = None): F[Option[A]]
 
-  def count(filter: Filter[A] = Filter.all)(using session: Option[ClientSession] = None): F[Long]
+  def count(filter: Filter[A] = Filter.all, options: CountOptions = CountOptions.default)(using
+      session: Option[ClientSession] = None
+  ): F[Long]
   def estimatedCount: F[Long]
 
   def bulkWrite(commands: Seq[WriteCommand[A]], ordered: Boolean = true)(using
