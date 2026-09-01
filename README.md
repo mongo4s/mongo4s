@@ -44,6 +44,7 @@ flowchart LR
 * [Modules](#modules)
 * [Benchmarks](#benchmarks)
 * [Design notes](#design-notes)
+* [Roadmap](ROADMAP.md)
 * [Contributing](#contributing)
 
 ## Quick start
@@ -1124,13 +1125,17 @@ Published for Scala 3 under `org.mongo4s`:
 
 ### Compatibility
 
-From 1.0.0 onward, binary compatibility within a major version is checked by
-[MiMa](https://github.com/lightbend/mima) on every build, new `Effect`/`RsBridge` methods carry default
-implementations, and deprecations get at least one minor release before removal. `1.1.0` carries one deliberate,
-filtered exception. The `3.8`-pinned modules cannot be consumed from a `3.3 LTS` project, and `mongo4s-kyo` sits
-outside the promise while kyo is on a release candidate.
+Binary compatibility within a major version is checked by [MiMa](https://github.com/lightbend/mima) on every build,
+new `Effect`/`RsBridge` methods carry default implementations, and deprecations get at least one minor release before
+removal. The `3.8`-pinned modules cannot be consumed from a `3.3 LTS` project, and `mongo4s-kyo` sits outside the
+promise while kyo is on a release candidate.
 
-Full policy, the per-release exception list and the Scala-version rules: **[COMPATIBILITY.md](COMPATIBILITY.md)**.
+`2.0.0` is a breaking release — mainly because every write operation's options moved from parameters into an
+immutable options value, which is what lets new options arrive in a `2.x` minor without breaking anyone. The compiler
+catches every change; none of them is silent.
+
+Full policy, the 1.x → 2.0 migration guide and the Scala-version rules: **[COMPATIBILITY.md](COMPATIBILITY.md)**.
+What is not covered yet and how it will land: **[ROADMAP.md](ROADMAP.md)**.
 
 ## Benchmarks
 

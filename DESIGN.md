@@ -286,8 +286,9 @@ Three commitments, and the mechanics that make each one keepable:
 compiling across minor releases. `liveStream` was added this way.
 
 **Binary compatibility is checked, not asserted.** MiMa runs in CI against the previous release. Every deliberate
-break is a filter in [`mima.sbt`](mima.sbt) and an entry in [COMPATIBILITY.md](COMPATIBILITY.md) — waivers are
-visible, not silent.
+break is a filter in `mima.sbt` and an entry in [COMPATIBILITY.md](COMPATIBILITY.md) — waivers are visible, not
+silent. `2.0.0` needs no filters at all: a major release is allowed to break, so the list there is a migration guide
+rather than a set of waivers.
 
 **Configuration types are builders, not case classes.** This one was learned the expensive way. Adding a field with
 a default to a `case class` is source-compatible but *never* binary-compatible: default arguments are resolved at the
@@ -318,4 +319,4 @@ carrying exactly n events it blocks forever. Not fixable from here.
 
 **A circe bridge.** There is no `mongo4s-bson-circe` module. A `BsonDocumentCodec[A]` built from circe's
 `Encoder`/`Decoder` is short to hand-write, but a model already on circe has no first-class path today. This is a gap,
-not a decision.
+not a decision — it is tracked in [ROADMAP.md](ROADMAP.md) with the rest of them.

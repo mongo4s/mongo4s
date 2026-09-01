@@ -285,7 +285,8 @@
         <a href="#runtime">Runtime</a> ·
         <a href="#modules">Modules</a> ·
         <a href="#benchmarks">Benchmarks</a> ·
-        <a href="#design">Design notes</a>
+        <a href="#design">Design notes</a> ·
+        <a href="https://github.com/mongo4s/mongo4s/blob/main/ROADMAP.md">Roadmap</a>
     </nav>
 
     <p class="lead">
@@ -1312,7 +1313,7 @@ given RsBridgeConfig = RsBridgeConfig(
     </table>
 
     <h3 id="compatibility">Compatibility</h3>
-    <p>From 1.0.0 onward:</p>
+    <p>What the artifacts promise:</p>
     <ul>
         <li>Binary compatibility within a major version is checked by
             <a href="https://github.com/lightbend/mima">MiMa</a> on every build;
@@ -1324,14 +1325,19 @@ given RsBridgeConfig = RsBridgeConfig(
         <li>Deprecations get at least one minor release before removal.</li>
     </ul>
     <p>
-        <strong>1.1.0</strong> carries one deliberate exception, declared as MiMa filters rather than left silent:
-        <code>WireCodecConfig</code> stopped being a <code>case class</code>. It is now a <code>final class</code>
-        with a private constructor and <code>withX</code> builders, so <code>WireCodecConfig(...)</code>,
-        <code>.copy(...)</code>, <code>unapply</code> and the <code>Product</code> methods are gone — recompile and
-        use <code>WireCodecConfig.Default.withFieldNaming(...)</code>. The break was taken deliberately and once:
-        every derivation option added after this one is a new <code>withX</code> method, which is binary compatible,
-        where a new field on a case class would have broken <code>apply</code>/<code>copy</code> again in every
-        release.
+        <strong>2.0.0 is a breaking release.</strong> The largest change is that every write operation's options moved
+        from parameters into an immutable options value — <code>UpdateOptions</code>, <code>ReplaceOptions</code>,
+        <code>DeleteOptions</code>, <code>CountOptions</code> and the <code>findOneAnd*</code> trio. That is what lets
+        new options arrive in a 2.x minor without breaking anyone: a parameter cannot be added to a published method,
+        a builder method can. <code>Projection</code> also became two types, so mixing inclusion with exclusion no
+        longer compiles, and <code>FakeMongoCollection</code> moved into the published
+        <code>mongo4s-testkit</code> module. The compiler catches every change; none is silent.
+    </p>
+    <p class="muted">
+        The full 1.x → 2.0 migration guide, including the corrected behaviours, is in
+        <a href="https://github.com/mongo4s/mongo4s/blob/main/COMPATIBILITY.md">COMPATIBILITY.md</a>; what is not
+        covered yet and how it will land is in
+        <a href="https://github.com/mongo4s/mongo4s/blob/main/ROADMAP.md">ROADMAP.md</a>.
     </p>
     <p class="muted">
         Scala 3 TASTy is backward but not forward compatible, so <code>mongo4s-bson-calypso</code>,

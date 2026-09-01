@@ -88,6 +88,18 @@ before assuming the default is safe there. If the runtime can't derive a `Tag`-l
 Formatting is enforced by [scalafmt](https://scalameta.org/scalafmt/) (`.scalafmt.conf`) and checked
 in CI. Run `sbt scalafmtAll` before opening a PR.
 
+## Releasing
+
+Two steps are easy to forget because nothing fails when they are missed:
+
+- **Move the MiMa baseline.** `binaryCompatibleWith` in `build.sbt` names the releases the artifacts are checked
+  against. It is `Set.empty` while a major version is being prepared, because there is nothing compatible to compare
+  to; the moment that version is on Maven Central it must become `Set("<that version>")`, or the compatibility
+  promise is asserted and never checked.
+- **Record any deliberate break.** A break inside a major version needs a filter in `mima.sbt` and an entry in
+  [COMPATIBILITY.md](COMPATIBILITY.md). A major release needs no filters, but its migration guide still belongs
+  there.
+
 ## Opening a pull request
 
 - Keep PRs focused - one runtime backend, one codec bridge, or one bug fix per PR is easier to review
