@@ -6,7 +6,7 @@ import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSM
 
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.queries.{AggregateQuery, DistinctQuery, FindQuery}
-import mongo4s.operations.{Filter, Index, Projection, ReplaceOptions, Sort, Stage, Update, UpdateOptions, WriteCommand}
+import mongo4s.operations.*
 import mongo4s.bson.{BsonDecoder, BsonDocumentCodec, DecodeResult, FieldNaming}
 import mongo4s.results.{BulkWriteResult, DeleteResult, InsertManyResult, InsertOneResult, UpdateResult}
 
@@ -38,26 +38,18 @@ trait MongoCollection[F[*], S[*], A]:
   def findOneAndUpdate(
       filter: Filter[A],
       update: Update[A],
-      returnUpdated: Boolean = true,
-      upsert: Boolean = false,
-      sort: Sort[A] = Sort.empty[A],
-      projection: Projection[A] = Projection.empty[A],
-      arrayFilters: Seq[Filter[?]] = Nil,
+      options: FindOneAndUpdateOptions[A] = FindOneAndUpdateOptions.default[A],
   )(using session: Option[ClientSession] = None): F[Option[A]]
 
   def findOneAndReplace(
       filter: Filter[A],
       replacement: A,
-      returnUpdated: Boolean = true,
-      upsert: Boolean = false,
-      sort: Sort[A] = Sort.empty[A],
-      projection: Projection[A] = Projection.empty[A],
+      options: FindOneAndReplaceOptions[A] = FindOneAndReplaceOptions.default[A],
   )(using session: Option[ClientSession] = None): F[Option[A]]
 
   def findOneAndDelete(
       filter: Filter[A],
-      sort: Sort[A] = Sort.empty[A],
-      projection: Projection[A] = Projection.empty[A],
+      options: FindOneAndDeleteOptions[A] = FindOneAndDeleteOptions.default[A],
   )(using session: Option[ClientSession] = None): F[Option[A]]
 
   def count(filter: Filter[A] = Filter.all)(using session: Option[ClientSession] = None): F[Long]

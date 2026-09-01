@@ -4,7 +4,7 @@ import com.mongodb.reactivestreams.client.ClientSession
 
 import mongo4s.bson.BsonEncoder
 import mongo4s.{Field, Streamable}
-import mongo4s.operations.{Filter, Index, Update, UpdateOptions, WriteCommand}
+import mongo4s.operations.*
 import mongo4s.results.{BulkWriteResult, DeleteResult, UpdateResult}
 
 trait Repository[F[*], S[*], E, K]:
@@ -49,7 +49,7 @@ trait Repository[F[*], S[*], E, K]:
   def updateOne(key: K, update: Update[E], options: UpdateOptions = UpdateOptions.default)(using session: Option[ClientSession] = None): F[UpdateResult]
   def updateBy(filter: Filter[E], update: Update[E])(using session: Option[ClientSession] = None): F[UpdateResult]
 
-  def findOneAndUpdate(key: K, update: Update[E], returnUpdated: Boolean = true)(using
+  def findOneAndUpdate(key: K, update: Update[E], options: FindOneAndUpdateOptions[E] = FindOneAndUpdateOptions.default[E])(using
       session: Option[ClientSession] = None
   ): F[Option[E]]
 

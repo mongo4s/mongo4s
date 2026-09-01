@@ -6,7 +6,7 @@ import com.mongodb.reactivestreams.client.ClientSession
 
 import mongo4s.bson.{BsonDocumentCodec, BsonEncoder, FieldNaming}
 import mongo4s.results.{BulkWriteResult, DeleteResult, UpdateResult}
-import mongo4s.operations.{Filter, Index, Projection, ReplaceOptions, Update, UpdateOptions, WriteCommand}
+import mongo4s.operations.*
 import mongo4s.{Effect, Field, MongoCollection, MongoDatabase, PrimaryKey, Streamable, WithId}
 
 open class BaseMongoRepository[F[*], S[*], E, K](
@@ -74,8 +74,8 @@ open class BaseMongoRepository[F[*], S[*], E, K](
   def updateBy(filter: Filter[E], update: Update[E])(using session: Option[ClientSession]): F[UpdateResult] =
     collection.updateMany(filter, update)(using session)
 
-  def findOneAndUpdate(key: K, update: Update[E], returnUpdated: Boolean)(using session: Option[ClientSession]): F[Option[E]] =
-    collection.findOneAndUpdate(pk.eqFilter(key), update, returnUpdated, projection = defaultProjection)(using session)
+  def findOneAndUpdate(key: K, update: Update[E], options: FindOneAndUpdateOptions[E])(using session: Option[ClientSession]): F[Option[E]] =
+    collection.findOneAndUpdate(pk.eqFilter(key), update, options.withProjection(defaultProjection))(using session)
 
   def bulkWrite(commands: Seq[WriteCommand[E]])(using session: Option[ClientSession]): F[BulkWriteResult] =
     batchedResults(commands.toList)(chunk => collection.bulkWrite(chunk)(using session))

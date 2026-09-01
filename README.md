@@ -150,10 +150,7 @@ trait MongoCollection[F[*], S[*], A]:
 
   def deleteOne(filter: Filter[A])(using session: Option[ClientSession] = None): F[DeleteResult]
 
-  def findOneAndUpdate(filter: Filter[A], update: Update[A], returnUpdated: Boolean = true,
-
-...):
-  F[Option[A]]
+  def findOneAndUpdate(filter: Filter[A], update: Update[A], options: FindOneAndUpdateOptions[A] = FindOneAndUpdateOptions.default[A])(using session: Option[ClientSession] = None): F[Option[A]]
 
   def aggregate[B](pipeline: Seq[Stage[A]])(using session: Option[ClientSession] = None)(using BsonDocumentCodec[B]): AggregateQuery[F, S, B]
 
@@ -292,6 +289,16 @@ UpdateOptions.upsert.withArrayFilters(Seq(elementQty.lt(3)))
 
 Each operation family has its own options type on purpose rather than one shared bag: `upsert` means nothing on a
 delete, and a type that offered it there would let you write down a request the server cannot answer.
+
+The `findOneAnd*` trio works the same way, except its options carry the entity type because `sort` and `projection`
+do — `FindOneAndUpdateOptions[A]`, `FindOneAndReplaceOptions[A]`, `FindOneAndDeleteOptions[A]`. `returnUpdated`
+defaults to true, and `returningPrevious` is how you ask for the document as it was:
+
+```scala
+collection.findOneAndUpdate(filter, update)                                          // the updated document
+collection.findOneAndUpdate(filter, update, FindOneAndUpdateOptions.default[User].returningPrevious)
+collection.findOneAndUpdate(filter, update, FindOneAndUpdateOptions.upsert[User].withSort(Sort.asc(ageField)))
+```
 
 An update that would produce no operators throws instead of sending `{}` — MongoDB rejects it, and failing at the
 call site beats a write that silently does nothing.

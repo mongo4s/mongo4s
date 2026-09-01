@@ -10,7 +10,7 @@ import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.{Effect, Field, MongoCollection, Streamable}
 import mongo4s.bson.{BsonDocumentCodec, DecodeResult, FieldNaming}
 import mongo4s.queries.{AggregateQuery, DecodeAttempts, DistinctQuery, FindQuery}
-import mongo4s.operations.{Filter, Index, Projection, ReplaceOptions, Sort, Stage, Update, UpdateOptions, WriteCommand}
+import mongo4s.operations.*
 import mongo4s.results.{BulkWriteResult, DeleteResult, InsertManyResult, InsertOneResult, UpdateResult}
 
 import scala.jdk.CollectionConverters.given
@@ -87,43 +87,35 @@ final class FakeMongoCollection[F[*], S[*], E](
     UpdateResult(matchedCount = matches.size.toLong, modifiedCount = matches.size.toLong, upsertedId = None)
   }
 
-  def findOneAndUpdate(
-      filter: Filter[E],
-      update: Update[E],
-      returnUpdated: Boolean,
-      upsert: Boolean,
-      sort: Sort[E],
-      projection: Projection[E],
-      arrayFilters: Seq[Filter[?]],
-  )(using
+  def findOneAndUpdate(filter: Filter[E], update: Update[E], options: FindOneAndUpdateOptions[E])(using
       session: Option[ClientSession]
   ): F[Option[E]] = F.delay {
-    requireNoArrayFilters(arrayFilters, "findOneAndUpdate")
+    requireNoArrayFilters(options.arrayFilters, "findOneAndUpdate")
     matching(filter).headOption match
-      case None if upsert => throw UnsupportedOperationException("FakeMongoCollection: findOneAndUpdate(upsert = true) is not simulated")
-      case None           => None
-      case Some(existing) =>
+      case None if options.upsert => throw UnsupportedOperationException("FakeMongoCollection: findOneAndUpdate with upsert is not simulated")
+      case None                   => None
+      case Some(existing)         =>
         val updated = applyUpdate(existing, update)
         storage(storage.indexOf(existing)) = updated
-        decodeProjected(if returnUpdated then updated else existing, projection)
+        decodeProjected(if options.returnUpdated then updated else existing, options.projection)
   }
 
-  def findOneAndReplace(filter: Filter[E], replacement: E, returnUpdated: Boolean, upsert: Boolean, sort: Sort[E], projection: Projection[E])(using
+  def findOneAndReplace(filter: Filter[E], replacement: E, options: FindOneAndReplaceOptions[E])(using
       session: Option[ClientSession]
   ): F[Option[E]] = F.delay {
     matching(filter).headOption match
-      case None if upsert => throw UnsupportedOperationException("FakeMongoCollection: findOneAndReplace(upsert = true) is not simulated")
-      case None           => None
-      case Some(existing) =>
+      case None if options.upsert => throw UnsupportedOperationException("FakeMongoCollection: findOneAndReplace with upsert is not simulated")
+      case None                   => None
+      case Some(existing)         =>
         val encoded = codec.encodeDocument(replacement)
         storage(storage.indexOf(existing)) = encoded
-        decodeProjected(if returnUpdated then encoded else existing, projection)
+        decodeProjected(if options.returnUpdated then encoded else existing, options.projection)
   }
 
-  def findOneAndDelete(filter: Filter[E], sort: Sort[E], projection: Projection[E])(using session: Option[ClientSession]): F[Option[E]] = F.delay {
+  def findOneAndDelete(filter: Filter[E], options: FindOneAndDeleteOptions[E])(using session: Option[ClientSession]): F[Option[E]] = F.delay {
     matching(filter).headOption.flatMap { existing =>
       storage -= existing
-      decodeProjected(existing, projection)
+      decodeProjected(existing, options.projection)
     }
   }
 

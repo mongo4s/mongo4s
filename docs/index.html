@@ -471,6 +471,12 @@ collection.updateOne(orderId.equalTo("1"), Update.set(lowQty, 100), UpdateOption
     <pre><code>UpdateOptions.default                                     // nothing set
 UpdateOptions.upsert                                      // shorthand for default.withUpsert
 UpdateOptions.upsert.withArrayFilters(Seq(elementQty.lt(3)))</code></pre>
+    <p class="muted">
+        The <code>findOneAnd*</code> trio works the same way, except its options carry the entity type because
+        <code>sort</code> and <code>projection</code> do. <code>returnUpdated</code> defaults to true, and
+        <code>returningPrevious</code> asks for the document as it was:
+        <code>findOneAndUpdate(filter, update, FindOneAndUpdateOptions.default[User].returningPrevious)</code>.
+    </p>
     <p><code>find</code> returns a builder; nothing is sent until <code>first</code>, <code>all</code>,
         <code>stream</code> or <code>attempting</code>:</p>
     <pre><code>collection

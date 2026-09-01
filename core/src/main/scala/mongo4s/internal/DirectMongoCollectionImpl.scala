@@ -8,7 +8,8 @@ import org.bson.BsonDocument
 import org.bson.codecs.configuration.CodecRegistries
 import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
 import com.mongodb.client.model.{BulkWriteOptions, DeleteManyModel, DeleteOneModel, IndexOptions, InsertOneModel}
-import com.mongodb.client.model.{FindOneAndDeleteOptions, FindOneAndReplaceOptions, FindOneAndUpdateOptions, ReturnDocument}
+import com.mongodb.client.model.{FindOneAndDeleteOptions as DriverFindOneAndDeleteOptions, ReturnDocument}
+import com.mongodb.client.model.{FindOneAndReplaceOptions as DriverFindOneAndReplaceOptions, FindOneAndUpdateOptions as DriverFindOneAndUpdateOptions}
 import com.mongodb.client.model.{ReplaceOneModel, UpdateManyModel, UpdateOneModel, WriteModel}
 import com.mongodb.client.model.{ReplaceOptions as DriverReplaceOptions, UpdateOptions as DriverUpdateOptions}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
@@ -139,58 +140,40 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
   def findOneAndUpdate(
       filter: Filter[A],
       update: Update[A],
-      returnUpdated: Boolean,
-      upsert: Boolean,
-      sort: Sort[A],
-      projection: Projection[A],
-      arrayFilters: Seq[Filter[?]],
+      options: FindOneAndUpdateOptions[A],
   )(using
       session: Option[ClientSession]
   ): F[Option[A]] =
     F.suspend {
-      val options = FindOneAndUpdateOptions()
-        .upsert(upsert)
-        .returnDocument(if returnUpdated then ReturnDocument.AFTER else ReturnDocument.BEFORE)
-
-      if !sort.isEmpty then options.sort(sort.toBson(naming)): Unit
-      if !projection.isEmpty then options.projection(projection.toBson(naming)): Unit
-      if arrayFilters.nonEmpty then options.arrayFilters(arrayFilters.map(_.toBson(naming)).asJava): Unit
+      val driverOptions = driverFindOneAndUpdate(options)
 
       val publisher = session match
-        case Some(s) => typedCollection.findOneAndUpdate(s, filter.toBson(naming), update.toBson(naming), options)
-        case None    => typedCollection.findOneAndUpdate(filter.toBson(naming), update.toBson(naming), options)
+        case Some(s) => typedCollection.findOneAndUpdate(s, filter.toBson(naming), update.toBson(naming), driverOptions)
+        case None    => typedCollection.findOneAndUpdate(filter.toBson(naming), update.toBson(naming), driverOptions)
 
       rs.option(publisher)
     }
 
-  def findOneAndReplace(filter: Filter[A], replacement: A, returnUpdated: Boolean, upsert: Boolean, sort: Sort[A], projection: Projection[A])(using
+  def findOneAndReplace(filter: Filter[A], replacement: A, options: FindOneAndReplaceOptions[A])(using
       session: Option[ClientSession]
   ): F[Option[A]] =
     F.suspend {
-      val options = FindOneAndReplaceOptions()
-        .upsert(upsert)
-        .returnDocument(if returnUpdated then ReturnDocument.AFTER else ReturnDocument.BEFORE)
-
-      if !sort.isEmpty then options.sort(sort.toBson(naming)): Unit
-      if !projection.isEmpty then options.projection(projection.toBson(naming)): Unit
+      val driverOptions = driverFindOneAndReplace(options)
 
       val publisher = session match
-        case Some(s) => typedCollection.findOneAndReplace(s, filter.toBson(naming), replacement, options)
-        case None    => typedCollection.findOneAndReplace(filter.toBson(naming), replacement, options)
+        case Some(s) => typedCollection.findOneAndReplace(s, filter.toBson(naming), replacement, driverOptions)
+        case None    => typedCollection.findOneAndReplace(filter.toBson(naming), replacement, driverOptions)
 
       rs.option(publisher)
     }
 
-  def findOneAndDelete(filter: Filter[A], sort: Sort[A], projection: Projection[A])(using session: Option[ClientSession]): F[Option[A]] =
+  def findOneAndDelete(filter: Filter[A], options: FindOneAndDeleteOptions[A])(using session: Option[ClientSession]): F[Option[A]] =
     F.suspend {
-      val options = FindOneAndDeleteOptions()
-
-      if !sort.isEmpty then options.sort(sort.toBson(naming)): Unit
-      if !projection.isEmpty then options.projection(projection.toBson(naming)): Unit
+      val driverOptions = driverFindOneAndDelete(options)
 
       val publisher = session match
-        case Some(s) => typedCollection.findOneAndDelete(s, filter.toBson(naming), options)
-        case None    => typedCollection.findOneAndDelete(filter.toBson(naming), options)
+        case Some(s) => typedCollection.findOneAndDelete(s, filter.toBson(naming), driverOptions)
+        case None    => typedCollection.findOneAndDelete(filter.toBson(naming), driverOptions)
 
       rs.option(publisher)
     }
@@ -337,6 +320,35 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
 
   private def driverReplace(options: ReplaceOptions): DriverReplaceOptions =
     DriverReplaceOptions().upsert(options.upsert)
+
+  private def driverFindOneAndUpdate(options: FindOneAndUpdateOptions[A]): DriverFindOneAndUpdateOptions =
+    val driverOptions = DriverFindOneAndUpdateOptions()
+      .upsert(options.upsert)
+      .returnDocument(if options.returnUpdated then ReturnDocument.AFTER else ReturnDocument.BEFORE)
+
+    if !options.sort.isEmpty then driverOptions.sort(options.sort.toBson(naming)): Unit
+    if !options.projection.isEmpty then driverOptions.projection(options.projection.toBson(naming)): Unit
+    if options.arrayFilters.nonEmpty then driverOptions.arrayFilters(options.arrayFilters.map(_.toBson(naming)).asJava): Unit
+    driverOptions
+  end driverFindOneAndUpdate
+
+  private def driverFindOneAndReplace(options: FindOneAndReplaceOptions[A]): DriverFindOneAndReplaceOptions =
+    val driverOptions = DriverFindOneAndReplaceOptions()
+      .upsert(options.upsert)
+      .returnDocument(if options.returnUpdated then ReturnDocument.AFTER else ReturnDocument.BEFORE)
+
+    if !options.sort.isEmpty then driverOptions.sort(options.sort.toBson(naming)): Unit
+    if !options.projection.isEmpty then driverOptions.projection(options.projection.toBson(naming)): Unit
+    driverOptions
+  end driverFindOneAndReplace
+
+  private def driverFindOneAndDelete(options: FindOneAndDeleteOptions[A]): DriverFindOneAndDeleteOptions =
+    val driverOptions = DriverFindOneAndDeleteOptions()
+
+    if !options.sort.isEmpty then driverOptions.sort(options.sort.toBson(naming)): Unit
+    if !options.projection.isEmpty then driverOptions.projection(options.projection.toBson(naming)): Unit
+    driverOptions
+  end driverFindOneAndDelete
 
   private def toModel(command: WriteCommand[A]): WriteModel[A] = command match
     case WriteCommand.InsertOne(document)                 => InsertOneModel(document)

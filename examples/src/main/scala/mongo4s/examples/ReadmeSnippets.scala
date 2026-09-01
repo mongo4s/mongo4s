@@ -241,7 +241,7 @@ object ReadmeSnippets:
     users.getBy(adults, Page.first(100))
 
   def atomically(users: BaseMongoRepository[IO, S, User, String]): IO[Option[User]] =
-    users.findOneAndUpdate("1", birthday, returnUpdated = true)
+    users.findOneAndUpdate("1", birthday)
 
   // --- Change streams ---
 

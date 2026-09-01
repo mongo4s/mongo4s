@@ -12,7 +12,7 @@ import org.bson.{BsonDocument, BsonInt32, BsonString}
 import mongo4s.bson.*
 import mongo4s.cats.CatsStream
 import mongo4s.{Field, MongoClient, MongoCollection, RsBridge}
-import mongo4s.operations.{Accumulator, Projection, Sort, Stage, Update}
+import mongo4s.operations.*
 
 import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
@@ -156,7 +156,7 @@ final class QueryItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndA
         for
           collection <- seeded("find_one_and_update")
           after      <- collection.findOneAndUpdate(nameField.equalTo("bob"), Update.inc(ageField, 1))
-          before     <- collection.findOneAndUpdate(nameField.equalTo("bob"), Update.inc(ageField, 1), returnUpdated = false)
+          before     <- collection.findOneAndUpdate(nameField.equalTo("bob"), Update.inc(ageField, 1), FindOneAndUpdateOptions.default[Person].returningPrevious)
           settled    <- collection.find(nameField.equalTo("bob")).first
         yield (after, before, settled)
 
@@ -171,7 +171,7 @@ final class QueryItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndA
       val program =
         for
           collection <- seeded("find_one_and_update_sorted")
-          youngest   <- collection.findOneAndUpdate(ageField.gte(0), Update.set(nameField, "picked"), sort = Sort.asc(ageField))
+          youngest   <- collection.findOneAndUpdate(ageField.gte(0), Update.set(nameField, "picked"), FindOneAndUpdateOptions.default[Person].withSort(Sort.asc(ageField)))
         yield youngest.map(_.name)
 
       program.asserting(_ shouldBe Some("picked"))
@@ -181,7 +181,7 @@ final class QueryItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndA
       val program =
         for
           collection <- seeded("find_one_and_update_upsert")
-          created    <- collection.findOneAndUpdate(nameField.equalTo("erin"), Update.set(ageField, 22), upsert = true)
+          created    <- collection.findOneAndUpdate(nameField.equalTo("erin"), Update.set(ageField, 22), FindOneAndUpdateOptions.upsert[Person])
         yield created
 
       program.asserting(_ shouldBe Some(Person("erin", 22)))
