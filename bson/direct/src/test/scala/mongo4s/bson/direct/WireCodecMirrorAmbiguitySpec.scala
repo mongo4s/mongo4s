@@ -5,13 +5,34 @@ import java.nio.ByteBuffer
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
+import org.bson.*
 import org.bson.io.{BasicOutputBuffer, ByteBufferBsonInput}
-import org.bson.{BsonBinaryReader, BsonBinaryWriter, BsonDocument, ByteBufNIO}
 import org.bson.codecs.{BsonDocumentCodec as DriverBsonDocumentCodec, DecoderContext}
+
+import mongo4s.bson.{BsonEncoder, BsonDecoder}
 
 final class WireCodecMirrorAmbiguitySpec extends AnyWordSpec, Matchers:
 
   final case class Foo(x: Int) derives WireCodec
+
+  final case class Money(amount: Long, currency: String)
+
+  object Money:
+    given BsonEncoder[Money] = money => BsonDocument().append("amount", BsonInt64(money.amount)).append("currency", BsonString(money.currency))
+
+    given BsonDecoder[Money] = value =>
+      for
+        amount   <- BsonDecoder[Long].decode(value.asDocument.get("amount"))
+        currency <- BsonDecoder[String].decode(value.asDocument.get("currency"))
+      yield Money(amount, currency)
+
+  final case class Packed(label: String) derives WireCodec
+
+  object Packed:
+    given BsonEncoder[Packed] = packed => BsonDocument().append("packed", BsonString(packed.label))
+
+    given BsonDecoder[Packed] =
+      value => BsonDecoder[String].decode(value.asDocument.get("packed")).map(Packed.apply)
 
   final case class ListHolder(foos: List[Foo]) derives WireCodec
   final case class OptionHolder(foo: Option[Foo]) derives WireCodec
@@ -65,6 +86,16 @@ final class WireCodecMirrorAmbiguitySpec extends AnyWordSpec, Matchers:
 
     "encode Set[CaseClass] as a real BSON array" in {
       documentOf(SetHolder(Set(Foo(1), Foo(2)))).isArray("foos") shouldBe true
+    }
+
+    "resolve a single WireCodec for a case class that also carries a BsonEncoder/BsonDecoder pair" in {
+      val codec = summon[WireCodec[Money]]
+
+      documentOf(Money(5L, "EUR"))(using codec).getInt64("amount").getValue shouldBe 5L
+    }
+
+    "let an explicit derives WireCodec win over that same BsonEncoder/BsonDecoder pair" in {
+      documentOf(Packed("boxed")).getString("label").getValue shouldBe "boxed"
     }
 
     "encode Either[String, CaseClass] via its own dedicated instance, discriminated by type name" in {

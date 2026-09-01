@@ -5,7 +5,7 @@ import org.bson.codecs.{BsonValueCodec, DecoderContext, EncoderContext}
 
 import mongo4s.bson.{BsonDecoder, BsonEncoder}
 
-trait WireFallbackInstances:
+trait WireFallbackInstances extends WireCodecLowPriorityDerivation:
 
   given fromBsonValueCodec[A](using encoder: BsonEncoder[A], decoder: BsonDecoder[A]): WireCodec[A] =
     new WireCodec[A]:

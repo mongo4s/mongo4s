@@ -700,6 +700,12 @@ hand-rolled `WireCodec.instance(...)` for the common case of one type wrapping a
 calls to write by hand, and the wrap/unwrap logic lives in exactly one place instead of being duplicated across the
 encode and decode sides.
 
+Resolution order matters when a type qualifies for more than one instance. An existing `BsonEncoder`/`BsonDecoder`
+pair — hand-written, or coming from `mongo4s-bson-medeia`/`-zio`/`-calypso` — is bridged into a `WireCodec` and takes
+precedence over automatic `Mirror` derivation, so a case class carrying those instances resolves without needing
+`derives WireCodec`. Writing `derives WireCodec` on the type still wins over both: it puts a concrete instance in the
+companion, which is more specific than either generic given.
+
 #### `ScalarWireCodec` — reusing a `WireCodec` as a `BsonEncoder`
 
 An opaque type over a primitive (`opaque type UserId = String`) typically needs a `WireCodec[UserId]` for

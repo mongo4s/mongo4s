@@ -866,6 +866,16 @@ object Provider:
         and decode sides.
     </p>
 
+    <p>
+        Resolution order matters when a type qualifies for more than one instance. An existing
+        <code>BsonEncoder</code>/<code>BsonDecoder</code> pair — hand-written, or coming from
+        <code>mongo4s-bson-medeia</code>/<code>-zio</code>/<code>-calypso</code> — is bridged into a
+        <code>WireCodec</code> and takes precedence over automatic <code>Mirror</code> derivation, so a case class
+        carrying those instances resolves without needing <code>derives WireCodec</code>. Writing
+        <code>derives WireCodec</code> on the type still wins over both: it puts a concrete instance in the companion,
+        which is more specific than either generic given.
+    </p>
+
     <h4>ScalarWireCodec — reusing a WireCodec as a BsonEncoder</h4>
     <p>
         An opaque type over a primitive (<code>opaque type UserId = String</code>) typically needs a
