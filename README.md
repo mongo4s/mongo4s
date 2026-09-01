@@ -109,6 +109,21 @@ Already have a `MongoClientSettings` built elsewhere (connection pool tuning, re
 …)? Use `MongoClientResource.fromSettings` instead of `fromConnectionString`. `MongoClient.fromClient`/`fromSettings`/
 `fromConnectionString` give you the same thing unwrapped, if you'd rather own `.close` yourself.
 
+`MongoClientSettings` sets read/write concerns for the whole client. To narrow them, `MongoDatabase` and
+`MongoCollection` both carry `withReadConcern`/`withWriteConcern`/`withReadPreference`, each returning a **new**
+handle rather than mutating the one you have:
+
+```scala
+val durable = collection.withWriteConcern(WriteConcern.MAJORITY)
+durable.insertOne(user)          // majority-acknowledged
+collection.insertOne(other)      // still the client's default
+```
+
+Because the derived handle is an ordinary `MongoCollection`, per-operation control is just chaining:
+`collection.withWriteConcern(w).insertOne(x)`. Concerns inherit database → collection, as they do in the driver, and
+a collection derived this way keeps the codec it was opened with — including the `WireCodec` that
+`getDirectCollection` registers.
+
 A driver `CodecRegistry` is not how you plug a codec into `mongo4s`, though — see
 [Codecs and the driver's registry](#codecs-and-the-drivers-registry).
 

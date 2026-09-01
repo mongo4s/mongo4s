@@ -6,6 +6,7 @@ import scala.reflect.ClassTag
 
 import org.bson.BsonDocument
 import org.bson.codecs.configuration.CodecRegistries
+import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
 import com.mongodb.client.model.*
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
@@ -38,6 +39,15 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
       .withDocumentClass(tag.runtimeClass.asInstanceOf[Class[A]])
 
   def name: String = underlying.getNamespace.getCollectionName
+
+  def withReadConcern(concern: ReadConcern): MongoCollection[F, S, A] =
+    DirectMongoCollectionImpl(underlying.withReadConcern(concern), naming)
+
+  def withWriteConcern(concern: WriteConcern): MongoCollection[F, S, A] =
+    DirectMongoCollectionImpl(underlying.withWriteConcern(concern), naming)
+
+  def withReadPreference(preference: ReadPreference): MongoCollection[F, S, A] =
+    DirectMongoCollectionImpl(underlying.withReadPreference(preference), naming)
 
   def insertOne(document: A)(using session: Option[ClientSession]): F[InsertOneResult] =
     F.suspend {

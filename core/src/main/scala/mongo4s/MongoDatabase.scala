@@ -1,5 +1,6 @@
 package mongo4s
 
+import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoDatabase as RSMongoDatabase}
 import org.bson.BsonDocument
 
@@ -43,5 +44,9 @@ trait MongoDatabase[F[*], S[*]]:
   )(using decoder: BsonDocumentDecoder[A])(using Streamable[S, DecodeResult[ChangeEvent[A]]]): S[DecodeResult[ChangeEvent[A]]]
 
   def dropCollection(collectionName: String)(using session: Option[ClientSession] = None): F[Unit]
+
+  def withReadConcern(concern: ReadConcern): MongoDatabase[F, S]
+  def withWriteConcern(concern: WriteConcern): MongoDatabase[F, S]
+  def withReadPreference(preference: ReadPreference): MongoDatabase[F, S]
 
   def underlying: RSMongoDatabase

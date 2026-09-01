@@ -3,6 +3,7 @@ package mongo4s.internal
 import scala.reflect.ClassTag
 
 import org.bson.BsonDocument
+import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
 import com.mongodb.reactivestreams.client.{ChangeStreamPublisher, ClientSession, MongoDatabase as RSMongoDatabase}
 
 import mongo4s.bson.direct.WireCodec
@@ -18,6 +19,15 @@ private[mongo4s] final class MongoDatabaseImpl[F[*], S[*]](
     extends MongoDatabase[F, S]:
 
   def name: String = underlying.getName
+
+  def withReadConcern(concern: ReadConcern): MongoDatabase[F, S] =
+    MongoDatabaseImpl(underlying.withReadConcern(concern))
+
+  def withWriteConcern(concern: WriteConcern): MongoDatabase[F, S] =
+    MongoDatabaseImpl(underlying.withWriteConcern(concern))
+
+  def withReadPreference(preference: ReadPreference): MongoDatabase[F, S] =
+    MongoDatabaseImpl(underlying.withReadPreference(preference))
 
   def getCollection[A](
       collectionName: String,

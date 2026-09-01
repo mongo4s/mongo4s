@@ -3,6 +3,7 @@ package mongo4s.testkit
 import scala.collection.mutable
 
 import org.bson.{BsonDocument, BsonString, BsonValue}
+import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
@@ -26,6 +27,10 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   private val storage        = mutable.ArrayBuffer.empty[BsonDocument]
   private val createdIndexes = mutable.ArrayBuffer.empty[Index[E]]
+
+  def withReadConcern(concern: ReadConcern): MongoCollection[F, S, E]          = this
+  def withWriteConcern(concern: WriteConcern): MongoCollection[F, S, E]        = this
+  def withReadPreference(preference: ReadPreference): MongoCollection[F, S, E] = this
 
   def snapshot: List[E] = storage.flatMap(codec.decodeDocument(_).toOption).toList
 

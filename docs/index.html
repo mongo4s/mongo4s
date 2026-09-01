@@ -363,6 +363,17 @@ object Main extends IOApp.Simple:
 
 MongoClientResource.fromSettings[IO](settings).use { client =&gt; ... }</code></pre>
     <p>
+        <code>MongoClientSettings</code> sets read/write concerns for the whole client. To narrow them,
+        <code>MongoDatabase</code> and <code>MongoCollection</code> both carry <code>withReadConcern</code>/
+        <code>withWriteConcern</code>/<code>withReadPreference</code>, each returning a <strong>new</strong> handle
+        rather than mutating the one you have — so per-operation control is just chaining. Concerns inherit database →
+        collection as they do in the driver, and a derived collection keeps the codec it was opened with, including
+        the <code>WireCodec</code> that <code>getDirectCollection</code> registers.
+    </p>
+    <pre><code>val durable = collection.withWriteConcern(WriteConcern.MAJORITY)
+durable.insertOne(user)          // majority-acknowledged
+collection.insertOne(other)      // still the client's default</code></pre>
+    <p>
         For more examples see:
         <a href="https://github.com/mongo4s/mongo4s/tree/main/examples/src/main/scala/mongo4s/examples">examples/src/main/scala/mongo4s/examples</a>
         — a shared domain model (opaque types, enums, nested case classes) run through every runtime/codec combination

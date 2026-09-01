@@ -1,6 +1,7 @@
 package mongo4s
 
 import org.bson.BsonDocument
+import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
@@ -94,5 +95,9 @@ trait MongoCollection[F[*], S[*], A]:
   )(using
       Streamable[S, DecodeResult[ChangeEvent[A]]]
   ): S[DecodeResult[ChangeEvent[A]]]
+
+  def withReadConcern(concern: ReadConcern): MongoCollection[F, S, A]
+  def withWriteConcern(concern: WriteConcern): MongoCollection[F, S, A]
+  def withReadPreference(preference: ReadPreference): MongoCollection[F, S, A]
 
   def underlying: RSMongoCollection[BsonDocument]

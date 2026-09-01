@@ -3,6 +3,7 @@ package mongo4s.internal
 import java.util.concurrent.TimeUnit
 
 import org.bson.BsonDocument
+import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
 import com.mongodb.client.model.*
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
@@ -23,6 +24,15 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
     extends MongoCollection[F, S, A]:
 
   def name: String = underlying.getNamespace.getCollectionName
+
+  def withReadConcern(concern: ReadConcern): MongoCollection[F, S, A] =
+    MongoCollectionImpl(underlying.withReadConcern(concern), naming, codec)
+
+  def withWriteConcern(concern: WriteConcern): MongoCollection[F, S, A] =
+    MongoCollectionImpl(underlying.withWriteConcern(concern), naming, codec)
+
+  def withReadPreference(preference: ReadPreference): MongoCollection[F, S, A] =
+    MongoCollectionImpl(underlying.withReadPreference(preference), naming, codec)
 
   def insertOne(document: A)(using session: Option[ClientSession]): F[InsertOneResult] =
     F.suspend {

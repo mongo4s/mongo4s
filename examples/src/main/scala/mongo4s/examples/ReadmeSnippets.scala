@@ -3,6 +3,7 @@ package mongo4s.examples
 import cats.effect.IO
 import org.bson.types.ObjectId
 import org.bson.{BsonDocument, BsonInt32, BsonString, BsonTimestamp}
+import com.mongodb.WriteConcern
 import com.mongodb.client.model.Collation
 import com.mongodb.client.model.changestream.FullDocument
 
@@ -101,6 +102,12 @@ object ReadmeSnippets:
     .and(
       Update.Raw[User](BsonDocument("$bit", BsonDocument("age", BsonDocument("and", BsonString("7")))))
     )
+
+  // --- Concerns ---
+
+  def durableWrite(collection: MongoCollection[IO, S, User], user: User, other: User): IO[Unit] =
+    val durable = collection.withWriteConcern(WriteConcern.MAJORITY)
+    durable.insertOne(user) *> collection.insertOne(other).void
 
   // --- Results ---
 
