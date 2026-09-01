@@ -146,7 +146,7 @@ trait MongoCollection[F[*], S[*], A]:
 
   def find(filter: Filter[A] = Filter.all)(using session: Option[ClientSession] = None): FindQuery[F, S, A]
 
-  def updateOne(filter: Filter[A], update: Update[A], upsert: Boolean = false)(using session: Option[ClientSession] = None): F[UpdateResult]
+  def updateOne(filter: Filter[A], update: Update[A], options: UpdateOptions = UpdateOptions.default)(using session: Option[ClientSession] = None): F[UpdateResult]
 
   def deleteOne(filter: Filter[A])(using session: Option[ClientSession] = None): F[DeleteResult]
 
@@ -270,13 +270,28 @@ val elementQty: Field[Item, Int] = Field.stored("low.qty")
 collection.updateOne(
   orderId.equalTo("1"),
   Update.set(lowQty, 100),
-  arrayFilters = Seq(elementQty.lt(3)),
+  UpdateOptions.default.withArrayFilters(Seq(elementQty.lt(3))),
 )
 ```
 
 Array-filter paths are written against the **stored** document — the identifier is not a field of your model, so
 build them with `Field.stored` and spell the field names as they appear on the wire. Everything reached through `/`
 is a stored segment too, so neither the identifier nor `$[]` is touched by the collection's `FieldNaming`.
+
+#### Write options
+
+`updateOne`/`updateMany` take an `UpdateOptions`, `replaceOne` a `ReplaceOptions`. Both are immutable, built by
+chaining from `default`, and exist so that new options stay additive — a write method's signature never has to grow
+another parameter again:
+
+```scala
+UpdateOptions.default                                     // nothing set
+UpdateOptions.upsert                                      // shorthand for default.withUpsert
+UpdateOptions.upsert.withArrayFilters(Seq(elementQty.lt(3)))
+```
+
+Each operation family has its own options type on purpose rather than one shared bag: `upsert` means nothing on a
+delete, and a type that offered it there would let you write down a request the server cannot answer.
 
 An update that would produce no operators throws instead of sending `{}` — MongoDB rejects it, and failing at the
 call site beats a write that silently does nothing.
@@ -332,7 +347,7 @@ Writes report what actually happened. `UpdateResult` carries `matchedCount`, `mo
 is the only way to tell "matched but unchanged" from "nothing matched", or to recover the id an upsert generated:
 
 ```scala
-val result = collection.updateOne(filter, update, upsert = true)
+val result = collection.updateOne(filter, update, UpdateOptions.upsert)
 result.map(r => if r.wasUpserted then r.upsertedId else None)
 ```
 
@@ -913,7 +928,7 @@ the real driver interprets is interpreted against an in-memory buffer instead, s
 without a running MongoDB. Filters, updates, sorting, paging and projections are simulated; `aggregate`, `distinct`,
 `watch`, `$text`, `$expr` and `Filter.Raw` throw `UnsupportedOperationException` naming what was asked for, rather
 than quietly answering wrong. Replace-based upserts — what `upsert`/`upsertMany` go through — insert on a miss the
-way the server does; an `update`-based `upsert = true` that matches nothing throws instead of guessing what the
+way the server does; an `update`-based `UpdateOptions.upsert` that matches nothing throws instead of guessing what the
 operators would have built.
 
 ## Runtime backends

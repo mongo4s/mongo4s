@@ -9,7 +9,7 @@ import org.testcontainers.containers.MongoDBContainer
 import cats.effect.IO
 
 import mongo4s.cats.CatsStream
-import mongo4s.operations.Update
+import mongo4s.operations.{Update, UpdateOptions}
 import mongo4s.{Field, MongoClient}
 import mongo4s.bson.direct.WireCodec
 
@@ -66,7 +66,7 @@ final class ArrayFiltersItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Bef
           _      <- orders.updateOne(
                       idField.equalTo("1"),
                       Update.set(lowQty, 100),
-                      arrayFilters = Seq(elementQty.lt(3)),
+                      UpdateOptions.default.withArrayFilters(Seq(elementQty.lt(3))),
                     )
           found  <- orders.find(idField.equalTo("1")).first
         yield found

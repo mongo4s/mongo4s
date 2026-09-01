@@ -13,7 +13,7 @@ import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.repositories.{BaseMongoRepository, Page}
 import mongo4s.bson.{BsonDocumentCodec, DecodeResult, FieldNaming}
 import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec, WireCodecConfig}
-import mongo4s.operations.{Accumulator, Filter, Index, Projection, Sort, Stage, Update, WriteCommand}
+import mongo4s.operations.{Accumulator, Filter, Index, Projection, Sort, Stage, Update, UpdateOptions, WriteCommand}
 import mongo4s.{Field, MongoClient, MongoCollection, MongoDatabase, PrimaryKey, RsBridgeConfig, WithId, withTransaction}
 
 import scala.concurrent.duration.given
@@ -117,7 +117,7 @@ object ReadmeSnippets:
     collection.updateOne(
       Field.of[Order, Int](_.seq).equalTo(1),
       Update.set(lowQuantity, 100),
-      arrayFilters = Seq(elementQuantity.lt(3)),
+      UpdateOptions.default.withArrayFilters(Seq(elementQuantity.lt(3))),
     )
 
   // --- Concerns ---
@@ -129,7 +129,7 @@ object ReadmeSnippets:
   // --- Results ---
 
   def upsertedId(collection: MongoCollection[IO, S, User]): IO[Option[org.bson.BsonValue]] =
-    collection.updateOne(named, setAge, upsert = true).map(r => if r.wasUpserted then r.upsertedId else None)
+    collection.updateOne(named, setAge, UpdateOptions.upsert).map(r => if r.wasUpserted then r.upsertedId else None)
 
   def bulk(collection: MongoCollection[IO, S, User]): IO[BulkWriteResult] =
     collection.bulkWrite(

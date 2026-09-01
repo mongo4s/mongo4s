@@ -10,7 +10,7 @@ import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.{Effect, Field, MongoCollection, Streamable}
 import mongo4s.bson.{BsonDocumentCodec, DecodeResult, FieldNaming}
 import mongo4s.queries.{AggregateQuery, DecodeAttempts, DistinctQuery, FindQuery}
-import mongo4s.operations.{Filter, Index, Projection, Sort, Stage, Update, WriteCommand}
+import mongo4s.operations.{Filter, Index, Projection, ReplaceOptions, Sort, Stage, Update, UpdateOptions, WriteCommand}
 import mongo4s.results.{BulkWriteResult, DeleteResult, InsertManyResult, InsertOneResult, UpdateResult}
 
 import scala.jdk.CollectionConverters.given
@@ -56,34 +56,34 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   def find(filter: Filter[E])(using session: Option[ClientSession]): FindQuery[F, S, E] = FakeFindQuery(filter)
 
-  def replaceOne(filter: Filter[E], replacement: E, upsert: Boolean)(using session: Option[ClientSession]): F[UpdateResult] = F.delay {
+  def replaceOne(filter: Filter[E], replacement: E, options: ReplaceOptions)(using session: Option[ClientSession]): F[UpdateResult] = F.delay {
     matching(filter).headOption match
-      case Some(existing) =>
+      case Some(existing)         =>
         storage(storage.indexOf(existing)) = codec.encodeDocument(replacement)
         UpdateResult(matchedCount = 1, modifiedCount = 1, upsertedId = None)
-      case None if upsert =>
+      case None if options.upsert =>
         val encoded = codec.encodeDocument(replacement)
         storage += encoded
         UpdateResult(matchedCount = 0, modifiedCount = 0, upsertedId = Option(encoded.get("_id")))
-      case None           => UpdateResult.none
+      case None                   => UpdateResult.none
   }
 
-  def updateOne(filter: Filter[E], update: Update[E], upsert: Boolean, arrayFilters: Seq[Filter[?]])(using session: Option[ClientSession]): F[UpdateResult] = F.delay {
-    requireNoArrayFilters(arrayFilters, "updateOne")
+  def updateOne(filter: Filter[E], update: Update[E], options: UpdateOptions)(using session: Option[ClientSession]): F[UpdateResult] = F.delay {
+    requireNoArrayFilters(options.arrayFilters, "updateOne")
     matching(filter).headOption match
-      case Some(existing) =>
+      case Some(existing)         =>
         storage(storage.indexOf(existing)) = applyUpdate(existing, update)
         UpdateResult(matchedCount = 1, modifiedCount = 1, upsertedId = None)
-      case None if upsert =>
-        throw UnsupportedOperationException("FakeMongoCollection: updateOne(upsert = true) is not simulated")
-      case None           => UpdateResult.none
+      case None if options.upsert =>
+        throw UnsupportedOperationException("FakeMongoCollection: updateOne with upsert is not simulated")
+      case None                   => UpdateResult.none
   }
 
-  def updateMany(filter: Filter[E], update: Update[E], upsert: Boolean, arrayFilters: Seq[Filter[?]])(using session: Option[ClientSession]): F[UpdateResult] = F.delay {
-    requireNoArrayFilters(arrayFilters, "updateMany")
+  def updateMany(filter: Filter[E], update: Update[E], options: UpdateOptions)(using session: Option[ClientSession]): F[UpdateResult] = F.delay {
+    requireNoArrayFilters(options.arrayFilters, "updateMany")
     val matches = matching(filter)
     matches.foreach(doc => storage(storage.indexOf(doc)) = applyUpdate(doc, update))
-    if matches.isEmpty && upsert then throw UnsupportedOperationException("FakeMongoCollection: updateMany(upsert = true) is not simulated")
+    if matches.isEmpty && options.upsert then throw UnsupportedOperationException("FakeMongoCollection: updateMany with upsert is not simulated")
     UpdateResult(matchedCount = matches.size.toLong, modifiedCount = matches.size.toLong, upsertedId = None)
   }
 
@@ -152,35 +152,35 @@ final class FakeMongoCollection[F[*], S[*], E](
     val upserted = mutable.Map.empty[Int, BsonValue]
 
     commands.zipWithIndex.foreach {
-      case (WriteCommand.InsertOne(document), _)           =>
+      case (WriteCommand.InsertOne(document), _)                =>
         storage += codec.encodeDocument(document)
         inserted += 1
-      case (WriteCommand.ReplaceOne(filter, value, up), i) =>
+      case (WriteCommand.ReplaceOne(filter, value, options), i) =>
         matching(filter).headOption match
-          case Some(existing) =>
+          case Some(existing)         =>
             storage(storage.indexOf(existing)) = codec.encodeDocument(value)
             matched += 1
             modified += 1
-          case None if up     =>
+          case None if options.upsert =>
             val encoded = codec.encodeDocument(value)
             storage += encoded
             upserted += (i -> upsertedId(encoded))
-          case None           => ()
-      case (WriteCommand.UpdateOne(filter, update, _), _)  =>
+          case None                   => ()
+      case (WriteCommand.UpdateOne(filter, update, _), _)       =>
         matching(filter).headOption.foreach { doc =>
           storage(storage.indexOf(doc)) = applyUpdate(doc, update)
           matched += 1
           modified += 1
         }
-      case (WriteCommand.UpdateMany(filter, update, _), _) =>
+      case (WriteCommand.UpdateMany(filter, update, _), _)      =>
         matching(filter).foreach { doc =>
           storage(storage.indexOf(doc)) = applyUpdate(doc, update)
           matched += 1
           modified += 1
         }
-      case (WriteCommand.DeleteOne(filter), _)             =>
+      case (WriteCommand.DeleteOne(filter), _)                  =>
         matching(filter).headOption.foreach { doc => storage -= doc; deleted += 1 }
-      case (WriteCommand.DeleteMany(filter), _)            =>
+      case (WriteCommand.DeleteMany(filter), _)                 =>
         val matches = matching(filter)
         storage --= matches
         deleted += matches.size

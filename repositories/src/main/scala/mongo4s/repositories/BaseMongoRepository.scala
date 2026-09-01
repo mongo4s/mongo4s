@@ -6,7 +6,7 @@ import com.mongodb.reactivestreams.client.ClientSession
 
 import mongo4s.bson.{BsonDocumentCodec, BsonEncoder, FieldNaming}
 import mongo4s.results.{BulkWriteResult, DeleteResult, UpdateResult}
-import mongo4s.operations.{Filter, Index, Projection, Update, WriteCommand}
+import mongo4s.operations.{Filter, Index, Projection, ReplaceOptions, Update, UpdateOptions, WriteCommand}
 import mongo4s.{Effect, Field, MongoCollection, MongoDatabase, PrimaryKey, Streamable, WithId}
 
 open class BaseMongoRepository[F[*], S[*], E, K](
@@ -54,11 +54,11 @@ open class BaseMongoRepository[F[*], S[*], E, K](
     batched(entities)(chunk => F.map(collection.insertMany(chunk)(using session))(_.insertedIds))
 
   def upsert(entity: E)(using session: Option[ClientSession]): F[UpdateResult] =
-    collection.replaceOne(pk.eqFilter(pk.key(entity)), entity, upsert = true)(using session)
+    collection.replaceOne(pk.eqFilter(pk.key(entity)), entity, ReplaceOptions.upsert)(using session)
 
   def upsertMany(entities: List[E])(using session: Option[ClientSession]): F[BulkWriteResult] =
     batchedResults(entities)(chunk =>
-      collection.bulkWrite(chunk.map(entity => WriteCommand.replaceOne(pk.eqFilter(pk.key(entity)), entity, upsert = true)))(using session)
+      collection.bulkWrite(chunk.map(entity => WriteCommand.replaceOne(pk.eqFilter(pk.key(entity)), entity, ReplaceOptions.upsert)))(using session)
     )
 
   def updateField[A](key: K, field: Field[E, A], value: A)(using
@@ -68,8 +68,8 @@ open class BaseMongoRepository[F[*], S[*], E, K](
   ): F[UpdateResult] =
     collection.updateOne(pk.eqFilter(key), Update.Set(field.path, encoder.encode(value)))(using session)
 
-  def updateOne(key: K, update: Update[E], upsert: Boolean)(using session: Option[ClientSession]): F[UpdateResult] =
-    collection.updateOne(pk.eqFilter(key), update, upsert)(using session)
+  def updateOne(key: K, update: Update[E], options: UpdateOptions)(using session: Option[ClientSession]): F[UpdateResult] =
+    collection.updateOne(pk.eqFilter(key), update, options)(using session)
 
   def updateBy(filter: Filter[E], update: Update[E])(using session: Option[ClientSession]): F[UpdateResult] =
     collection.updateMany(filter, update)(using session)

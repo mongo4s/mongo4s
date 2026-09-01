@@ -7,7 +7,10 @@ import scala.reflect.ClassTag
 import org.bson.BsonDocument
 import org.bson.codecs.configuration.CodecRegistries
 import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
-import com.mongodb.client.model.*
+import com.mongodb.client.model.{BulkWriteOptions, DeleteManyModel, DeleteOneModel, IndexOptions, InsertOneModel}
+import com.mongodb.client.model.{FindOneAndDeleteOptions, FindOneAndReplaceOptions, FindOneAndUpdateOptions, ReturnDocument}
+import com.mongodb.client.model.{ReplaceOneModel, UpdateManyModel, UpdateOneModel, WriteModel}
+import com.mongodb.client.model.{ReplaceOptions as DriverReplaceOptions, UpdateOptions as DriverUpdateOptions}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
 import mongo4s.operations.*
@@ -78,37 +81,35 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
 
   def find(filter: Filter[A])(using session: Option[ClientSession]): FindQuery[F, S, A] = query(filter, session)
 
-  def replaceOne(filter: Filter[A], replacement: A, upsert: Boolean)(using session: Option[ClientSession]): F[UpdateResult] =
+  def replaceOne(filter: Filter[A], replacement: A, options: ReplaceOptions)(using session: Option[ClientSession]): F[UpdateResult] =
     F.suspend {
-      val options = ReplaceOptions().upsert(upsert)
+      val driverOptions = driverReplace(options)
 
       val publisher = session match
-        case Some(s) => typedCollection.replaceOne(s, filter.toBson(naming), replacement, options)
-        case None    => typedCollection.replaceOne(filter.toBson(naming), replacement, options)
+        case Some(s) => typedCollection.replaceOne(s, filter.toBson(naming), replacement, driverOptions)
+        case None    => typedCollection.replaceOne(filter.toBson(naming), replacement, driverOptions)
 
       F.map(rs.one(publisher))(UpdateResult.fromDriver)
     }
 
-  def updateOne(filter: Filter[A], update: Update[A], upsert: Boolean, arrayFilters: Seq[Filter[?]])(using session: Option[ClientSession]): F[UpdateResult] =
+  def updateOne(filter: Filter[A], update: Update[A], options: UpdateOptions)(using session: Option[ClientSession]): F[UpdateResult] =
     F.suspend {
-      val options = UpdateOptions().upsert(upsert)
-      if arrayFilters.nonEmpty then options.arrayFilters(arrayFilters.map(_.toBson(naming)).asJava): Unit
+      val driverOptions = driverUpdate(options)
 
       val publisher = session match
-        case Some(s) => typedCollection.updateOne(s, filter.toBson(naming), update.toBson(naming), options)
-        case None    => typedCollection.updateOne(filter.toBson(naming), update.toBson(naming), options)
+        case Some(s) => typedCollection.updateOne(s, filter.toBson(naming), update.toBson(naming), driverOptions)
+        case None    => typedCollection.updateOne(filter.toBson(naming), update.toBson(naming), driverOptions)
 
       F.map(rs.one(publisher))(UpdateResult.fromDriver)
     }
 
-  def updateMany(filter: Filter[A], update: Update[A], upsert: Boolean, arrayFilters: Seq[Filter[?]])(using session: Option[ClientSession]): F[UpdateResult] =
+  def updateMany(filter: Filter[A], update: Update[A], options: UpdateOptions)(using session: Option[ClientSession]): F[UpdateResult] =
     F.suspend {
-      val options = UpdateOptions().upsert(upsert)
-      if arrayFilters.nonEmpty then options.arrayFilters(arrayFilters.map(_.toBson(naming)).asJava): Unit
+      val driverOptions = driverUpdate(options)
 
       val publisher = session match
-        case Some(s) => typedCollection.updateMany(s, filter.toBson(naming), update.toBson(naming), options)
-        case None    => typedCollection.updateMany(filter.toBson(naming), update.toBson(naming), options)
+        case Some(s) => typedCollection.updateMany(s, filter.toBson(naming), update.toBson(naming), driverOptions)
+        case None    => typedCollection.updateMany(filter.toBson(naming), update.toBson(naming), driverOptions)
 
       F.map(rs.one(publisher))(UpdateResult.fromDriver)
     }
@@ -329,10 +330,18 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
       session = session,
     )
 
+  private def driverUpdate(options: UpdateOptions): DriverUpdateOptions =
+    val driverOptions = DriverUpdateOptions().upsert(options.upsert)
+    if options.arrayFilters.nonEmpty then driverOptions.arrayFilters(options.arrayFilters.map(_.toBson(naming)).asJava): Unit
+    driverOptions
+
+  private def driverReplace(options: ReplaceOptions): DriverReplaceOptions =
+    DriverReplaceOptions().upsert(options.upsert)
+
   private def toModel(command: WriteCommand[A]): WriteModel[A] = command match
-    case WriteCommand.InsertOne(document)            => InsertOneModel(document)
-    case WriteCommand.ReplaceOne(filter, value, up)  => ReplaceOneModel(filter.toBson(naming), value, ReplaceOptions().upsert(up))
-    case WriteCommand.UpdateOne(filter, update, up)  => UpdateOneModel(filter.toBson(naming), update.toBson(naming), UpdateOptions().upsert(up))
-    case WriteCommand.UpdateMany(filter, update, up) => UpdateManyModel(filter.toBson(naming), update.toBson(naming), UpdateOptions().upsert(up))
-    case WriteCommand.DeleteOne(filter)              => DeleteOneModel(filter.toBson(naming))
-    case WriteCommand.DeleteMany(filter)             => DeleteManyModel(filter.toBson(naming))
+    case WriteCommand.InsertOne(document)                 => InsertOneModel(document)
+    case WriteCommand.ReplaceOne(filter, value, options)  => ReplaceOneModel(filter.toBson(naming), value, driverReplace(options))
+    case WriteCommand.UpdateOne(filter, update, options)  => UpdateOneModel(filter.toBson(naming), update.toBson(naming), driverUpdate(options))
+    case WriteCommand.UpdateMany(filter, update, options) => UpdateManyModel(filter.toBson(naming), update.toBson(naming), driverUpdate(options))
+    case WriteCommand.DeleteOne(filter)                   => DeleteOneModel(filter.toBson(naming))
+    case WriteCommand.DeleteMany(filter)                  => DeleteManyModel(filter.toBson(naming))

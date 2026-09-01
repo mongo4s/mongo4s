@@ -6,7 +6,7 @@ import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSM
 
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.queries.{AggregateQuery, DistinctQuery, FindQuery}
-import mongo4s.operations.{Filter, Index, Projection, Sort, Stage, Update, WriteCommand}
+import mongo4s.operations.{Filter, Index, Projection, ReplaceOptions, Sort, Stage, Update, UpdateOptions, WriteCommand}
 import mongo4s.bson.{BsonDecoder, BsonDocumentCodec, DecodeResult, FieldNaming}
 import mongo4s.results.{BulkWriteResult, DeleteResult, InsertManyResult, InsertOneResult, UpdateResult}
 
@@ -20,15 +20,15 @@ trait MongoCollection[F[*], S[*], A]:
 
   def find(filter: Filter[A] = Filter.all)(using session: Option[ClientSession] = None): FindQuery[F, S, A]
 
-  def replaceOne(filter: Filter[A], replacement: A, upsert: Boolean = false)(using
+  def replaceOne(filter: Filter[A], replacement: A, options: ReplaceOptions = ReplaceOptions.default)(using
       session: Option[ClientSession] = None
   ): F[UpdateResult]
 
-  def updateOne(filter: Filter[A], update: Update[A], upsert: Boolean = false, arrayFilters: Seq[Filter[?]] = Nil)(using
+  def updateOne(filter: Filter[A], update: Update[A], options: UpdateOptions = UpdateOptions.default)(using
       session: Option[ClientSession] = None
   ): F[UpdateResult]
 
-  def updateMany(filter: Filter[A], update: Update[A], upsert: Boolean = false, arrayFilters: Seq[Filter[?]] = Nil)(using
+  def updateMany(filter: Filter[A], update: Update[A], options: UpdateOptions = UpdateOptions.default)(using
       session: Option[ClientSession] = None
   ): F[UpdateResult]
 

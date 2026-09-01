@@ -454,13 +454,23 @@ Update.rename(oldField, newField)  // $rename — also currentDate, popFirst/pop
     <pre><code>val lowQty: Field[Order, Int]    = Field.of[Order, List[Item]](_.items) / "$[low]" / "qty"
 val elementQty: Field[Item, Int] = Field.stored("low.qty")
 
-collection.updateOne(orderId.equalTo("1"), Update.set(lowQty, 100), arrayFilters = Seq(elementQty.lt(3)))</code></pre>
+collection.updateOne(orderId.equalTo("1"), Update.set(lowQty, 100), UpdateOptions.default.withArrayFilters(Seq(elementQty.lt(3))))</code></pre>
     <p class="muted">
         Array-filter paths are written against the <strong>stored</strong> document — the identifier is not a field of
         your model, so build them with <code>Field.stored</code> and spell the field names as they appear on the wire.
         Everything reached through <code>/</code> is a stored segment too, so neither the identifier nor
         <code>$[]</code> is touched by the collection's <code>FieldNaming</code>.
     </p>
+    <p>
+        <code>updateOne</code>/<code>updateMany</code> take an <code>UpdateOptions</code>, <code>replaceOne</code> a
+        <code>ReplaceOptions</code>. Both are immutable, built by chaining from <code>default</code>, and exist so new
+        options stay additive — a write method's signature never has to grow another parameter again. Each operation
+        family gets its own type rather than one shared bag, so <code>upsert</code> cannot be set on something that
+        has no upsert to give.
+    </p>
+    <pre><code>UpdateOptions.default                                     // nothing set
+UpdateOptions.upsert                                      // shorthand for default.withUpsert
+UpdateOptions.upsert.withArrayFilters(Seq(elementQty.lt(3)))</code></pre>
     <p><code>find</code> returns a builder; nothing is sent until <code>first</code>, <code>all</code>,
         <code>stream</code> or <code>attempting</code>:</p>
     <pre><code>collection
@@ -490,7 +500,7 @@ collection.updateOne(orderId.equalTo("1"), Update.set(lowQty, 100), arrayFilters
         <code>modifiedCount</code> and <code>upsertedId</code>, which is the only way to tell "matched but unchanged"
         from "nothing matched", or to recover the id an upsert generated:
     </p>
-    <pre><code>val result = collection.updateOne(filter, update, upsert = true)
+    <pre><code>val result = collection.updateOne(filter, update, UpdateOptions.upsert)
 result.map(r =&gt; if r.wasUpserted then r.upsertedId else None)</code></pre>
     <p class="muted">
         Under an unacknowledged write concern (<code>w=0</code>) the server sends nothing back, so every write result
@@ -1094,7 +1104,7 @@ users.getBy(adults, Page.first(100))  // same, as a stream</code></pre>
         <code>watch</code>, <code>$text</code>, <code>$expr</code> and <code>Filter.Raw</code> throw
         <code>UnsupportedOperationException</code> naming what was asked for, rather than quietly answering wrong.
         Replace-based upserts — what <code>upsert</code>/<code>upsertMany</code> go through — insert on a miss the way
-        the server does; an <code>update</code>-based <code>upsert = true</code> that matches nothing throws instead of
+        the server does; an <code>update</code>-based <code>UpdateOptions.upsert</code> that matches nothing throws instead of
         guessing what the operators would have built.
     </p>
 
