@@ -21,8 +21,11 @@ object DirectSumItSpec:
     case Circle(radius: Double)
     case Square(side: Double)
 
+  final case class Draft(title: String) derives WireCodec
+  final case class Published(title: String, slug: String) derives WireCodec
+
 final class DirectSumItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAfterAll:
-  import DirectSumItSpec.Shape
+  import DirectSumItSpec.{Draft, Published, Shape}
 
   private val container = new MongoDBContainer("mongo:7")
 
@@ -56,5 +59,18 @@ final class DirectSumItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Before
         yield found
 
       program.asserting(_ shouldBe List(Shape.Circle(1.0), Shape.Square(3.0), Shape.Circle(4.0)))
+    }
+
+    "read back an Either stored as the root entity, which has its own discriminator reader" in {
+      val program =
+        for
+          client     <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database   <- client.getDatabase("direct_sum_it")
+          collection <- database.getDirectCollection[Either[Draft, Published]]("posts")
+          _          <- collection.insertOne(Left(Draft("wip")))
+          found      <- collection.find(Filter.all).all
+        yield found
+
+      program.asserting(_ shouldBe List(Left(Draft("wip"))))
     }
   }

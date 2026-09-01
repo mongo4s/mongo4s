@@ -169,9 +169,7 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
     private def readBranch[T](reader: BsonReader, codec: WireCodec[T]): T =
       codec match
         case fieldCodec: FieldCodec[T @unchecked] => fieldCodec.readFields(reader)
-        case scalarCodec                          =>
-          reader.readName()
-          scalarCodec.decode(reader)
+        case scalarCodec                          => WireDiscriminator.readValue(reader, scalarCodec)
 
     def encode(writer: BsonWriter, value: Either[A, B]): Unit =
       value match
@@ -179,18 +177,7 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
         case Right(b) => writeBranch(writer, nameB, b, codecB)
 
     def decode(reader: BsonReader): Either[A, B] =
-      reader.readStartDocument()
-      if reader.readBsonType() == BsonType.END_OF_DOCUMENT
-      then throw BsonError.DecodingFailure(BsonError.MissingField(WireSumDerivation.DiscriminatorField))
-
-      val firstName = reader.readName()
-      if firstName != WireSumDerivation.DiscriminatorField
-      then
-        throw BsonError.DecodingFailure(
-          BsonError.Custom(s"Expected discriminator field '${WireSumDerivation.DiscriminatorField}' first, got '$firstName'")
-        )
-
-      val tag = reader.readString()
+      val tag = WireDiscriminator.read(reader)
 
       val result =
         if tag == nameA

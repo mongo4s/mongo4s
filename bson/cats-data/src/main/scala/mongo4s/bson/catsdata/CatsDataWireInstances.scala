@@ -9,7 +9,7 @@ import cats.data.{Chain, Ior, NonEmptyList, NonEmptyMap, NonEmptySet, NonEmptyVe
 import org.bson.{BsonReader, BsonType, BsonWriter}
 
 import mongo4s.bson.BsonError
-import mongo4s.bson.direct.WireCodec
+import mongo4s.bson.direct.{WireCodec, WireDiscriminator}
 
 trait CatsDataWireInstances:
 
@@ -46,8 +46,8 @@ trait CatsDataWireInstances:
       reader => NonEmptyMap.fromMap(SortedMap.from(inner.decode(reader))).getOrElse(nonEmpty("map")),
     )
 
-  private val IorDiscriminatorField = "_type"
-  private val IorValueField         = "value"
+  private val IorDiscriminatorField = WireDiscriminator.Field
+  private val IorValueField         = WireDiscriminator.ValueField
   private val IorLeftField          = "left"
   private val IorRightField         = "right"
 
@@ -74,13 +74,6 @@ trait CatsDataWireInstances:
       writer.writeEndDocument()
     end writeSingle
 
-    def readSingle[T](reader: BsonReader, tag: String, codec: WireCodec[T]): T =
-      val name = reader.readName()
-      if name != IorValueField
-      then throw BsonError.DecodingFailure(BsonError.Custom(s"Expected '$IorValueField' for Ior '$tag', got '$name'"))
-      else codec.decode(reader)
-    end readSingle
-
     def readBoth(reader: BsonReader): Ior[A, B] =
       var left: Option[A]  = None
       var right: Option[B] = None
@@ -99,19 +92,6 @@ trait CatsDataWireInstances:
           )
     end readBoth
 
-    def readTag(reader: BsonReader): String =
-      reader.readStartDocument()
-
-      if reader.readBsonType() == BsonType.END_OF_DOCUMENT
-      then throw BsonError.DecodingFailure(BsonError.MissingField(IorDiscriminatorField))
-
-      val firstName = reader.readName()
-
-      if firstName != IorDiscriminatorField
-      then throw BsonError.DecodingFailure(BsonError.Custom(s"Expected discriminator field '$IorDiscriminatorField' first, got '$firstName'"))
-      reader.readString()
-    end readTag
-
     WireCodec.instance(
       (writer, value) =>
         value match
@@ -127,13 +107,13 @@ trait CatsDataWireInstances:
             codecB.encode(writer, b)
             writer.writeEndDocument(),
       reader =>
-        val tag = readTag(reader)
+        val tag = WireDiscriminator.read(reader)
 
         val result: Ior[A, B] =
           if tag == nameA
-          then Ior.Left(readSingle(reader, tag, codecA))
+          then Ior.Left(WireDiscriminator.readValue(reader, codecA))
           else if tag == nameB
-          then Ior.Right(readSingle(reader, tag, codecB))
+          then Ior.Right(WireDiscriminator.readValue(reader, codecB))
           else if tag == bothTag
           then readBoth(reader)
           else throw BsonError.DecodingFailure(BsonError.Custom(s"Unknown Ior discriminator: $tag"))
