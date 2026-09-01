@@ -92,7 +92,12 @@ object Main extends IOApp.Simple:
 ```
 
 Swap `mongo4s-cats` for `mongo4s-zio` / `mongo4s-kyo` / `mongo4s-rapid` and the matching `*Instances.given` import to
-change runtime — nothing else in this snippet changes. `BsonEncoder`/`BsonDecoder` for built-in types (`String`,
+change runtime — the body of the `for` is identical. What does change is how you take the client, since each runtime
+keeps its own resource idiom: cats gives you a `Resource` to `.use`, ZIO a scoped `ZIO` and kyo a `Scope` effect (both
+bind inside the `for` and are discharged by `ZIO.scoped`/`Scope.run`), and rapid takes the body as a function —
+`MongoClientResource.fromConnectionString(uri) { client => … }`. See
+[examples/](examples/src/main/scala/mongo4s/examples) for one app per runtime.
+`BsonEncoder`/`BsonDecoder` for built-in types (`String`,
 `Int`, `Option`, `List`, `Vector`, `Set`, `Seq`, …) resolve with no import at all — no
 `mongo4s.bson.BsonInstances.given` needed unless you're summoning one directly.
 
@@ -310,7 +315,8 @@ val everything: S[DecodeResult[User]] = collection.find().attempting.stream
 ```
 
 `DecodeResult[A]` is `Either[BsonError, A]`. It's available on `find`, `aggregate` and `distinct`, and as
-`watchAttempting` on every `watch`. Transport errors still fail the effect — only decoding is made per-document.
+`watchAttempting` on a collection's `watch` — `watchAsAttempting` at the client and database level, where the
+element type is named at the call site. Transport errors still fail the effect — only decoding is made per-document.
 
 ### Primary keys
 
@@ -533,8 +539,8 @@ collection.watch(insertsOnly)
 ```
 
 A change stream never completes on its own — take from it, or interrupt it. A document that does not decode ends it
-with an error; `watchAttempting` reports the failure and carries on instead, which is what you want for a
-long-lived subscription.
+with an error; `watchAttempting` — `watchAsAttempting` at the client and database level — reports the failure and
+carries on instead, which is what you want for a long-lived subscription.
 
 ## BSON codecs
 

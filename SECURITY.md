@@ -2,8 +2,8 @@
 
 ## Supported Versions
 
-mongo4s is pre-1.0. Only the latest published release is supported; there is no back-porting of
-fixes to older versions at this stage.
+Only the latest published release is supported. Fixes are not back-ported to earlier major or minor
+versions; upgrade to the current release to pick them up.
 
 ## Reporting a Vulnerability
 

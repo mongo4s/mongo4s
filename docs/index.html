@@ -339,8 +339,10 @@ object Main extends IOApp.Simple:
       yield ()
     }</code></pre>
     <p>Swap <code>mongo4s-cats</code> for <code>mongo4s-zio</code> / <code>mongo4s-kyo</code> /
-        <code>mongo4s-rapid</code> and the matching <code>*Instances.given</code> import to change runtime — nothing
-        else changes. <code>BsonEncoder</code>/<code>BsonDecoder</code> for built-in types (<code>String</code>, <code>Int</code>,
+        <code>mongo4s-rapid</code> and the matching <code>*Instances.given</code> import to change runtime — the body
+        of the <code>for</code> is identical. What changes is how you take the client: cats gives you a
+        <code>Resource</code> to <code>.use</code>, ZIO a scoped <code>ZIO</code> and kyo a <code>Scope</code> effect,
+        and rapid takes the body as a function. <code>BsonEncoder</code>/<code>BsonDecoder</code> for built-in types (<code>String</code>, <code>Int</code>,
         <code>Option</code>, <code>List</code>, <code>Vector</code>, <code>Set</code>, <code>Seq</code>, …) resolve with
         no import at all.</p>
     <p class="muted">
@@ -481,8 +483,9 @@ result.map(r =&gt; if r.wasUpserted then r.upsertedId else None)</code></pre>
 val everything: S[DecodeResult[User]] = collection.find().attempting.stream</code></pre>
     <p class="muted">
         <code>DecodeResult[A]</code> is <code>Either[BsonError, A]</code>. It's on <code>find</code>,
-        <code>aggregate</code> and <code>distinct</code>, and as <code>watchAttempting</code> on every
-        <code>watch</code>. Transport errors still fail the effect — only decoding is made per-document.
+        <code>aggregate</code> and <code>distinct</code>, and as <code>watchAttempting</code> on a collection's
+        <code>watch</code> — <code>watchAsAttempting</code> at the client and database level. Transport errors still
+        fail the effect — only decoding is made per-document.
     </p>
 
     <h3 id="keys">Primary keys</h3>
@@ -679,8 +682,9 @@ collection.watch(WatchOptions.resumeAfter[User](savedToken))</code></pre>
 collection.watch(insertsOnly)</code></pre>
     <p class="muted">
         A change stream never completes on its own — take from it, or interrupt it. A document that does not decode
-        ends it with an error; <code>watchAttempting</code> reports the failure and carries on instead, which is what
-        you want for a long-lived subscription. All three levels need a replica set or sharded cluster.
+        ends it with an error; <code>watchAttempting</code> — <code>watchAsAttempting</code> at the client and
+        database level — reports the failure and carries on instead, which is what you want for a long-lived
+        subscription. All three levels need a replica set or sharded cluster.
     </p>
 
     <h2 id="codecs">BSON codecs</h2>
