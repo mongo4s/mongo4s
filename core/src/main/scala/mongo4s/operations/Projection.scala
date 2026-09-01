@@ -14,13 +14,21 @@ enum Projection[E]:
     this match
       case Include(fields, withId) => Include(fields :+ field.path, withId)
       case Everything()            => Include(List(field.path), withId = true)
-      case Exclude(_)              => Include(List(field.path), withId = true)
+      case Exclude(fields)         =>
+        require(
+          fields == Projection.IdOnly,
+          "a projection cannot mix inclusion with exclusion — only _id may be excluded alongside included fields",
+        )
+        Include(List(field.path), withId = false)
 
   def exclude[A](field: Field[E, A]): Projection[E] =
     this match
       case Exclude(fields) => Exclude(fields :+ field.path)
       case Everything()    => Exclude(List(field.path))
-      case Include(_, _)   => Exclude(List(field.path))
+      case Include(_, _)   =>
+        throw IllegalArgumentException(
+          "a projection cannot mix inclusion with exclusion — use withoutId to drop _id from an inclusion projection"
+        )
 
   def withoutId: Projection[E] =
     this match
@@ -53,5 +61,7 @@ enum Projection[E]:
         fields.foldLeft(BsonDocument())((acc, path) => acc.append(path.render(naming), BsonInt32(0)))
 
 object Projection:
+  private val IdOnly: List[FieldPath] = List(FieldPath.literal("_id"))
+
   def empty[E]: Projection[E]     = Everything()
-  def excludeId[E]: Projection[E] = Exclude(List(FieldPath.literal("_id")))
+  def excludeId[E]: Projection[E] = Exclude(IdOnly)

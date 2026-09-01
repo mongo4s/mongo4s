@@ -274,8 +274,9 @@ collection
 `collation`/`maxTime`/`batchSize` on `distinct`.
 
 `Projection` keeps inclusion and exclusion apart, because MongoDB rejects a projection mixing them — switching from
-one to the other replaces rather than adds. `_id` is the exception: `withoutId` drops it from an inclusion
-projection.
+one to the other throws `IllegalArgumentException` rather than silently dropping what you already listed, which
+would return more fields than you asked for. `_id` is the exception: `withoutId` drops it from an inclusion
+projection, and `Projection.excludeId` may be followed by `include` to build `{"field": 1, "_id": 0}`.
 
 ### Results
 

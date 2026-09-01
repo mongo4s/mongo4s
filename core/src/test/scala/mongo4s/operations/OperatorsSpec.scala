@@ -92,10 +92,18 @@ final class OperatorsSpec extends AnyWordSpec, Matchers:
   }
 
   "Projection" should {
-    "not mix inclusion with exclusion" in {
-      val projection = Projection.empty[Order].include(totalField).exclude(itemsField)
+    "reject exclusion after inclusion rather than silently dropping the included fields" in {
+      an[IllegalArgumentException] should be thrownBy Projection.empty[Order].include(totalField).exclude(itemsField)
+    }
 
-      projection.toBson(FieldNaming.identity).toJson shouldBe """{"items": 0}"""
+    "reject inclusion after a non-_id exclusion for the same reason" in {
+      an[IllegalArgumentException] should be thrownBy Projection.empty[Order].exclude(itemsField).include(totalField)
+    }
+
+    "allow inclusion on top of an _id-only exclusion, keeping _id out" in {
+      val projection = Projection.excludeId[Order].include(totalField)
+
+      projection.toBson(FieldNaming.identity).toJson shouldBe """{"total": 1, "_id": 0}"""
     }
 
     "keep _id excludable from an inclusion projection" in {

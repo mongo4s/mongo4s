@@ -451,7 +451,9 @@ Update.rename(oldField, newField)  // $rename — also currentDate, popFirst/pop
         <code>allowDiskUse</code>, and <code>collation</code>/<code>maxTime</code>/<code>batchSize</code> on
         <code>distinct</code>.
         <code>Projection</code> keeps inclusion and exclusion apart, since MongoDB rejects a projection mixing them —
-        <code>_id</code> being the exception, via <code>withoutId</code>.
+        switching from one to the other throws rather than silently dropping what you already listed.
+        <code>_id</code> is the exception, via <code>withoutId</code> or <code>Projection.excludeId</code> followed by
+        <code>include</code>.
     </p>
 
     <h3 id="results">Results, and reads that survive bad documents</h3>
