@@ -1017,13 +1017,19 @@ repository call can join a [transaction](#sessions--transactions) the same way a
 directly, not reimplementing what's already there.
 
 For unit tests, `FakeMongoCollection` (in `mongo4s-testkit`, a published module — add it as
-`"org.mongo4s" %% "mongo4s-testkit" % "2.0.0" % Test`) implements `MongoCollection` in memory — the exact same `Filter`/`Update`/`Field` AST
-the real driver interprets is interpreted against an in-memory buffer instead, so repository logic is testable
-without a running MongoDB. Filters, updates, sorting, paging and projections are simulated; `aggregate`, `distinct`,
-`watch`, `$text`, `$expr` and `Filter.Raw` throw `UnsupportedOperationException` naming what was asked for, rather
-than quietly answering wrong. Replace-based upserts — what `upsert`/`upsertMany` go through — insert on a miss the
-way the server does; an `update`-based `UpdateOptions.upsert` that matches nothing throws instead of guessing what the
-operators would have built.
+`"org.mongo4s" %% "mongo4s-testkit" % "2.0.0" % Test`) implements `MongoCollection` in memory. The exact same
+`Filter`/`Update`/`Field` AST the real driver interprets is interpreted against an in-memory buffer instead, so
+repository logic is testable without a running MongoDB.
+
+Filters, updates, sorting, paging and projections are simulated. `aggregate`, `distinct`, `watch`, `$text`, `$expr`,
+`Filter.Raw` and an update carrying `arrayFilters` throw `UnsupportedOperationException` naming what was asked for,
+rather than quietly answering wrong — a fake that lies is worse than no fake. Replace-based upserts — what
+`upsert`/`upsertMany` go through — insert on a miss the way the server does; an `update`-based `UpdateOptions.upsert`
+that matches nothing throws instead of guessing what the operators would have built.
+
+`FakeRepository` is the same idea one layer up: a real `BaseMongoRepository` over a `FakeMongoCollection`, so the
+repository logic under test is the one that ships. `repository.fake` reaches the collection underneath, for seeding
+and for `snapshot`.
 
 ## Runtime backends
 

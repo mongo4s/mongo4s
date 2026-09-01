@@ -270,8 +270,8 @@ appears once a write exceeds one batch, which is to say in production and not in
 Because `Filter`/`Update` are an AST rather than driver builders, they can be interpreted twice: once into real
 `Bson` for the server, and once against an in-memory buffer. `FakeMongoCollection` is that second interpreter —
 filters, updates, sorting, paging and projections are simulated, while `aggregate`, `distinct`, `watch`, `$text`,
-`$expr` and `Filter.Raw` throw `UnsupportedOperationException` naming what was asked for rather than quietly
-answering wrong. A fake that lies is worse than no fake.
+`$expr`, `Filter.Raw` and an update carrying `arrayFilters` throw `UnsupportedOperationException` naming what was
+asked for rather than quietly answering wrong. A fake that lies is worse than no fake.
 
 It ships as its own published module, `mongo4s-testkit`, so it is usable from a consumer's own tests rather than only
 inside this build. Alongside it, `FakeRepository` is a `BaseMongoRepository` over a `FakeMongoCollection` — the real

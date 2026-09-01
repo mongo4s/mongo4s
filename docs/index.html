@@ -1144,8 +1144,9 @@ users.getBy(adults, Page.first(100))  // same, as a stream</code></pre>
         same <code>Filter</code>/<code>Update</code>/<code>Field</code> AST the real driver interprets is interpreted
         against an in-memory buffer instead, so repository logic is testable without a running MongoDB. Filters,
         updates, sorting, paging and projections are simulated; <code>aggregate</code>, <code>distinct</code>,
-        <code>watch</code>, <code>$text</code>, <code>$expr</code> and <code>Filter.Raw</code> throw
-        <code>UnsupportedOperationException</code> naming what was asked for, rather than quietly answering wrong.
+        <code>watch</code>, <code>$text</code>, <code>$expr</code>, <code>Filter.Raw</code> and an update carrying
+        <code>arrayFilters</code> throw <code>UnsupportedOperationException</code> naming what was asked for, rather
+        than quietly answering wrong.
         Replace-based upserts — what <code>upsert</code>/<code>upsertMany</code> go through — insert on a miss the way
         the server does; an <code>update</code>-based <code>UpdateOptions.upsert</code> that matches nothing throws instead of
         guessing what the operators would have built.
@@ -2028,9 +2029,9 @@ given RsBridgeConfig = RsBridgeConfig(
         interpreted twice: into real <code>Bson</code> for the server, and against an in-memory buffer.
         <code>FakeMongoCollection</code> is that second interpreter — filters, updates, sorting, paging and
         projections are simulated, while <code>aggregate</code>, <code>distinct</code>, <code>watch</code>,
-        <code>$text</code>, <code>$expr</code> and <code>Filter.Raw</code> throw
-        <code>UnsupportedOperationException</code> naming what was asked for rather than quietly answering wrong. A
-        fake that lies is worse than no fake.
+        <code>$text</code>, <code>$expr</code>, <code>Filter.Raw</code> and an update carrying <code>arrayFilters</code>
+        throw <code>UnsupportedOperationException</code> naming what was asked for rather than quietly answering
+        wrong. A fake that lies is worse than no fake.
     </p>
     <p class="muted">
         It ships as its own published module, <code>mongo4s-testkit</code>, so it is usable from a consumer's own
