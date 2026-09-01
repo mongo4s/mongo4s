@@ -509,6 +509,32 @@ val byAge = Seq(
 `$replaceRoot`/`$facet`/`$sample`/`$unionWith`/`$out`/`$merge`,
 with `Stage.raw(document)` as the escape hatch for anything else.
 
+`$lookup` has two forms. `Stage.lookup` is the equality join on `localField`/`foreignField`; `Stage.lookupWith` takes
+a sub-pipeline that runs against the foreign collection, with `let` binding values from the outer document:
+
+```scala
+Stage.lookupWith[Order, User](
+  from = "users",
+  pipeline = List(Stage.matching(Field.of[User, Int](_.age).gte(18))),
+  as = "adults",
+  let = Some(BsonDocument("owner", BsonString("$user_id"))),
+)
+
+Stage.graphLookup[Order, User, String](
+  from = "users",
+  startWith = BsonString("$user_id"),
+  connectFrom = Field.of[User, String](_.managerId),
+  connectTo = Field.of[User, String](_.id),
+  as = "chain",
+  options = GraphLookupOptions.default[User].withMaxDepth(3).withDepthField("depth"),
+)
+```
+
+Note the second type parameter: the sub-pipeline and the `connectFrom`/`connectTo` fields belong to the **foreign**
+collection, so they are typed against it rather than against `A`. They are rendered with the outer collection's
+`FieldNaming` — fine when a project uses one convention throughout, which is the usual case; if the two collections
+disagree, spell the foreign names with `Field.stored`.
+
 `$out` and `$merge` write the pipeline's result into a collection, and both take options that stay out of the way
 until you need them — with none set they render as the bare collection name the server also accepts:
 

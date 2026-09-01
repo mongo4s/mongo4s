@@ -1,6 +1,6 @@
 package mongo4s.operations
 
-import org.bson.BsonDocument
+import org.bson.{BsonDocument, BsonString}
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -11,6 +11,7 @@ import mongo4s.bson.BsonInstances.given
 
 object StageSpec:
   final case class Order(userId: String, itemCount: Int, tags: List[String])
+  final case class User(id: String, age: Int, managerId: String)
 
 final class StageSpec extends AnyWordSpec, Matchers:
   import StageSpec.Order
@@ -59,6 +60,42 @@ final class StageSpec extends AnyWordSpec, Matchers:
       val stage = Stage.lookup("users", Field.of[Order, String](_.userId), "user_id", as = "user")
       stage.toBson(FieldNaming.snakeCase).toJson shouldBe
         """{"$lookup": {"from": "users", "localField": "user_id", "foreignField": "user_id", "as": "user"}}"""
+    }
+
+    "render a $lookup driven by a sub-pipeline over the foreign collection" in {
+      val stage = Stage.lookupWith[Order, StageSpec.User](
+        from = "users",
+        pipeline = List(Stage.matching(Field.of[StageSpec.User, Int](_.age).gte(18))),
+        as = "adults",
+        let = Some(BsonDocument("owner", BsonString("$user_id"))),
+      )
+
+      stage.toBson(FieldNaming.snakeCase).toJson shouldBe
+        """{"$lookup": {"from": "users", "let": {"owner": "$user_id"}, "pipeline": [{"$match": {"age": {"$gte": 18}}}], "as": "adults"}}"""
+    }
+
+    "render a $graphLookup, with its options only when they are set" in {
+      val bare = Stage.graphLookup[Order, StageSpec.User, String](
+        from = "users",
+        startWith = BsonString("$user_id"),
+        connectFrom = Field.of[StageSpec.User, String](_.managerId),
+        connectTo = Field.of[StageSpec.User, String](_.id),
+        as = "chain",
+      )
+
+      bare.toBson(FieldNaming.snakeCase).toJson shouldBe
+        """{"$graphLookup": {"from": "users", "startWith": "$user_id", "connectFromField": "manager_id", "connectToField": "id", "as": "chain"}}"""
+
+      val tuned = Stage.graphLookup[Order, StageSpec.User, String](
+        from = "users",
+        startWith = BsonString("$user_id"),
+        connectFrom = Field.of[StageSpec.User, String](_.managerId),
+        connectTo = Field.of[StageSpec.User, String](_.id),
+        as = "chain",
+        options = GraphLookupOptions.default[StageSpec.User].withMaxDepth(3).withDepthField("depth"),
+      )
+
+      tuned.toBson(FieldNaming.snakeCase).toJson should include(""""maxDepth": 3, "depthField": "depth"""")
     }
 
     "render $out and $merge as a bare name while nothing else is set" in {

@@ -16,6 +16,16 @@ enum Stage[E]:
   case Count(fieldName: String)
   case Unwind(path: FieldPath, preserveNullAndEmptyArrays: Boolean)
   case Lookup(from: String, localField: FieldPath, foreignField: FieldPath, as: String)
+  case LookupPipeline[T, B](from: String, let: Option[BsonDocument], pipeline: List[Stage[B]], as: String) extends Stage[T]
+
+  case GraphLookup[T, B](
+      from: String,
+      startWith: BsonValue,
+      connectFrom: FieldPath,
+      connectTo: FieldPath,
+      as: String,
+      options: GraphLookupOptions[B],
+  ) extends Stage[T]
   case Group(by: Option[FieldPath], accumulators: List[(String, Accumulator[E])])
   case AddFields(fields: List[(String, BsonValue)])
   case ReplaceRoot(path: FieldPath)
@@ -48,7 +58,29 @@ enum Stage[E]:
           .append("foreignField", BsonString(foreignField.render(naming)))
           .append("as", BsonString(as)),
       )
-    case Stage.Group(by, accumulators)                    =>
+    case Stage.LookupPipeline(from, let, pipeline, as)    =>
+      val lookup = BsonDocument("from", BsonString(from))
+
+      let.foreach(value => lookup.append("let", value): Unit)
+      lookup.append("pipeline", BsonArray(pipeline.map(_.toBson(naming)).asJava)): Unit
+      lookup.append("as", BsonString(as)): Unit
+
+      BsonDocument("$lookup", lookup)
+
+    case Stage.GraphLookup(from, startWith, connectFrom, connectTo, as, options) =>
+      val graph = BsonDocument("from", BsonString(from))
+        .append("startWith", startWith)
+        .append("connectFromField", BsonString(connectFrom.render(naming)))
+        .append("connectToField", BsonString(connectTo.render(naming)))
+        .append("as", BsonString(as))
+
+      options.maxDepth.foreach(value => graph.append("maxDepth", BsonInt32(value)): Unit)
+      options.depthField.foreach(value => graph.append("depthField", BsonString(value)): Unit)
+      options.restrictSearch.foreach(filter => graph.append("restrictSearchWithMatch", filter.toBson(naming)): Unit)
+
+      BsonDocument("$graphLookup", graph)
+
+    case Stage.Group(by, accumulators) =>
       val group = BsonDocument(
         "_id",
         by.fold(BsonNull.VALUE: BsonValue)(path => BsonString("$" + path.render(naming)))
@@ -87,6 +119,19 @@ object Stage:
 
   def unwind[E, A](field: Field[E, A], preserveNullAndEmptyArrays: Boolean = false): Stage[E] =
     Unwind(field.path, preserveNullAndEmptyArrays)
+
+  def lookupWith[E, B](from: String, pipeline: List[Stage[B]], as: String, let: Option[BsonDocument] = None): Stage[E] =
+    LookupPipeline(from, let, pipeline, as)
+
+  def graphLookup[E, B, A](
+      from: String,
+      startWith: BsonValue,
+      connectFrom: Field[B, A],
+      connectTo: Field[B, A],
+      as: String,
+      options: GraphLookupOptions[B] = GraphLookupOptions.default[B],
+  ): Stage[E] =
+    GraphLookup(from, startWith, connectFrom.path, connectTo.path, as, options)
 
   def lookup[E, A](from: String, localField: Field[E, A], foreignField: String, as: String): Stage[E] =
     Lookup(

@@ -632,6 +632,13 @@ val byAge = Seq(
         with <code>Stage.raw(document)</code> as the escape hatch for anything else.
     </p>
     <p>
+        <code>$lookup</code> has two forms: <code>Stage.lookup</code> is the equality join, <code>Stage.lookupWith</code>
+        takes a sub-pipeline over the foreign collection with <code>let</code> binding values from the outer document.
+        <code>Stage.graphLookup</code> walks a self-referencing hierarchy. Both take a second type parameter, because
+        the sub-pipeline and the connect fields belong to the <strong>foreign</strong> collection rather than to
+        <code>A</code>.
+    </p>
+    <p>
         <code>$out</code> and <code>$merge</code> write the pipeline's result into a collection, and both take options
         that stay out of the way until you need them — with none set they render as the bare collection name:
     </p>

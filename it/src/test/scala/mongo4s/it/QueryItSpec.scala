@@ -115,6 +115,35 @@ final class QueryItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndA
       program.asserting(_ shouldBe List("alice", "bob", "carol"))
     }
 
+    "run a $lookup driven by a sub-pipeline and a $graphLookup, both of which the server validates" in {
+      val program =
+        for
+          collection <- seeded("lookup_pipeline")
+          joined     <- collection
+                          .aggregate[BsonDocument](
+                            Seq(
+                              Stage.matching(nameField.equalTo("bob")),
+                              Stage.lookupWith[Person, Person](
+                                from = "lookup_pipeline",
+                                pipeline = List(Stage.matching(ageField.gte(30))),
+                                as = "peers",
+                              ),
+                              Stage.graphLookup[Person, Person, String](
+                                from = "lookup_pipeline",
+                                startWith = BsonString("$name"),
+                                connectFrom = nameField,
+                                connectTo = nameField,
+                                as = "chain",
+                                options = GraphLookupOptions.default[Person].withMaxDepth(1),
+                              ),
+                            )
+                          )
+                          .first
+        yield joined.map(document => (document.getArray("peers").size, document.getArray("chain").size))
+
+      program.asserting(_ shouldBe Some((2, 1)))
+    }
+
     "run a $merge that names its target database and keeps existing documents" in {
       val program =
         for
