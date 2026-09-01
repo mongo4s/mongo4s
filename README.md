@@ -250,6 +250,34 @@ Update.set(nameField, "bob").and(Update.Raw[User](BsonDocument("$bit", BsonDocum
 Rendering never mutates the document you handed to `Raw`, so the same value can be reused across updates and
 rendered under more than one `FieldNaming`.
 
+#### Updating array elements
+
+The positional operators are path segments, so `/` builds them — `$[]` updates every element and needs nothing else:
+
+```scala
+val everyQty: Field[Order, Int] = Field.of[Order, List[Item]](_.items) / "$[]" / "qty"
+
+collection.updateOne(orderId.equalTo("1"), Update.set(everyQty, 0))
+```
+
+`$[identifier]` updates only the elements an *array filter* selects, and those go in `arrayFilters` on
+`updateOne`/`updateMany`/`findOneAndUpdate`:
+
+```scala
+val lowQty: Field[Order, Int]    = Field.of[Order, List[Item]](_.items) / "$[low]" / "qty"
+val elementQty: Field[Item, Int] = Field.stored("low.qty")
+
+collection.updateOne(
+  orderId.equalTo("1"),
+  Update.set(lowQty, 100),
+  arrayFilters = Seq(elementQty.lt(3)),
+)
+```
+
+Array-filter paths are written against the **stored** document — the identifier is not a field of your model, so
+build them with `Field.stored` and spell the field names as they appear on the wire. Everything reached through `/`
+is a stored segment too, so neither the identifier nor `$[]` is touched by the collection's `FieldNaming`.
+
 An update that would produce no operators throws instead of sending `{}` — MongoDB rejects it, and failing at the
 call site beats a write that silently does nothing.
 

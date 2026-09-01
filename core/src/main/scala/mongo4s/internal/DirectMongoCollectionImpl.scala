@@ -89,9 +89,10 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
       F.map(rs.one(publisher))(UpdateResult.fromDriver)
     }
 
-  def updateOne(filter: Filter[A], update: Update[A], upsert: Boolean)(using session: Option[ClientSession]): F[UpdateResult] =
+  def updateOne(filter: Filter[A], update: Update[A], upsert: Boolean, arrayFilters: Seq[Filter[?]])(using session: Option[ClientSession]): F[UpdateResult] =
     F.suspend {
       val options = UpdateOptions().upsert(upsert)
+      if arrayFilters.nonEmpty then options.arrayFilters(arrayFilters.map(_.toBson(naming)).asJava): Unit
 
       val publisher = session match
         case Some(s) => typedCollection.updateOne(s, filter.toBson(naming), update.toBson(naming), options)
@@ -100,9 +101,10 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
       F.map(rs.one(publisher))(UpdateResult.fromDriver)
     }
 
-  def updateMany(filter: Filter[A], update: Update[A], upsert: Boolean)(using session: Option[ClientSession]): F[UpdateResult] =
+  def updateMany(filter: Filter[A], update: Update[A], upsert: Boolean, arrayFilters: Seq[Filter[?]])(using session: Option[ClientSession]): F[UpdateResult] =
     F.suspend {
       val options = UpdateOptions().upsert(upsert)
+      if arrayFilters.nonEmpty then options.arrayFilters(arrayFilters.map(_.toBson(naming)).asJava): Unit
 
       val publisher = session match
         case Some(s) => typedCollection.updateMany(s, filter.toBson(naming), update.toBson(naming), options)
@@ -133,7 +135,15 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
       }
     }
 
-  def findOneAndUpdate(filter: Filter[A], update: Update[A], returnUpdated: Boolean, upsert: Boolean, sort: Sort[A], projection: Projection[A])(using
+  def findOneAndUpdate(
+      filter: Filter[A],
+      update: Update[A],
+      returnUpdated: Boolean,
+      upsert: Boolean,
+      sort: Sort[A],
+      projection: Projection[A],
+      arrayFilters: Seq[Filter[?]],
+  )(using
       session: Option[ClientSession]
   ): F[Option[A]] =
     F.suspend {
@@ -143,6 +153,7 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
 
       if !sort.isEmpty then options.sort(sort.toBson(naming)): Unit
       if !projection.isEmpty then options.projection(projection.toBson(naming)): Unit
+      if arrayFilters.nonEmpty then options.arrayFilters(arrayFilters.map(_.toBson(naming)).asJava): Unit
 
       val publisher = session match
         case Some(s) => typedCollection.findOneAndUpdate(s, filter.toBson(naming), update.toBson(naming), options)

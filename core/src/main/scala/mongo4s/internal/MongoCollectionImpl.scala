@@ -80,9 +80,10 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       F.map(rs.one(publisher))(UpdateResult.fromDriver)
     }
 
-  def updateOne(filter: Filter[A], update: Update[A], upsert: Boolean)(using session: Option[ClientSession]): F[UpdateResult] =
+  def updateOne(filter: Filter[A], update: Update[A], upsert: Boolean, arrayFilters: Seq[Filter[?]])(using session: Option[ClientSession]): F[UpdateResult] =
     F.suspend {
       val options = UpdateOptions().upsert(upsert)
+      if arrayFilters.nonEmpty then options.arrayFilters(arrayFilters.map(_.toBson(naming)).asJava): Unit
 
       val publisher = session match
         case Some(s) => underlying.updateOne(s, filter.toBson(naming), update.toBson(naming), options)
@@ -95,9 +96,11 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       filter: Filter[A],
       update: Update[A],
       upsert: Boolean,
+      arrayFilters: Seq[Filter[?]],
   )(using session: Option[ClientSession]): F[UpdateResult] =
     F.suspend {
       val options = UpdateOptions().upsert(upsert)
+      if arrayFilters.nonEmpty then options.arrayFilters(arrayFilters.map(_.toBson(naming)).asJava): Unit
 
       val publisher = session match
         case Some(s) => underlying.updateMany(s, filter.toBson(naming), update.toBson(naming), options)
@@ -135,6 +138,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       upsert: Boolean,
       sort: Sort[A],
       projection: Projection[A],
+      arrayFilters: Seq[Filter[?]],
   )(using
       session: Option[ClientSession]
   ): F[Option[A]] =
@@ -146,6 +150,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
 
       if !sort.isEmpty then options.sort(sort.toBson(naming)): Unit
       if !projection.isEmpty then options.projection(projection.toBson(naming)): Unit
+      if arrayFilters.nonEmpty then options.arrayFilters(arrayFilters.map(_.toBson(naming)).asJava): Unit
 
       val publisher = session match
         case Some(s) => underlying.findOneAndUpdate(s, filter.toBson(naming), update.toBson(naming), options)

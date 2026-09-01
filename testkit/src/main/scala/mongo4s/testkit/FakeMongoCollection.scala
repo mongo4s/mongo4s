@@ -38,6 +38,10 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   def insertRaw(document: BsonDocument): Unit = storage += document
 
+  private def requireNoArrayFilters(arrayFilters: Seq[Filter[?]], operation: String): Unit =
+    if arrayFilters.nonEmpty
+    then throw UnsupportedOperationException(s"FakeMongoCollection: $operation with arrayFilters is not simulated")
+
   def insertOne(document: E)(using session: Option[ClientSession]): F[InsertOneResult] = F.delay {
     val encoded = codec.encodeDocument(document)
     storage += encoded
@@ -64,7 +68,8 @@ final class FakeMongoCollection[F[*], S[*], E](
       case None           => UpdateResult.none
   }
 
-  def updateOne(filter: Filter[E], update: Update[E], upsert: Boolean)(using session: Option[ClientSession]): F[UpdateResult] = F.delay {
+  def updateOne(filter: Filter[E], update: Update[E], upsert: Boolean, arrayFilters: Seq[Filter[?]])(using session: Option[ClientSession]): F[UpdateResult] = F.delay {
+    requireNoArrayFilters(arrayFilters, "updateOne")
     matching(filter).headOption match
       case Some(existing) =>
         storage(storage.indexOf(existing)) = applyUpdate(existing, update)
@@ -74,16 +79,26 @@ final class FakeMongoCollection[F[*], S[*], E](
       case None           => UpdateResult.none
   }
 
-  def updateMany(filter: Filter[E], update: Update[E], upsert: Boolean)(using session: Option[ClientSession]): F[UpdateResult] = F.delay {
+  def updateMany(filter: Filter[E], update: Update[E], upsert: Boolean, arrayFilters: Seq[Filter[?]])(using session: Option[ClientSession]): F[UpdateResult] = F.delay {
+    requireNoArrayFilters(arrayFilters, "updateMany")
     val matches = matching(filter)
     matches.foreach(doc => storage(storage.indexOf(doc)) = applyUpdate(doc, update))
     if matches.isEmpty && upsert then throw UnsupportedOperationException("FakeMongoCollection: updateMany(upsert = true) is not simulated")
     UpdateResult(matchedCount = matches.size.toLong, modifiedCount = matches.size.toLong, upsertedId = None)
   }
 
-  def findOneAndUpdate(filter: Filter[E], update: Update[E], returnUpdated: Boolean, upsert: Boolean, sort: Sort[E], projection: Projection[E])(using
+  def findOneAndUpdate(
+      filter: Filter[E],
+      update: Update[E],
+      returnUpdated: Boolean,
+      upsert: Boolean,
+      sort: Sort[E],
+      projection: Projection[E],
+      arrayFilters: Seq[Filter[?]],
+  )(using
       session: Option[ClientSession]
   ): F[Option[E]] = F.delay {
+    requireNoArrayFilters(arrayFilters, "findOneAndUpdate")
     matching(filter).headOption match
       case None if upsert => throw UnsupportedOperationException("FakeMongoCollection: findOneAndUpdate(upsert = true) is not simulated")
       case None           => None

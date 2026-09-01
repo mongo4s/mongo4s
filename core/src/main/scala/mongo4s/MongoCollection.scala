@@ -24,11 +24,11 @@ trait MongoCollection[F[*], S[*], A]:
       session: Option[ClientSession] = None
   ): F[UpdateResult]
 
-  def updateOne(filter: Filter[A], update: Update[A], upsert: Boolean = false)(using
+  def updateOne(filter: Filter[A], update: Update[A], upsert: Boolean = false, arrayFilters: Seq[Filter[?]] = Nil)(using
       session: Option[ClientSession] = None
   ): F[UpdateResult]
 
-  def updateMany(filter: Filter[A], update: Update[A], upsert: Boolean = false)(using
+  def updateMany(filter: Filter[A], update: Update[A], upsert: Boolean = false, arrayFilters: Seq[Filter[?]] = Nil)(using
       session: Option[ClientSession] = None
   ): F[UpdateResult]
 
@@ -42,6 +42,7 @@ trait MongoCollection[F[*], S[*], A]:
       upsert: Boolean = false,
       sort: Sort[A] = Sort.empty[A],
       projection: Projection[A] = Projection.empty[A],
+      arrayFilters: Seq[Filter[?]] = Nil,
   )(using session: Option[ClientSession] = None): F[Option[A]]
 
   def findOneAndReplace(

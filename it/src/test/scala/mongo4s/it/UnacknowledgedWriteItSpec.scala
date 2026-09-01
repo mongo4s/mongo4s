@@ -9,7 +9,7 @@ import org.testcontainers.containers.MongoDBContainer
 import cats.effect.IO
 
 import mongo4s.cats.CatsStream
-import mongo4s.operations.{Filter, Update, WriteCommand}
+import mongo4s.operations.{Update, WriteCommand}
 import mongo4s.{Field, MongoClient, MongoCollection}
 
 import mongo4s.cats.CatsInstances.given

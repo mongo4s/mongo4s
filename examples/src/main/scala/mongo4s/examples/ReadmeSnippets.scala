@@ -103,6 +103,23 @@ object ReadmeSnippets:
       Update.Raw[User](BsonDocument("$bit", BsonDocument("age", BsonDocument("and", BsonString("7")))))
     )
 
+  // --- Array elements ---
+
+  def resetEveryQuantity(collection: MongoCollection[IO, S, Order]): IO[UpdateResult] =
+    val everyQuantity: Field[Order, Int] = Field.of[Order, List[Item]](_.items) / "$[]" / "quantity"
+
+    collection.updateOne(Field.of[Order, Int](_.seq).equalTo(1), Update.set(everyQuantity, 0))
+
+  def raiseLowQuantities(collection: MongoCollection[IO, S, Order]): IO[UpdateResult] =
+    val lowQuantity: Field[Order, Int]    = Field.of[Order, List[Item]](_.items) / "$[low]" / "quantity"
+    val elementQuantity: Field[Item, Int] = Field.stored("low.quantity")
+
+    collection.updateOne(
+      Field.of[Order, Int](_.seq).equalTo(1),
+      Update.set(lowQuantity, 100),
+      arrayFilters = Seq(elementQuantity.lt(3)),
+    )
+
   // --- Concerns ---
 
   def durableWrite(collection: MongoCollection[IO, S, User], user: User, other: User): IO[Unit] =

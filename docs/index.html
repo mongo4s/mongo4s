@@ -445,6 +445,22 @@ Update.rename(oldField, newField)  // $rename — also currentDate, popFirst/pop
         carrying the same <code>Filter</code> and <code>Update</code> values, run in the order given unless
         <code>ordered = false</code>.
     </p>
+    <p>
+        The positional operators are path segments, so <code>/</code> builds them. <code>$[]</code> updates every
+        element and needs nothing else; <code>$[identifier]</code> updates only what an <em>array filter</em> selects,
+        and those go in <code>arrayFilters</code> on
+        <code>updateOne</code>/<code>updateMany</code>/<code>findOneAndUpdate</code>:
+    </p>
+    <pre><code>val lowQty: Field[Order, Int]    = Field.of[Order, List[Item]](_.items) / "$[low]" / "qty"
+val elementQty: Field[Item, Int] = Field.stored("low.qty")
+
+collection.updateOne(orderId.equalTo("1"), Update.set(lowQty, 100), arrayFilters = Seq(elementQty.lt(3)))</code></pre>
+    <p class="muted">
+        Array-filter paths are written against the <strong>stored</strong> document — the identifier is not a field of
+        your model, so build them with <code>Field.stored</code> and spell the field names as they appear on the wire.
+        Everything reached through <code>/</code> is a stored segment too, so neither the identifier nor
+        <code>$[]</code> is touched by the collection's <code>FieldNaming</code>.
+    </p>
     <p><code>find</code> returns a builder; nothing is sent until <code>first</code>, <code>all</code>,
         <code>stream</code> or <code>attempting</code>:</p>
     <pre><code>collection
