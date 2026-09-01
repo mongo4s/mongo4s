@@ -10,37 +10,6 @@ enum Projection[E]:
   case Include[T](fields: List[FieldPath], withId: Boolean) extends Projection[T]
   case Exclude[T](fields: List[FieldPath])                  extends Projection[T]
 
-  def include[A](field: Field[E, A]): Projection[E] =
-    this match
-      case Include(fields, withId) => Include(fields :+ field.path, withId)
-      case Everything()            => Include(List(field.path), withId = true)
-      case Exclude(fields)         =>
-        require(
-          fields == Projection.IdOnly,
-          "a projection cannot mix inclusion with exclusion — only _id may be excluded alongside included fields",
-        )
-        Include(List(field.path), withId = false)
-
-  def exclude[A](field: Field[E, A]): Projection[E] =
-    this match
-      case Exclude(fields) => Exclude(fields :+ field.path)
-      case Everything()    => Exclude(List(field.path))
-      case Include(_, _)   =>
-        throw IllegalArgumentException(
-          "a projection cannot mix inclusion with exclusion — use withoutId to drop _id from an inclusion projection"
-        )
-
-  def withoutId: Projection[E] =
-    this match
-      case Include(fields, _) => Include(fields, withId = false)
-      case Everything()       => Exclude(List(FieldPath.literal("_id")))
-      case Exclude(fields)    =>
-        val id = FieldPath.literal("_id")
-        if fields.contains(id)
-        then this
-        else Exclude(fields :+ id)
-  end withoutId
-
   def isEmpty: Boolean = this match
     case Everything()          => true
     case Include(fields, true) => fields.isEmpty
@@ -61,7 +30,24 @@ enum Projection[E]:
         fields.foldLeft(BsonDocument())((acc, path) => acc.append(path.render(naming), BsonInt32(0)))
 
 object Projection:
-  private val IdOnly: List[FieldPath] = List(FieldPath.literal("_id"))
+  private val IdPath: FieldPath = FieldPath.literal("_id")
 
-  def empty[E]: Projection[E]     = Everything()
-  def excludeId[E]: Projection[E] = Exclude(IdOnly)
+  def empty[E]: Everything[E]  = Everything()
+  def excludeId[E]: Exclude[E] = Exclude(List(IdPath))
+
+  extension [E](projection: Everything[E])
+    def include[A](field: Field[E, A]): Include[E] = Include(List(field.path), withId = true)
+    def exclude[A](field: Field[E, A]): Exclude[E] = Exclude(List(field.path))
+    def withoutId: Exclude[E]                      = Exclude(List(IdPath))
+
+  extension [E](projection: Include[E])
+    def include[A](field: Field[E, A]): Include[E] = Include(projection.fields :+ field.path, projection.withId)
+    def withoutId: Include[E]                      = Include(projection.fields, withId = false)
+
+  extension [E](projection: Exclude[E])
+    def exclude[A](field: Field[E, A]): Exclude[E] = Exclude(projection.fields :+ field.path)
+
+    def withoutId: Exclude[E] =
+      if projection.fields.contains(IdPath)
+      then projection
+      else Exclude(projection.fields :+ IdPath)

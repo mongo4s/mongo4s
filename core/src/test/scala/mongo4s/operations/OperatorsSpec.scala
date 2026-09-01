@@ -1,5 +1,7 @@
 package mongo4s.operations
 
+import scala.compiletime.testing.typeChecks
+
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -92,18 +94,17 @@ final class OperatorsSpec extends AnyWordSpec, Matchers:
   }
 
   "Projection" should {
-    "reject exclusion after inclusion rather than silently dropping the included fields" in {
-      an[IllegalArgumentException] should be thrownBy Projection.empty[Order].include(totalField).exclude(itemsField)
+    "refuse to compile an exclusion chained onto an inclusion" in {
+      typeChecks("Projection.empty[Order].include(totalField).exclude(itemsField)") shouldBe false
     }
 
-    "reject inclusion after a non-_id exclusion for the same reason" in {
-      an[IllegalArgumentException] should be thrownBy Projection.empty[Order].exclude(itemsField).include(totalField)
+    "refuse to compile an inclusion chained onto an exclusion" in {
+      typeChecks("Projection.empty[Order].exclude(itemsField).include(totalField)") shouldBe false
     }
 
-    "allow inclusion on top of an _id-only exclusion, keeping _id out" in {
-      val projection = Projection.excludeId[Order].include(totalField)
-
-      projection.toBson(FieldNaming.identity).toJson shouldBe """{"total": 1, "_id": 0}"""
+    "keep both chains available from the neutral projection" in {
+      typeChecks("Projection.empty[Order].include(totalField).include(itemsField)") shouldBe true
+      typeChecks("Projection.empty[Order].exclude(totalField).exclude(itemsField)") shouldBe true
     }
 
     "keep _id excludable from an inclusion projection" in {

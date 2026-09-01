@@ -53,10 +53,10 @@ third-party codec library, no extra dependency beyond `mongo4s-core` itself:
 
 ```scala
 libraryDependencies ++= Seq(
-  "org.mongo4s" %% "mongo4s-cats" % "1.1.0", // mongo4s-core + cats-effect integration
-  "org.mongo4s" %% "mongo4s-bson-direct" % "1.1.0", // ast-free bson codecs
-  "org.mongo4s" %% "mongo4s-bson-cats-data" % "1.1.0", // if you need NonEmptyList etc. codec instances
-  "org.mongo4s" %% "mongo4s-repositories" % "1.1.0", // if you need auto-generated CRUD repository ops for your model
+  "org.mongo4s" %% "mongo4s-cats" % "2.0.0", // mongo4s-core + cats-effect integration
+  "org.mongo4s" %% "mongo4s-bson-direct" % "2.0.0", // ast-free bson codecs
+  "org.mongo4s" %% "mongo4s-bson-cats-data" % "2.0.0", // if you need NonEmptyList etc. codec instances
+  "org.mongo4s" %% "mongo4s-repositories" % "2.0.0", // if you need auto-generated CRUD repository ops for your model
 )
 ```
 
@@ -273,10 +273,10 @@ collection
 `hint`/`collation`/`maxTime`/`batchSize`/`comment` options are on `aggregate`, which adds `allowDiskUse`, and
 `collation`/`maxTime`/`batchSize` on `distinct`.
 
-`Projection` keeps inclusion and exclusion apart, because MongoDB rejects a projection mixing them — switching from
-one to the other throws `IllegalArgumentException` rather than silently dropping what you already listed, which
-would return more fields than you asked for. `_id` is the exception: `withoutId` drops it from an inclusion
-projection, and `Projection.excludeId` may be followed by `include` to build `{"field": 1, "_id": 0}`.
+`Projection` keeps inclusion and exclusion apart, because MongoDB rejects a projection mixing them. They are separate
+types — `Projection.empty` starts neutral and the first `include` or `exclude` commits it — so chaining `exclude` onto
+an inclusion projection does not compile at all, rather than silently returning more fields than you asked for. `_id`
+is the exception: `withoutId` drops it from an inclusion projection, giving `{"field": 1, "_id": 0}`.
 
 ### Results
 
@@ -947,7 +947,7 @@ Operations that expect at most one document read two, not the whole cursor — e
 Published for Scala 3 under `org.mongo4s`:
 
 ```scala
-"org.mongo4s" %% "mongo4s-<module>" % "1.1.0"
+"org.mongo4s" %% "mongo4s-<module>" % "2.0.0"
 ```
 
 | | Module | Min. Scala | Notes |
