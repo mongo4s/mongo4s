@@ -7,6 +7,7 @@ import org.scalatest.matchers.should.Matchers
 
 import org.bson.io.{BasicOutputBuffer, ByteBufferBsonInput}
 import org.bson.{BsonBinaryReader, BsonBinaryWriter, ByteBufNIO}
+import org.bson.{BsonDocument, BsonDocumentReader, BsonString}
 import cats.data.{Chain, Ior, NonEmptyList, NonEmptyMap, NonEmptySet, NonEmptyVector}
 
 import mongo4s.bson.direct.WireCodec
@@ -15,6 +16,10 @@ import mongo4s.bson.{BsonDecoder, BsonEncoder}
 import CatsDataBsonInstances.given
 import CatsDataWireInstances.given
 import mongo4s.bson.BsonInstances.given
+
+object CatsDataInstancesSpec:
+  final case class UserId(value: String) derives WireCodec
+  final case class OrderId(value: String) derives WireCodec
 
 final class CatsDataInstancesSpec extends AnyWordSpec, Matchers:
 
@@ -37,6 +42,9 @@ final class CatsDataInstancesSpec extends AnyWordSpec, Matchers:
     val result = codec.decode(reader)
     reader.readEndDocument()
     result
+
+  private def iorDecode[A](document: BsonDocument)(using codec: WireCodec[A]): A =
+    codec.decode(BsonDocumentReader(document))
 
   private def iorRoundTrip[A](value: A)(using codec: WireCodec[A]): A =
     val buffer = BasicOutputBuffer()
@@ -123,6 +131,17 @@ final class CatsDataInstancesSpec extends AnyWordSpec, Matchers:
 
   "cats.data Ior WireCodec instance" should {
     final case class Foo(x: Int) derives WireCodec
+
+    "decode Both by field name, so a reordered document does not swap the two sides" in {
+      import CatsDataInstancesSpec.{OrderId, UserId}
+
+      val document = BsonDocument()
+        .append("_type", BsonString("UserId+OrderId"))
+        .append("right", BsonDocument().append("value", BsonString("o1")))
+        .append("left", BsonDocument().append("value", BsonString("u1")))
+
+      iorDecode[Ior[UserId, OrderId]](document) shouldBe Ior.Both(UserId("u1"), OrderId("o1"))
+    }
 
     "round-trip Left/Right/Both" in {
       iorRoundTrip[Ior[String, Foo]](Ior.Left("boom")) shouldBe Ior.Left("boom")
