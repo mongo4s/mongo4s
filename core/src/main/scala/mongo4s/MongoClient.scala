@@ -7,6 +7,7 @@ import com.mongodb.reactivestreams.client.{ClientSession, MongoClient as RSMongo
 import mongo4s.internal.MongoClientImpl
 import mongo4s.bson.{BsonDocumentDecoder, DecodeResult}
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
+import mongo4s.operations.TransactionOptions
 
 trait MongoClient[F[*], S[*]]:
   def getDatabase(name: String): F[MongoDatabase[F, S]]
@@ -26,9 +27,12 @@ trait MongoClient[F[*], S[*]]:
       session: Option[ClientSession] = None
   )(using decoder: BsonDocumentDecoder[A])(using Streamable[S, DecodeResult[ChangeEvent[A]]]): S[DecodeResult[ChangeEvent[A]]]
 
-  def withTransaction[A](fa: Option[ClientSession] ?=> F[A])(using F: Effect[F], rs: RsBridge[F, S]): F[A] =
+  def withTransaction[A](fa: Option[ClientSession] ?=> F[A], options: TransactionOptions = TransactionOptions.default)(using
+      F: Effect[F],
+      rs: RsBridge[F, S],
+  ): F[A] =
     F.bracket(startSession) { session =>
-      session.withTransaction[F, S, A](fa)
+      session.withTransaction[F, S, A](fa, options)
     } { session =>
       F.delay(session.close())
     }

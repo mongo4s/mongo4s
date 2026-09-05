@@ -1,6 +1,10 @@
 package mongo4s.zio
 
-import zio.{Cause, Exit, Task, ZIO}
+import java.util.concurrent.TimeUnit
+
+import scala.concurrent.duration.FiniteDuration
+
+import zio.{Cause, Clock, Exit, Task, ZIO}
 
 import mongo4s.{Effect, ExitCase}
 
@@ -14,6 +18,9 @@ trait TaskToEffectInstance:
     def raiseError[A](error: Throwable): Task[A]             = ZIO.fail(error)
 
     override def suspend[A](fa: => Task[A]): Task[A] = ZIO.suspendSucceed(fa)
+
+    // Through ZIO's own Clock, so TestClock drives a transaction's retry window.
+    override def monotonic: Task[FiniteDuration] = Clock.nanoTime.map(FiniteDuration(_, TimeUnit.NANOSECONDS))
 
     def handleErrorWith[A](fa: Task[A])(f: Throwable => Task[A]): Task[A] =
       fa.catchAllCause: cause =>

@@ -7,10 +7,12 @@ import cats.effect.testing.scalatest.AsyncIOSpec
 import org.testcontainers.containers.MongoDBContainer
 
 import cats.effect.{Deferred, IO}
+import com.mongodb.{ReadConcern, WriteConcern}
 import org.bson.{BsonDocument, BsonInt32, BsonString}
 
 import mongo4s.bson.*
 import mongo4s.cats.CatsStream
+import mongo4s.operations.TransactionOptions
 import mongo4s.{MongoClient, MongoSession, withTransaction}
 
 import scala.concurrent.duration.given
@@ -94,6 +96,25 @@ final class TransactionItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befo
           database    <- client.getDatabase("tx-helper-commit")
           collection  <- database.getCollection[Person]("people")
           _           <- client.withTransaction(collection.insertOne(Person("carol", 40)))
+          afterCommit <- collection.count()
+          _           <- client.close
+        yield afterCommit
+
+      program.timeout(30.seconds).asserting(_ shouldBe 1L)
+    }
+
+    "carry its options through to the server" in {
+      val options = TransactionOptions.default
+        .withReadConcern(ReadConcern.SNAPSHOT)
+        .withWriteConcern(WriteConcern.MAJORITY)
+        .withMaxCommitTime(5.seconds)
+
+      val program =
+        for
+          client      <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database    <- client.getDatabase("tx-helper-options")
+          collection  <- database.getCollection[Person]("people")
+          _           <- client.withTransaction(collection.insertOne(Person("erin", 31)), options)
           afterCommit <- collection.count()
           _           <- client.close
         yield afterCommit

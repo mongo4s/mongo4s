@@ -15,7 +15,6 @@ full API applies.
 | --- | --- | --- |
 | **GridFS** | A module of its own, with its own streaming story on four runtimes. Nobody has asked for it. | The driver's `GridFSBuckets` over `client.underlying`. |
 | **Geospatial operators** | `$near`, `$geoWithin` and `$geoIntersects` need a small geometry vocabulary to be typed honestly. The index types (`2dsphere`, `2d`) already exist. | `Filter.Raw`. |
-| **`TransactionOptions` and retry semantics** | The driver's own `withTransaction` retries `TransientTransactionError` and `UnknownTransactionCommitResult`; `mongo4s`'s does not. Adopting that changes how a session is used rather than adding to it. | Retry around `withTransaction` yourself, or use `client.underlying`. |
 | **`CreateCollectionOptions`** | capped, validator, timeseries, clustered. | `database.runCommand`. |
 | **Aggregation stages** | `$bucket`, `$setWindowFields`, `$densify`, Atlas `$search`. | `Stage.raw`. |
 | **Change-stream extras** | `showExpandedEvents`, `wallTime`, `splitEvent`. | `WatchOptions` covers the rest; the driver's publisher is reachable through `underlying`. |
@@ -28,7 +27,9 @@ codec-bridge module. Since `2.0.0` froze the shape of every operation signature 
 Scala version, not the API — those can ship in a `3.x` minor release without breaking anybody, and will as demand
 appears.
 
-The exception is transaction retry semantics, which changes how a session is used rather than adding to it. That one
-waits for the next major.
+Several of them are less additive than they look, though — a new `Stage` or `Filter` case breaks an exhaustive
+match, a new abstract method breaks anything implementing the trait, and a new parameter on an existing method is
+never binary-compatible. Those are cheapest inside a major release, so they are worth pulling forward while one is
+open rather than deferring on principle.
 
 If you need one of these, open an issue saying what you are building — demand is what moves an item up this list.

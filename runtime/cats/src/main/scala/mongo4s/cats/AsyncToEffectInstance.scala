@@ -1,5 +1,7 @@
 package mongo4s.cats
 
+import scala.concurrent.duration.FiniteDuration
+
 import cats.effect.kernel.{Async, Outcome}
 
 import mongo4s.{Effect, ExitCase}
@@ -16,6 +18,9 @@ trait AsyncToEffectInstance:
 
     override def suspend[A](fa: => F[A]): F[A]                 = F.defer(fa)
     override def attempt[A](fa: F[A]): F[Either[Throwable, A]] = F.attempt(fa)
+
+    // Async is a Clock, and going through it is what lets TestControl drive a transaction's retry window.
+    override def monotonic: F[FiniteDuration] = F.monotonic
 
     def guaranteeCase[A](fa: F[A])(finalizer: ExitCase => F[Unit]): F[A] =
       F.guaranteeCase(fa)(outcome => runFinalizer(AsyncToEffectInstance.exitCaseOf(outcome), finalizer))

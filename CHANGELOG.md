@@ -10,25 +10,40 @@ part of `2.0.0` below.
 
 ## 3.0.0
 
+### Added
+
+- `TransactionOptions`, carrying a transaction's `readConcern`, `writeConcern`, `readPreference` and
+  `maxCommitTime` — and the retry window below. Both `withTransaction` methods take one.
+- `Effect.monotonic`, with a default reading `System.nanoTime`, so implementors are unaffected; `mongo4s-cats` and
+  `mongo4s-zio` override it with their runtime's own clock.
+
 ### Changed
 
+- **`Scala 3.9 LTS` is now required**, and it is the only Scala version the build uses. `mongo4s-bson-calypso`,
+  `mongo4s-kyo` and `mongo4s-rapid` were pinned to a fast-release `3.8` because their dependencies needed a
+  compiler newer than `3.3 LTS`; they are now on the LTS line with every other module. It takes a major version
+  because `TASTy` does not read forward, so a `3.3 LTS` project cannot consume these artifacts, and MiMa cannot see
+  that break. `3.3 LTS` is no longer supported.
+- `withTransaction` **retries the way the driver's own does**: a `TransientTransactionError` restarts the whole
+  transaction, an `UnknownTransactionCommitResult` retries only the commit, both bounded by one 120-second deadline
+  taken before the first attempt. `2.x` reported the first failure; `TransactionOptions.withoutRetries` restores
+  that. This is the one change in the release with no compile error behind it.
 - Compound `PrimaryKey`s are **named tuples**: `PrimaryKey.compound(o => (userId = o.userId, seq = o.seq))`
   replaces the positional tuple plus its parallel list of names and `_._1`/`_._2` extractors. Any width works, so
   `compound3` and `compound4` were removed.
-- **`Scala 3.9 LTS` is now required**, and it is the only Scala version the build uses. `mongo4s-bson-calypso`,
-  `mongo4s-kyo` and `mongo4s-rapid` were pinned to a fast-release `3.8` because their dependencies needed a
-  compiler newer than `3.3 LTS`; they are now on the LTS line with every other module.
-
-  It takes a major version because `TASTy` does not read forward, so a `3.3 LTS` project cannot consume these
-  artifacts, and MiMa cannot see that break. `3.3 LTS` is no longer supported.
-
-- Internally, every `given` moved to the syntax SIP-64 introduced in `3.6` (`given name: [A] => (dep: D) => T`), so
-  the whole codebase compiles under `-source:future`. This changes how instances are declared, not what they are,
-  and nothing about it is visible to a caller.
 - The accessors the compiler synthesizes for `Field.of` and the two `WireCodec` derivations are pinned with
   `@publicInBinary`. They were binary-unstable — a name MiMa cannot check because it is synthesized, not declared.
 - `mongo4s-cats` builds against `fs2 3.14.0`. Its Reactive-Streams interop is unchanged from `3.13.0` — the module
   is identical between the two releases — so nothing about streaming behaviour moves with the bump.
+- Internally, every `given` moved to the syntax SIP-64 introduced in `3.6` (`given name: [A] => (dep: D) => T`), so
+  the whole codebase compiles under `-source:future`. This changes how instances are declared, not what they are,
+  and nothing about it is visible to a caller.
+
+### Fixed
+
+- `RsBridge.unit` reported a publisher's failure wrapped in a `CompletionException` on backends that do not unwrap
+  one themselves, which hid the driver's own exception type — and with it the error labels the new transaction
+  retries depend on. It now reports the exception the publisher raised, on every backend.
 
 ## 2.0.0
 

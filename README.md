@@ -475,6 +475,27 @@ It commits on success and rolls back on failure **and on cancellation**: `Effect
 sees how the action ended, so an interrupted transaction does not linger on the server until it is reaped. A
 rollback that itself fails is attached as a suppressed exception rather than replacing the error that caused it.
 
+It also **retries**, the way the driver's own `withTransaction` does. A `TransientTransactionError` means nothing
+was committed, so the whole transaction — body included — is started again; an `UnknownTransactionCommitResult`
+means the commit may already have landed, so only the commit is asked again rather than the work being redone. Both
+are bounded by one deadline taken before the first attempt, 120 seconds by default:
+
+```scala
+import mongo4s.operations.TransactionOptions
+
+client.withTransaction(users.insertOne(User("2", "Bob", 41)), TransactionOptions.default.withRetryTimeout(10.seconds))
+
+client.withTransaction(body, TransactionOptions.withoutRetries) // report the first failure, as 2.x did
+```
+
+`TransactionOptions` also carries the transaction's own `readConcern`, `writeConcern`, `readPreference` and
+`maxCommitTime`. Errors the server did not label are never retried — a failure in your own code fails the
+transaction immediately, exactly as before.
+
+The deadline is measured with `Effect.monotonic`, which has a default implementation reading `System.nanoTime`; the
+`cats` and `zio` backends override it with their runtime's own clock, so `TestControl`/`TestClock` can drive the
+retry window in a test without waiting on a real one.
+
 If you're reusing one already-open session across more than one transaction, the same behaviour applies to the session
 itself — it commits and rolls back the same way, but leaves the session's own lifetime to you:
 

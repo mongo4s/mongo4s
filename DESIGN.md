@@ -63,7 +63,7 @@ trait Effect[F[*]]:
   def raiseError[A](error: Throwable): F[A]
   def handleErrorWith[A](fa: F[A])(f: Throwable => F[A]): F[A]
   def guaranteeCase[A](fa: F[A])(finalizer: ExitCase => F[Unit]): F[A]
-  // suspend, unit, void, attempt, guarantee, onError, bracket, bracketCase — all derived, all overridable
+  // suspend, unit, void, attempt, guarantee, onError, bracket, bracketCase, monotonic — derived, all overridable
 ```
 
 Seven abstract members. That number is a deliberate ceiling: everything derivable is derived with a default so that
@@ -229,6 +229,22 @@ It commits on success and rolls back on failure **and on cancellation**. The can
 `Effect.guaranteeCase` has the shape it does. A rollback that itself fails is attached as a suppressed exception
 rather than replacing the original error.
 
+**Retries follow the driver, including which failure means what.** A `TransientTransactionError` says nothing was
+committed, so the whole transaction is restarted — body and all. An `UnknownTransactionCommitResult` says the commit
+may already have landed, so repeating the body could double the write; only the commit is asked again. Treating the
+two the same in either direction is a data-loss or double-write bug, which is why they are separate paths rather
+than one retry loop.
+
+Both are bounded by a single deadline taken **before the first attempt**, so the retries are bounded in total rather
+than per round — an unbounded chain of individually-quick attempts is the failure mode a per-attempt limit misses.
+That deadline needs a clock, and `Effect` had none: `monotonic` was added with a default reading `System.nanoTime`,
+which is what every runtime's own monotonic clock does anyway, so no implementor had to change. `cats` and `zio`
+override it with their runtime's clock, which is what makes the retry window drivable by `TestControl`/`TestClock`
+instead of by waiting.
+
+Retrying is the default because it is the driver's default. `TransactionOptions.withoutRetries` restores the `2.x`
+behaviour of reporting the first failure.
+
 The manual path (`startTransaction`/`commitTransaction`/`abortTransaction` with `(using Some(session))` at each call
 site) is still there, and nothing is automatic on it, including the rollback. Both exist because the safe version
 should be the easy one, not the only one.
@@ -283,7 +299,7 @@ fake cannot drift from what production does; the only thing standing in for Mong
 Three commitments, and the mechanics that make each one keepable:
 
 **New `Effect`/`RsBridge` members carry default implementations.** Implementing either typeclass yourself keeps
-compiling across minor releases. `liveStream` was added this way.
+compiling across minor releases. `liveStream` and `Effect.monotonic` were both added this way.
 
 **Binary compatibility is checked, not asserted.** MiMa runs in CI against the previous release. Every deliberate
 break is a MiMa exclusion in `build.sbt` and an entry in [COMPATIBILITY.md](COMPATIBILITY.md) — waivers are visible, not

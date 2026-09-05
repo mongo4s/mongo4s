@@ -15,8 +15,8 @@
 
 ## Migrating from 2.x to 3.0.0
 
-`3.0.0` requires **`Scala 3.9 LTS`**, and changes one thing in the API: compound `PrimaryKey`s are named tuples.
-Nothing else moved — no renamed method, no relocated type, no changed signature anywhere else.
+`3.0.0` requires **`Scala 3.9 LTS`**, and changes two things in the API: compound `PrimaryKey`s are named tuples,
+and `withTransaction` retries the way the driver does. Nothing else moved.
 
 ### Why this is a major release
 
@@ -51,6 +51,28 @@ the stored spelling differs; leave it out and the labels are used verbatim, exac
 
 Key values are written with labels at every call site — `users.findOne((userId = "u1", seq = 3))` — and their order
 is part of the key's type, so a call that writes them in another order does not compile.
+
+### Transactions retry by default
+
+`withTransaction` now does what the driver's own does: a `TransientTransactionError` restarts the whole transaction,
+an `UnknownTransactionCommitResult` retries just the commit, both bounded by one 120-second deadline taken before
+the first attempt. In `2.x` the first failure was reported and nothing was retried.
+
+This is a **behaviour change with no compile error behind it**, so it is the one item here to read twice. It only
+affects failures the server itself labelled — an error from your own code inside the body still fails the
+transaction immediately. If you already retry around `withTransaction`, you now have two layers; drop yours, or:
+
+```scala
+client.withTransaction(body, TransactionOptions.withoutRetries) // exactly the 2.x behaviour
+```
+
+Both `withTransaction` methods gained an optional `TransactionOptions` parameter, which also carries the
+transaction's `readConcern`, `writeConcern`, `readPreference` and `maxCommitTime`. The block form is unchanged:
+`client.withTransaction { ... }` still compiles.
+
+`Effect` gained `monotonic`, needed to bound the retries. It has a default implementation reading `System.nanoTime`,
+so an `Effect` you implement yourself keeps compiling; override it if your runtime has a clock worth substituting in
+tests, as `mongo4s-cats` and `mongo4s-zio` do.
 
 ### What it buys
 
