@@ -35,8 +35,8 @@ object ReadmeSnippets:
   final case class Order(userId: String, seq: Int, address: Address, items: List[Item], totals: Map[String, Int]) derives WireCodec
 
   object Order:
-    given PrimaryKey[Order, (String, Int)] =
-      PrimaryKey.compound[Order, (String, Int), String, Int](o => (o.userId, o.seq))("user_id", _._1)("seq", _._2)
+    given PrimaryKey[Order, (userId: String, seq: Int)] =
+      PrimaryKey.compound(o => (userId = o.userId, seq = o.seq), FieldNaming.snakeCase)
 
   // --- Quick start ---
 

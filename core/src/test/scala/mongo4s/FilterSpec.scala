@@ -80,22 +80,24 @@ final class FilterSpec extends AnyWordSpec with Matchers:
 
   "PrimaryKey" should {
     "build an equality filter for a compound key" in {
-      val pk: PrimaryKey[User, (String, Int)] =
-        PrimaryKey.compound[User, (String, Int), String, Int](user => (user.firstName, user.age))(
-          "first_name",
-          _._1,
-        )("age", _._2)
+      val pk: PrimaryKey[User, (firstName: String, age: Int)] =
+        PrimaryKey.compound(user => (firstName = user.firstName, age = user.age), FieldNaming.snakeCase)
 
-      pk.eqFilter(("bob", 30)).toBson(FieldNaming.snakeCase).toJson shouldBe
+      pk.eqFilter((firstName = "bob", age = 30)).toBson(FieldNaming.snakeCase).toJson shouldBe
         """{"$and": [{"first_name": "bob"}, {"age": 30}]}"""
     }
 
+    "reject a compound key whose labels are written in another order" in {
+      val pk: PrimaryKey[User, (firstName: String, age: Int)] =
+        PrimaryKey.compound(user => (firstName = user.firstName, age = user.age), FieldNaming.snakeCase)
+
+      pk.fieldNames shouldBe List("first_name", "age")
+      """pk.eqFilter((age = 30, firstName = "bob"))""" shouldNot typeCheck
+    }
+
     "expose its stored field names, so the enforcing index can be built from it" in {
-      val pk: PrimaryKey[User, (String, Int)] =
-        PrimaryKey.compound[User, (String, Int), String, Int](user => (user.firstName, user.age))(
-          "first_name",
-          _._1,
-        )("age", _._2)
+      val pk: PrimaryKey[User, (firstName: String, age: Int)] =
+        PrimaryKey.compound(user => (firstName = user.firstName, age = user.age), FieldNaming.snakeCase)
 
       pk.fieldNames shouldBe List("first_name", "age")
     }

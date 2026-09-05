@@ -1,6 +1,9 @@
 package mongo4s
 
-import mongo4s.bson.BsonEncoder
+import scala.NamedTuple.NamedTuple
+import scala.compiletime.{constValueTuple, summonAll}
+
+import mongo4s.bson.{BsonEncoder, FieldNaming}
 import mongo4s.operations.Filter
 
 trait PrimaryKey[E, K] extends KeyRef[E, K]:
@@ -24,46 +27,36 @@ object PrimaryKey:
   def single[E, F1](name: String)(keyOf: E => F1)(using encoder: BsonEncoder[F1]): PrimaryKey[E, F1] =
     make(keyOf, List(name), key => KeyFields.one(name, encoder.encode(key)))
 
-  def compound[E, K, F1, F2](keyOf: E => K)(name1: String, value1: K => F1)(name2: String, value2: K => F2)(using
-      e1: BsonEncoder[F1],
-      e2: BsonEncoder[F2],
-  ): PrimaryKey[E, K] =
-    make(
-      keyOf,
-      List(name1, name2),
-      key => KeyFields.of(name1 -> e1.encode(value1(key)), name2 -> e2.encode(value2(key))),
+  /** A compound key described by a named tuple: `(userId = order.userId, seq = order.seq)`.
+    *
+    * The tuple's labels are the field names, so there is nothing to keep in step by hand and no arity limit. Like every other key, those names are *stored* names — pass
+    * a `naming` if the collection spells them differently from the Scala labels.
+    */
+  inline def compound[E, N <: Tuple, V <: Tuple](
+      inline keyOf: E => NamedTuple[N, V],
+      naming: FieldNaming = FieldNaming.identity,
+  ): PrimaryKey[E, NamedTuple[N, V]] =
+    val names    = constValueTuple[N].toList.map(label => naming(label.asInstanceOf[String]))
+    val encoders = summonAll[Tuple.Map[V, BsonEncoder]].toList.asInstanceOf[List[BsonEncoder[Any]]]
+
+    require(
+      names.distinct.length == names.length,
+      s"a primary key cannot name the same field twice, got: ${names.mkString(", ")}",
     )
 
-  def compound3[E, K, F1, F2, F3](keyOf: E => K)(name1: String, value1: K => F1)(name2: String, value2: K => F2)(
-      name3: String,
-      value3: K => F3,
-  )(using e1: BsonEncoder[F1], e2: BsonEncoder[F2], e3: BsonEncoder[F3]): PrimaryKey[E, K] =
-    make(
-      keyOf,
-      List(name1, name2, name3),
-      key => KeyFields.of(name1 -> e1.encode(value1(key)), name2 -> e2.encode(value2(key)), name3 -> e3.encode(value3(key))),
-    )
+    val encodeEach = names.zip(encoders)
 
-  def compound4[E, K, F1, F2, F3, F4](keyOf: E => K)(name1: String, value1: K => F1)(name2: String, value2: K => F2)(
-      name3: String,
-      value3: K => F3,
-  )(name4: String, value4: K => F4)(using
-      e1: BsonEncoder[F1],
-      e2: BsonEncoder[F2],
-      e3: BsonEncoder[F3],
-      e4: BsonEncoder[F4],
-  ): PrimaryKey[E, K] =
     make(
       keyOf,
-      List(name1, name2, name3, name4),
+      names,
       key =>
-        KeyFields.of(
-          name1 -> e1.encode(value1(key)),
-          name2 -> e2.encode(value2(key)),
-          name3 -> e3.encode(value3(key)),
-          name4 -> e4.encode(value4(key)),
-        ),
+        val encoded = encodeEach.zip(key.toTuple.productIterator.toList).map { case ((name, encoder), value) =>
+          name -> encoder.encode(value)
+        }
+
+        KeyFields(encoded.head, encoded.tail),
     )
+  end compound
 
   extension [E, K](entity: E)(using pk: PrimaryKey[E, K]) def primaryKeyFilter: Filter[E] = pk.eqFilter(pk.key(entity))
 

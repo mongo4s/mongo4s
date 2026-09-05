@@ -418,19 +418,32 @@ element type is named at the call site. Transport errors still fail the effect �
 
 ### Primary keys
 
-`PrimaryKey[E, K]` turns an entity into a key-based filter — single field, a native `_id` (`ObjectId` or your own
-encoder), or a compound key of up to four fields:
+`PrimaryKey[E, K]` turns an entity into a key-based filter — a single field, a native `_id` (`ObjectId` or your own
+encoder), or a compound key of any width:
 
 ```scala
-given PrimaryKey[User, String]         = PrimaryKey.single("id")(_.id)
-given PrimaryKey[Note, ObjectId]       = PrimaryKey.storedId(_.id) // keys on "_id" — see WithId
-given PrimaryKey[Order, (String, Int)] = PrimaryKey.compound(o => (o.userId, o.seq))("user_id", _._1)("seq", _._2)
+given PrimaryKey[User, String]   = PrimaryKey.single("id")(_.id)
+given PrimaryKey[Note, ObjectId] = PrimaryKey.storedId(_.id) // keys on "_id" — see WithId
+
+given PrimaryKey[Order, (userId: String, seq: Int)] =
+  PrimaryKey.compound(o => (userId = o.userId, seq = o.seq), FieldNaming.snakeCase)
 ```
 
-`PrimaryKey.id(_.id)` is `single("id")` spelled short, for the common case; `compound3`/`compound4` extend the
-compound form.
+`PrimaryKey.id(_.id)` is `single("id")` spelled short, for the common case.
 
-Field names are given separately from the extractors so the key knows them without a key value — that is what lets
+A compound key is a **named tuple**, so its labels are the field names — there is no second list of strings to keep
+in step with the extractors, and no arity ceiling. The labels are Scala identifiers; the optional `FieldNaming`
+spells them the way the collection stores them, so `userId` above is written as `user_id` while the key still reads
+as ordinary Scala at every call site:
+
+```scala
+users.findOne((userId = "u1", seq = 3))
+```
+
+The order of the labels is part of the key's type, so writing them in a different order at a call site is a compile
+error rather than a key silently assembled wrong.
+
+Field names are known without a key value — that is what lets
 `repository.ensureKeyIndex` build the unique index that makes the key a key. Without one, two concurrent `upsert`s
 on the same key can both miss and both insert.
 
@@ -1145,10 +1158,10 @@ Binary compatibility within a major version is checked by [MiMa](https://github.
 new `Effect`/`RsBridge` methods carry default implementations, and deprecations get at least one minor release before
 removal. `mongo4s-kyo` sits outside the promise while kyo is on a release candidate.
 
-`3.0.0` moves the whole build onto `Scala 3.9 LTS` and drops `3.3 LTS`. The API is unchanged from `2.0.0`, so there
-is nothing to migrate but the Scala version — but `TASTy` is not forward compatible, and that is a break MiMa cannot
-see, which is why it takes a major release rather than a minor. What it buys is one Scala version across every
-module: the three that used to be pinned to a fast-release `3.8` are on the LTS line with the rest.
+`3.0.0` moves the whole build onto `Scala 3.9 LTS` and drops `3.3 LTS`. `TASTy` is not forward compatible, and that
+is a break MiMa cannot see, which is why it takes a major release rather than a minor. What it buys is one Scala
+version across every module: the three that used to be pinned to a fast-release `3.8` are on the LTS line with the
+rest. The only API change riding along is compound `PrimaryKey`s, which became named tuples.
 
 Full policy, the migration guides and the Scala-version rules: **[COMPATIBILITY.md](COMPATIBILITY.md)**.
 What changed in each release: **[CHANGELOG.md](CHANGELOG.md)**. What is not covered yet and how it will land:

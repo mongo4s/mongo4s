@@ -15,8 +15,8 @@
 
 ## Migrating from 2.x to 3.0.0
 
-`3.0.0` changes one thing: **it requires `Scala 3.9 LTS`**. The API is identical to `2.0.0` — no renamed method, no
-moved type, no changed signature. If your project is on `3.9`, updating the version number is the whole migration.
+`3.0.0` requires **`Scala 3.9 LTS`**, and changes one thing in the API: compound `PrimaryKey`s are named tuples.
+Nothing else moved — no renamed method, no relocated type, no changed signature anywhere else.
 
 ### Why this is a major release
 
@@ -26,6 +26,31 @@ bytecode changed. MiMa cannot see that break — it compares signatures, not TAS
 takes a major release rather than a silent minor.
 
 `3.3 LTS` is no longer supported. The replacement is the current LTS, not a fast-release line.
+
+### Compound keys are named tuples
+
+`compound` used to pair a positional tuple with a separate list of names and extractors, and `compound3`/`compound4`
+extended it one arity at a time. All three are replaced by one `compound` over a named tuple:
+
+```scala
+// 2.x
+given PrimaryKey[Order, (String, Int)] =
+  PrimaryKey.compound(o => (o.userId, o.seq))("user_id", _._1)("seq", _._2)
+
+// 3.0
+given PrimaryKey[Order, (userId: String, seq: Int)] =
+  PrimaryKey.compound(o => (userId = o.userId, seq = o.seq), FieldNaming.snakeCase)
+```
+
+The labels are the field names, so the two lists that had to agree became one, and `_._1`/`_._2` — which type-check
+just as happily when swapped, as long as the two fields share a type — are gone. There is no arity ceiling either,
+so `compound3` and `compound4` have nothing left to do and were removed.
+
+Field names are still *stored* names. The `FieldNaming` argument is what lets the Scala labels stay idiomatic while
+the stored spelling differs; leave it out and the labels are used verbatim, exactly as the old string arguments were.
+
+Key values are written with labels at every call site — `users.findOne((userId = "u1", seq = 3))` — and their order
+is part of the key's type, so a call that writes them in another order does not compile.
 
 ### What it buys
 
