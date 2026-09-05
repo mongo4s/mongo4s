@@ -10,9 +10,9 @@ import mongo4s.{RsBridge, RsBridgeConfig, RsBridgeError, Streamable}
 
 trait AsyncToBridgeInstance:
 
-  given streamable[F[*], A]: Streamable[CatsStream[F], A] = Streamable.instance
+  given streamable: [F[*], A] => Streamable[CatsStream[F], A] = Streamable.instance
 
-  given asyncBridge[F[*]](using F: Async[F], config: RsBridgeConfig): RsBridge[F, CatsStream[F]] with
+  given asyncBridge: [F[*]] => (F: Async[F], config: RsBridgeConfig) => RsBridge[F, CatsStream[F]]:
     private def withTimeout[A](fa: F[A]): F[A] = config.timeout match
       case Some(d) => F.timeoutTo(fa, d, F.raiseError(RsBridgeError.Timeout(d)))
       case None    => fa

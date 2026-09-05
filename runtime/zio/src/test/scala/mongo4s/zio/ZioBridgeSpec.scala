@@ -43,7 +43,7 @@ final class ZioBridgeSpec extends AnyWordSpec, Matchers:
   private val effect = summon[Effect[Task]]
 
   private def run[A](task: Task[A]): A =
-    Unsafe.unsafe(implicit unsafe => Runtime.default.unsafe.run(task).getOrThrow())
+    Unsafe.unsafe(unsafe ?=> Runtime.default.unsafe.run(task).getOrThrow())
 
   "zio RsBridge" should {
     "collect a list" in {

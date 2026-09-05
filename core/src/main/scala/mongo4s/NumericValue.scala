@@ -20,6 +20,6 @@ trait NumericOf[C, A]:
   def encode(value: A): BsonValue
 
 object NumericOf:
-  given direct[A](using numeric: NumericValue[A]): NumericOf[A, A] = numeric.encode(_)
+  given direct: [A] => (numeric: NumericValue[A]) => NumericOf[A, A] = numeric.encode(_)
 
-  given optional[A](using numeric: NumericValue[A]): NumericOf[Option[A], A] = numeric.encode(_)
+  given optional: [A] => (numeric: NumericValue[A]) => NumericOf[Option[A], A] = numeric.encode(_)

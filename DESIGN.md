@@ -286,7 +286,7 @@ Three commitments, and the mechanics that make each one keepable:
 compiling across minor releases. `liveStream` was added this way.
 
 **Binary compatibility is checked, not asserted.** MiMa runs in CI against the previous release. Every deliberate
-break is a filter in `mima.sbt` and an entry in [COMPATIBILITY.md](COMPATIBILITY.md) — waivers are visible, not
+break is a MiMa exclusion in `build.sbt` and an entry in [COMPATIBILITY.md](COMPATIBILITY.md) — waivers are visible, not
 silent. `2.0.0` needs no filters at all: a major release is allowed to break, so the list there is a migration guide
 rather than a set of waivers.
 
@@ -317,6 +317,9 @@ coupling between unrelated collections. Not worth it.
 `Step.Stop` *inside* `transform`, so it needs element n+1 to arrive before it stops. On an infinite change stream
 carrying exactly n events it blocks forever. Not fixable from here.
 
-**A circe bridge.** There is no `mongo4s-bson-circe` module. A `BsonDocumentCodec[A]` built from circe's
-`Encoder`/`Decoder` is short to hand-write, but a model already on circe has no first-class path today. This is a gap,
-not a decision — it is tracked in [ROADMAP.md](ROADMAP.md) with the rest of them.
+**A circe bridge.** There is no `mongo4s-bson-circe` module, and there is not going to be one. circe is a *JSON*
+codec: routing an entity through it means `case class → circe → some BSON tree → org.bson`, which is the same
+`case class ↔ circe ↔ mongo4cats.Bson ↔ org.Bson` trip [BENCHMARKS.md](BENCHMARKS.md) measures at 2.5–5× slower on
+decode. That cost is the reason `mongo4s` exists; shipping a first-class path back to it would be arguing against
+the library's own premise. A model already on circe should get a `BsonDocumentCodec[A]` written against BSON
+directly — `bson-direct` derives one with no third-party dependency at all.

@@ -6,11 +6,7 @@ import mongo4s.bson.{BsonDocumentCodec, BsonError}
 
 trait ZioBsonLowPriorityInstances:
 
-  given fromZioCodec[A](using
-      encoder: ZioBsonEncoder[A],
-      decoder: ZioBsonDecoder[A],
-      mirror: Mirror.Of[A],
-  ): BsonDocumentCodec[A] =
+  given fromZioCodec: [A] => (encoder: ZioBsonEncoder[A], decoder: ZioBsonDecoder[A], mirror: Mirror.Of[A]) => BsonDocumentCodec[A] =
     BsonDocumentCodec.make(
       to = value => {
         val bson = encoder.toBsonValue(value)

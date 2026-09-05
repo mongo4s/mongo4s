@@ -7,7 +7,7 @@ import mongo4s.bson.{BsonDecoder, BsonEncoder}
 
 trait WireFallbackInstances extends WireCodecLowPriorityDerivation:
 
-  given fromBsonValueCodec[A](using encoder: BsonEncoder[A], decoder: BsonDecoder[A]): WireCodec[A] =
+  given fromBsonValueCodec: [A] => (encoder: BsonEncoder[A], decoder: BsonDecoder[A]) => WireCodec[A] =
     new WireCodec[A]:
       private val bsonValueCodec = BsonValueCodec()
 

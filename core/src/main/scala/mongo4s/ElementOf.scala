@@ -8,9 +8,9 @@ object ElementOf:
 
   private def of[C, A]: ElementOf[C, A] = instance.asInstanceOf[ElementOf[C, A]]
 
-  given list[A]: ElementOf[List[A], A]         = of
-  given seq[A]: ElementOf[Seq[A], A]           = of
-  given vector[A]: ElementOf[Vector[A], A]     = of
-  given set[A]: ElementOf[Set[A], A]           = of
-  given iterable[A]: ElementOf[Iterable[A], A] = of
-  given array[A]: ElementOf[Array[A], A]       = of
+  given list: [A] => ElementOf[List[A], A]         = of
+  given seq: [A] => ElementOf[Seq[A], A]           = of
+  given vector: [A] => ElementOf[Vector[A], A]     = of
+  given set: [A] => ElementOf[Set[A], A]           = of
+  given iterable: [A] => ElementOf[Iterable[A], A] = of
+  given array: [A] => ElementOf[Array[A], A]       = of

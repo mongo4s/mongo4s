@@ -20,15 +20,15 @@ full API applies.
 | **Aggregation stages** | `$bucket`, `$setWindowFields`, `$densify`, Atlas `$search`. | `Stage.raw`. |
 | **Change-stream extras** | `showExpandedEvents`, `wallTime`, `splitEvent`. | `WatchOptions` covers the rest; the driver's publisher is reachable through `underlying`. |
 | **Client-level `bulkWrite`** | Driver 5.3+ can write across collections in one command. | Per-collection `bulkWrite`. |
-| **A circe bridge** | No `mongo4s-bson-circe` module, so a model already on circe has no first-class path. A gap rather than a decision. | Hand-write a `BsonDocumentCodec[A]` from circe's `Encoder`/`Decoder`; it is short. |
 
 ## How these land
 
 Most of the list is **additive** — new methods, new options on the existing options values, new `Stage` cases, a new
-codec-bridge module. Since `2.0.0` froze the shape of every operation signature, those can ship in a `2.x` minor
-release without breaking anybody, and will as demand appears.
+codec-bridge module. Since `2.0.0` froze the shape of every operation signature — and `3.0.0` changed only the
+Scala version, not the API — those can ship in a `3.x` minor release without breaking anybody, and will as demand
+appears.
 
 The exception is transaction retry semantics, which changes how a session is used rather than adding to it. That one
-waits for `3.0.0`.
+waits for the next major.
 
 If you need one of these, open an issue saying what you are building — demand is what moves an item up this list.

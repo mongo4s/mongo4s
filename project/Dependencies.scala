@@ -3,8 +3,7 @@ import sbt.*
 object Dependencies {
 
   object Versions {
-    val scalaLTS  = "3.3.8"
-    val scalaLast = "3.8.4"
+    val scala3 = "3.9.0"
 
     val mongo = "5.11.0"
 

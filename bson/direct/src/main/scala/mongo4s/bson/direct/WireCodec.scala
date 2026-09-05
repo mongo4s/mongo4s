@@ -24,5 +24,5 @@ object WireCodec extends WireCodecLowPriorityDerivation, WireIterableLowPriority
       override def isAbsent(value: A): Boolean       = encoder.isAbsent(value)
       override def defaultOnMissing: Option[A]       = decoder.defaultOnMissing
 
-  given fromEncoderAndDecoder[A](using encoder: WireEncoder[A], decoder: WireDecoder[A]): WireCodec[A] =
+  given fromEncoderAndDecoder: [A] => (encoder: WireEncoder[A], decoder: WireDecoder[A]) => WireCodec[A] =
     from(encoder, decoder)

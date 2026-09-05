@@ -9,9 +9,32 @@
 * New methods added to `Effect` and `RsBridge` carry default implementations, so implementing either typeclass
   yourself keeps working across minor releases.
 * Deprecations get at least one minor release before removal.
-* Every deliberate break inside a major version is listed here and carries a matching filter in `mima.sbt`, so
-  nothing is waived silently. `2.0.0` has no such exceptions: it is a major release, and everything below is
-  covered by that.
+* Every deliberate break inside a major version is listed here and carries a matching MiMa exclusion in
+  `build.sbt`, so nothing is waived silently. `3.0.0` has no such exceptions: it is a major release, and everything
+  below is covered by that.
+
+## Migrating from 2.x to 3.0.0
+
+`3.0.0` changes one thing: **it requires `Scala 3.9 LTS`**. The API is identical to `2.0.0` — no renamed method, no
+moved type, no changed signature. If your project is on `3.9`, updating the version number is the whole migration.
+
+### Why this is a major release
+
+`Scala 3 TASTy` is backward but not forward compatible, and a Scala 3 artifact carries the same `_3` suffix whatever
+minor compiled it. So artifacts built on `3.9` **cannot be read from a `3.3 LTS` project**, while nothing about the
+bytecode changed. MiMa cannot see that break — it compares signatures, not TASTy versions — which is exactly why it
+takes a major release rather than a silent minor.
+
+`3.3 LTS` is no longer supported. The replacement is the current LTS, not a fast-release line.
+
+### What it buys
+
+Every module is now built with one Scala version. `mongo4s-bson-calypso`, `mongo4s-kyo` and `mongo4s-rapid` used to
+be pinned to a fast-release `3.8` because their upstream dependencies required it, which put them outside what a
+`3.3 LTS` project could use at all. They are now on the LTS line with everything else.
+
+Internally the codebase moved to the `given` syntax introduced by SIP-64 in `3.6` — how instances are *declared*,
+not what they are. Nothing about that is visible to a caller.
 
 ## Migrating from 1.x to 2.0.0
 
@@ -111,9 +134,9 @@ These fix results that were wrong before. No source change is needed, but the ou
 
 ## Scala versions
 
-`Scala 3 TASTy` is backward but not forward compatible, so `mongo4s-bson-calypso`, `mongo4s-kyo` and `mongo4s-rapid`
-— the three modules built on `3.8` — **cannot be consumed from a Scala `3.3 LTS` project**, even though everything
-else can. They are pinned there because their upstream dependencies require it.
+Every module is built with `Scala 3.9 LTS`. There is no longer a subset of the library that a project on an older
+compiler has to do without — and, by the same token, no way to consume any of it from `3.3 LTS`, since `TASTy` does
+not read forward.
 
 `mongo4s-kyo` depends on a kyo release candidate. Until kyo reaches 1.0.0 final, that module sits outside the binary
 compatibility promise the other artifacts make.

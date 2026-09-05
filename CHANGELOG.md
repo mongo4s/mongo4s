@@ -8,6 +8,22 @@ Notable changes per release. Breaking changes and how to migrate are in
 This file starts at `2.0.0`. `1.0.0` was released without one, and `1.1.0` was never published — its changes are
 part of `2.0.0` below.
 
+## 3.0.0
+
+### Changed
+
+- **`Scala 3.9 LTS` is now required**, and it is the only Scala version the build uses. `mongo4s-bson-calypso`,
+  `mongo4s-kyo` and `mongo4s-rapid` were pinned to a fast-release `3.8` because their dependencies needed a
+  compiler newer than `3.3 LTS`; they are now on the LTS line with every other module.
+
+  This is the entire release. The API is identical to `2.0.0` — no renamed method, no moved type, no changed
+  signature. It takes a major version because `TASTy` does not read forward, so a `3.3 LTS` project cannot consume
+  these artifacts, and MiMa cannot see that break. `3.3 LTS` is no longer supported.
+
+- Internally, every `given` moved to the syntax SIP-64 introduced in `3.6` (`given name: [A] => (dep: D) => T`), so
+  the whole codebase compiles under `-source:future`. This changes how instances are declared, not what they are,
+  and nothing about it is visible to a caller.
+
 ## 2.0.0
 
 ### Added

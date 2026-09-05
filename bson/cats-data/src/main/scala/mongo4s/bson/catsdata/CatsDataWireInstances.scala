@@ -16,31 +16,31 @@ trait CatsDataWireInstances:
   private def nonEmpty[A](description: String): A =
     throw BsonError.DecodingFailure(BsonError.Custom(s"Expected a non-empty $description"))
 
-  given [A](using inner: WireCodec[List[A]]): WireCodec[NonEmptyList[A]] =
+  given [A] => (inner: WireCodec[List[A]]) => WireCodec[NonEmptyList[A]] =
     WireCodec.instance(
       (writer, value) => inner.encode(writer, value.toList),
       reader => NonEmptyList.fromList(inner.decode(reader)).getOrElse(nonEmpty("list")),
     )
 
-  given [A](using inner: WireCodec[List[A]]): WireCodec[Chain[A]] =
+  given [A] => (inner: WireCodec[List[A]]) => WireCodec[Chain[A]] =
     WireCodec.instance(
       (writer, value) => inner.encode(writer, value.toList),
       reader => Chain.fromSeq(inner.decode(reader)),
     )
 
-  given [A](using inner: WireCodec[Vector[A]]): WireCodec[NonEmptyVector[A]] =
+  given [A] => (inner: WireCodec[Vector[A]]) => WireCodec[NonEmptyVector[A]] =
     WireCodec.instance(
       (writer, value) => inner.encode(writer, value.toVector),
       reader => NonEmptyVector.fromVector(inner.decode(reader)).getOrElse(nonEmpty("vector")),
     )
 
-  given [A](using inner: WireCodec[Set[A]], order: Order[A]): WireCodec[NonEmptySet[A]] =
+  given [A] => (inner: WireCodec[Set[A]], order: Order[A]) => WireCodec[NonEmptySet[A]] =
     WireCodec.instance(
       (writer, value) => inner.encode(writer, value.toSortedSet),
       reader => NonEmptySet.fromSet(SortedSet.from(inner.decode(reader))(using order.toOrdering)).getOrElse(nonEmpty("set")),
     )
 
-  given [A](using inner: WireCodec[Map[String, A]]): WireCodec[NonEmptyMap[String, A]] =
+  given [A] => (inner: WireCodec[Map[String, A]]) => WireCodec[NonEmptyMap[String, A]] =
     WireCodec.instance(
       (writer, value) => inner.encode(writer, value.toSortedMap),
       reader => NonEmptyMap.fromMap(SortedMap.from(inner.decode(reader))).getOrElse(nonEmpty("map")),
@@ -51,12 +51,7 @@ trait CatsDataWireInstances:
   private val IorLeftField          = "left"
   private val IorRightField         = "right"
 
-  given iorWireCodec[A, B](using
-      codecA: WireCodec[A],
-      codecB: WireCodec[B],
-      tagA: ClassTag[A],
-      tagB: ClassTag[B],
-  ): WireCodec[Ior[A, B]] =
+  given iorWireCodec: [A, B] => (codecA: WireCodec[A], codecB: WireCodec[B], tagA: ClassTag[A], tagB: ClassTag[B]) => WireCodec[Ior[A, B]] =
     val nameA   = tagA.runtimeClass.getSimpleName
     val nameB   = tagB.runtimeClass.getSimpleName
     require(

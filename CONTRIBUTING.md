@@ -5,13 +5,13 @@ run its tests, and where to make changes for common kinds of contributions.
 
 ## Building
 
-Tested against JDK 25 (LTS) — that's what CI uses. Other recent JDKs likely work too, but JDK 25 is
-the one to reach for if something looks version-specific.
+Tested against JDK 25 (LTS) — that's what CI uses. `Scala 3.9` itself needs only JDK 17, but anything
+touching `kyo` needs 25, so 25 is the one to reach for.
 
-The project is built with [sbt](https://www.scala-sbt.org/). Modules are split across two Scala 3
-versions — most of the codebase targets the LTS release, while `kyo`, `rapid`, `bson-calypso`, and
-anything that depends on them (`repositories-tests`, `examples`, `benchmarks`, `it`) target the latest
-Scala 3 release instead. sbt handles this transparently; you don't need to do anything special.
+The project is built with [sbt](https://www.scala-sbt.org/). Every module targets the same Scala
+version, `3.9 LTS` — set once as `Versions.scala3` in `project/Dependencies.scala`. Until `3.0.0` the
+build was split across two Scala versions, because `kyo`, `rapid` and `bson-calypso` needed a compiler
+newer than the then-current LTS; `3.9` being an LTS is what removed that split.
 
 ```bash
 sbt compile          # compile everything
@@ -38,7 +38,7 @@ sbt "repositoriesTests/testOnly mongo4s.repositories.CodecRepositorySpec"
 | `runtime/cats`, `runtime/zio`, `runtime/kyo`, `runtime/rapid` | `given Effect[F]` + `given RsBridge[F, S]` per runtime |
 | `repositories` | `BaseMongoRepository`, `Repository`, `Page` |
 | `testkit` | `FakeMongoCollection` and `FakeRepository`, published so consumers can unit-test against them too |
-| `repositories-tests` | cross-cutting tests that need more than one runtime or codec bridge in scope at once (hence pinned to the latest Scala 3, so `kyo`/`rapid`/`calypso` can all be included) |
+| `repositories-tests` | cross-cutting tests that need more than one runtime or codec bridge in scope at once |
 | `it` | tests against a real MongoDB via [Testcontainers](https://testcontainers.com/) — needs Docker |
 | `examples` | runnable end-to-end examples, one per runtime/codec combination |
 | `benchmarks` | JMH benchmarks comparing runtimes, codecs, and mongo4s against `mongo4cats` |
@@ -96,7 +96,7 @@ Two steps are easy to forget because nothing fails when they are missed:
   against. It is `Set.empty` while a major version is being prepared, because there is nothing compatible to compare
   to; the moment that version is on Maven Central it must become `Set("<that version>")`, or the compatibility
   promise is asserted and never checked.
-- **Record any deliberate break.** A break inside a major version needs a filter in `mima.sbt` and an entry in
+- **Record any deliberate break.** A break inside a major version needs a MiMa exclusion in `build.sbt` and an entry in
   [COMPATIBILITY.md](COMPATIBILITY.md). A major release needs no filters, but its migration guide still belongs
   there.
 - **Add the release to [CHANGELOG.md](CHANGELOG.md)**, in Added / Changed / Fixed order. The GitHub release notes

@@ -10,9 +10,9 @@ import mongo4s.{RsBridge, RsBridgeConfig, RsBridgeError, Streamable}
 
 trait TaskToBridgeInstance:
 
-  given streamable[A]: Streamable[ZioStream, A] = Streamable.instance
+  given streamable: [A] => Streamable[ZioStream, A] = Streamable.instance
 
-  given taskBridge(using config: RsBridgeConfig): RsBridge[Task, ZioStream] with
+  given taskBridge: (config: RsBridgeConfig) => RsBridge[Task, ZioStream]:
     private def withTimeout[A](task: Task[A]): Task[A] =
       config.timeout match
         case Some(d) => task.timeoutFail(RsBridgeError.Timeout(d))(Duration.fromScala(d))

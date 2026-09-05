@@ -8,7 +8,7 @@ import mongo4s.bson.BsonError
 
 trait WireCollectionInstances extends WirePrimitiveInstances:
 
-  given optionWireCodec[A](using inner: WireCodec[A]): WireCodec[Option[A]] with
+  given optionWireCodec: [A] => (inner: WireCodec[A]) => WireCodec[Option[A]]:
     def encode(writer: BsonWriter, value: Option[A]): Unit =
       value match
         case Some(a) => inner.encode(writer, a)
@@ -25,7 +25,7 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
 
     override def defaultOnMissing: Option[Option[A]] = Some(None)
 
-  given listWireCodec[A](using inner: WireCodec[A]): WireCodec[List[A]] with
+  given listWireCodec: [A] => (inner: WireCodec[A]) => WireCodec[List[A]]:
     def encode(writer: BsonWriter, values: List[A]): Unit =
       writer.writeStartArray()
       values.foreach(inner.encode(writer, _))
@@ -43,7 +43,7 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
       builder.result()
     end decode
 
-  given vectorWireCodec[A](using inner: WireCodec[A]): WireCodec[Vector[A]] with
+  given vectorWireCodec: [A] => (inner: WireCodec[A]) => WireCodec[Vector[A]]:
     def encode(writer: BsonWriter, values: Vector[A]): Unit =
       writer.writeStartArray()
       values.foreach(inner.encode(writer, _))
@@ -61,7 +61,7 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
       builder.result()
     end decode
 
-  given seqWireCodec[A](using inner: WireCodec[A]): WireCodec[Seq[A]] with
+  given seqWireCodec: [A] => (inner: WireCodec[A]) => WireCodec[Seq[A]]:
     def encode(writer: BsonWriter, values: Seq[A]): Unit =
       writer.writeStartArray()
       values.foreach(inner.encode(writer, _))
@@ -79,7 +79,7 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
       builder.result()
     end decode
 
-  given setWireCodec[A](using inner: WireCodec[A]): WireCodec[Set[A]] with
+  given setWireCodec: [A] => (inner: WireCodec[A]) => WireCodec[Set[A]]:
     def encode(writer: BsonWriter, values: Set[A]): Unit =
       writer.writeStartArray()
       values.foreach(inner.encode(writer, _))
@@ -97,7 +97,7 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
       builder.result()
     end decode
 
-  given mapWireCodec[A](using inner: WireCodec[A]): WireCodec[Map[String, A]] with
+  given mapWireCodec: [A] => (inner: WireCodec[A]) => WireCodec[Map[String, A]]:
     def encode(writer: BsonWriter, values: Map[String, A]): Unit =
       writer.writeStartDocument()
       values.foreach { (key, value) =>
@@ -121,7 +121,7 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
       builder.result()
     end decode
 
-  given arrayWireCodec[A: ClassTag](using inner: WireCodec[A]): WireCodec[Array[A]] with
+  given arrayWireCodec: [A: ClassTag] => (inner: WireCodec[A]) => WireCodec[Array[A]]:
     def encode(writer: BsonWriter, values: Array[A]): Unit =
       writer.writeStartArray()
       values.foreach(inner.encode(writer, _))
@@ -139,12 +139,7 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
       builder.result()
     end decode
 
-  given eitherWireCodec[A, B](using
-      codecA: WireCodec[A],
-      codecB: WireCodec[B],
-      tagA: ClassTag[A],
-      tagB: ClassTag[B],
-  ): WireCodec[Either[A, B]] with
+  given eitherWireCodec: [A, B] => (codecA: WireCodec[A], codecB: WireCodec[B], tagA: ClassTag[A], tagB: ClassTag[B]) => WireCodec[Either[A, B]]:
     private val nameA = tagA.runtimeClass.getSimpleName
     private val nameB = tagB.runtimeClass.getSimpleName
     require(

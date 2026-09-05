@@ -11,39 +11,39 @@ import mongo4s.bson.{BsonDecoder, BsonEncoder, BsonError, BsonTypeName}
 
 trait CatsDataBsonInstances:
 
-  given [A](using enc: BsonEncoder[List[A]]): BsonEncoder[NonEmptyList[A]] =
+  given [A] => (enc: BsonEncoder[List[A]]) => BsonEncoder[NonEmptyList[A]] =
     enc.contramap(_.toList)
-  given [A](using dec: BsonDecoder[List[A]]): BsonDecoder[NonEmptyList[A]] =
+  given [A] => (dec: BsonDecoder[List[A]]) => BsonDecoder[NonEmptyList[A]] =
     dec.emap { list =>
       NonEmptyList
         .fromList(list)
         .toRight(BsonError.Custom("Expected a non-empty list"))
     }
 
-  given [A](using enc: BsonEncoder[List[A]]): BsonEncoder[Chain[A]] = enc.contramap(_.toList)
-  given [A](using dec: BsonDecoder[List[A]]): BsonDecoder[Chain[A]] = dec.map(Chain.fromSeq)
+  given [A] => (enc: BsonEncoder[List[A]]) => BsonEncoder[Chain[A]] = enc.contramap(_.toList)
+  given [A] => (dec: BsonDecoder[List[A]]) => BsonDecoder[Chain[A]] = dec.map(Chain.fromSeq)
 
-  given [A](using enc: BsonEncoder[Vector[A]]): BsonEncoder[NonEmptyVector[A]] =
+  given [A] => (enc: BsonEncoder[Vector[A]]) => BsonEncoder[NonEmptyVector[A]] =
     enc.contramap(_.toVector)
-  given [A](using dec: BsonDecoder[Vector[A]]): BsonDecoder[NonEmptyVector[A]] =
+  given [A] => (dec: BsonDecoder[Vector[A]]) => BsonDecoder[NonEmptyVector[A]] =
     dec.emap { vector =>
       NonEmptyVector
         .fromVector(vector)
         .toRight(BsonError.Custom("Expected a non-empty vector"))
     }
 
-  given [A](using enc: BsonEncoder[Set[A]]): BsonEncoder[NonEmptySet[A]]                  =
+  given [A] => (enc: BsonEncoder[Set[A]]) => BsonEncoder[NonEmptySet[A]]                  =
     enc.contramap(_.toSortedSet)
-  given [A](using dec: BsonDecoder[Set[A]], order: Order[A]): BsonDecoder[NonEmptySet[A]] =
+  given [A] => (dec: BsonDecoder[Set[A]], order: Order[A]) => BsonDecoder[NonEmptySet[A]] =
     dec.emap { set =>
       NonEmptySet
         .fromSet(SortedSet.from(set)(using order.toOrdering))
         .toRight(BsonError.Custom("Expected a non-empty set"))
     }
 
-  given [A](using enc: BsonEncoder[Map[String, A]]): BsonEncoder[NonEmptyMap[String, A]] =
+  given [A] => (enc: BsonEncoder[Map[String, A]]) => BsonEncoder[NonEmptyMap[String, A]] =
     enc.contramap(_.toSortedMap)
-  given [A](using dec: BsonDecoder[Map[String, A]]): BsonDecoder[NonEmptyMap[String, A]] =
+  given [A] => (dec: BsonDecoder[Map[String, A]]) => BsonDecoder[NonEmptyMap[String, A]] =
     dec.emap { map =>
       NonEmptyMap
         .fromMap(SortedMap.from(map))
@@ -62,7 +62,7 @@ trait CatsDataBsonInstances:
     (nameA, nameB, s"$nameA+$nameB")
   end iorNames
 
-  given [A, B](using encA: BsonEncoder[A], encB: BsonEncoder[B], tagA: ClassTag[A], tagB: ClassTag[B]): BsonEncoder[Ior[A, B]] =
+  given [A, B] => (encA: BsonEncoder[A], encB: BsonEncoder[B], tagA: ClassTag[A], tagB: ClassTag[B]) => BsonEncoder[Ior[A, B]] =
     val (nameA, nameB, bothTag) = iorNames[A, B]
     {
       case Ior.Left(a)    => BsonDocument(IorDiscriminatorField, BsonString(nameA)).append("value", encA.encode(a))
@@ -74,7 +74,7 @@ trait CatsDataBsonInstances:
     }
   end given
 
-  given [A, B](using decA: BsonDecoder[A], decB: BsonDecoder[B], tagA: ClassTag[A], tagB: ClassTag[B]): BsonDecoder[Ior[A, B]] =
+  given [A, B] => (decA: BsonDecoder[A], decB: BsonDecoder[B], tagA: ClassTag[A], tagB: ClassTag[B]) => BsonDecoder[Ior[A, B]] =
     val (nameA, nameB, bothTag) = iorNames[A, B]
 
     def field(doc: BsonDocument, key: String): Either[BsonError, BsonValue] =

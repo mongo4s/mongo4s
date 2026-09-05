@@ -5,7 +5,7 @@ import scala.collection.Factory
 import org.bson.{BsonReader, BsonType, BsonWriter}
 
 private[direct] trait WireIterableLowPriorityInstances:
-  given iterableWireCodec[A, C[X] <: Iterable[X]](using inner: WireCodec[A], factory: Factory[A, C[A]]): WireCodec[C[A]] with
+  given iterableWireCodec: [A, C[X] <: Iterable[X]] => (inner: WireCodec[A], factory: Factory[A, C[A]]) => WireCodec[C[A]]:
     def encode(writer: BsonWriter, values: C[A]): Unit =
       writer.writeStartArray()
       values.foreach(inner.encode(writer, _))

@@ -6,7 +6,7 @@ import mongo4s.{Effect, ExitCase}
 
 trait AsyncToEffectInstance:
 
-  given asyncEffect[F[*]](using F: Async[F]): Effect[F] = new Effect[F]:
+  given asyncEffect: [F[*]] => (F: Async[F]) => Effect[F] = new Effect[F]:
     def pure[A](a: A): F[A]                                      = F.pure(a)
     def delay[A](a: => A): F[A]                                  = F.delay(a)
     def map[A, B](fa: F[A])(f: A => B): F[B]                     = F.map(fa)(f)

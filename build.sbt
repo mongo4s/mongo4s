@@ -1,16 +1,16 @@
 import Dependencies.Versions
 import com.typesafe.tools.mima.plugin.MimaKeys.mimaPreviousArtifacts
 
-lazy val binaryCompatibleWith = Set("2.0.0")
+lazy val binaryCompatibleWith = Set.empty[String]
 
 lazy val commonSettings = Seq(
   organization           := "org.mongo4s",
   organizationName       := "Mongo4s",
   homepage               := Some(uri("https://mongo4s.org/")),
   description            := "Mongo client, bson-codecs and repositories for Scala 3",
-  version                := "2.0.0",
+  version                := "3.0.0",
   versionScheme          := Some("semver-spec"),
-  scalaVersion           := Versions.scalaLTS,
+  scalaVersion           := Versions.scala3,
   parallelExecution      := true,
   publishMavenStyle      := true,
   Test / publishArtifact := false,
@@ -36,7 +36,7 @@ lazy val commonSettings = Seq(
   scalacOptions ++= Seq(
     "-encoding",
     "UTF-8",
-    "-source:future",
+    "-source:3.9",
     "-deprecation",
     "-feature",
     "-unchecked",
@@ -78,8 +78,7 @@ lazy val bsonCalypso = project
   .in(file("bson/calypso"))
   .settings(commonSettings)
   .settings(
-    name         := "mongo4s-bson-calypso",
-    scalaVersion := Versions.scalaLast,
+    name := "mongo4s-bson-calypso",
     libraryDependencies += Dependencies.Codecs.calypso,
   )
   .dependsOn(bsonCore)
@@ -151,8 +150,7 @@ lazy val kyo = project
   .in(file("runtime/kyo"))
   .settings(commonSettings)
   .settings(
-    name         := "mongo4s-kyo",
-    scalaVersion := Versions.scalaLast,
+    name := "mongo4s-kyo",
     libraryDependencies ++= Dependencies.Kyo.all,
   )
   .dependsOn(core)
@@ -161,8 +159,7 @@ lazy val rapid = project
   .in(file("runtime/rapid"))
   .settings(commonSettings)
   .settings(
-    name         := "mongo4s-rapid",
-    scalaVersion := Versions.scalaLast,
+    name := "mongo4s-rapid",
     libraryDependencies ++= Dependencies.Rapid.all,
   )
   .dependsOn(core)
@@ -203,7 +200,6 @@ lazy val repositoriesTests = project
   .settings(commonSettings)
   .settings(
     name                  := "mongo4s-repositories-tests",
-    scalaVersion          := Versions.scalaLast,
     publish / skip        := true,
     mimaPreviousArtifacts := Set.empty,
     libraryDependencies ++= Seq(
@@ -234,7 +230,6 @@ lazy val examples = project
   .settings(commonSettings)
   .settings(
     name                  := "mongo4s-examples",
-    scalaVersion          := Versions.scalaLast,
     publish / skip        := true,
     mimaPreviousArtifacts := Set.empty,
     libraryDependencies ++= Seq(
@@ -265,7 +260,6 @@ lazy val benchmarks = project
   .settings(commonSettings)
   .settings(
     name                  := "mongo4s-benchmarks",
-    scalaVersion          := Versions.scalaLast,
     publish / skip        := true,
     mimaPreviousArtifacts := Set.empty,
     libraryDependencies ++= Seq(
@@ -295,7 +289,6 @@ lazy val it = project
   .settings(commonSettings)
   .settings(
     name                     := "mongo4s-it",
-    scalaVersion             := Versions.scalaLast,
     publish / skip           := true,
     mimaPreviousArtifacts    := Set.empty,
     Test / fork              := true,

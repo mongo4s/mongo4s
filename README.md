@@ -55,10 +55,10 @@ third-party codec library, no extra dependency beyond `mongo4s-core` itself:
 
 ```scala
 libraryDependencies ++= Seq(
-  "org.mongo4s" %% "mongo4s-cats" % "2.0.0", // mongo4s-core + cats-effect integration
-  "org.mongo4s" %% "mongo4s-bson-direct" % "2.0.0", // ast-free bson codecs
-  "org.mongo4s" %% "mongo4s-bson-cats-data" % "2.0.0", // if you need NonEmptyList etc. codec instances
-  "org.mongo4s" %% "mongo4s-repositories" % "2.0.0", // if you need auto-generated CRUD repository ops for your model
+  "org.mongo4s" %% "mongo4s-cats"           % "3.0.0", // mongo4s-core + cats-effect integration
+  "org.mongo4s" %% "mongo4s-bson-direct"    % "3.0.0", // ast-free bson codecs
+  "org.mongo4s" %% "mongo4s-bson-cats-data" % "3.0.0", // if you need NonEmptyList etc. codec instances
+  "org.mongo4s" %% "mongo4s-repositories"   % "3.0.0", // if you need auto-generated CRUD repository ops for your model
 )
 ```
 
@@ -1018,7 +1018,7 @@ repository call can join a [transaction](#sessions--transactions) the same way a
 directly, not reimplementing what's already there.
 
 For unit tests, `FakeMongoCollection` (in `mongo4s-testkit`, a published module — add it as
-`"org.mongo4s" %% "mongo4s-testkit" % "2.0.0" % Test`) implements `MongoCollection` in memory. The exact same
+`"org.mongo4s" %% "mongo4s-testkit" % "3.0.0" % Test`) implements `MongoCollection` in memory. The exact same
 `Filter`/`Update`/`Field` AST the real driver interprets is interpreted against an in-memory buffer instead, so
 repository logic is testable without a running MongoDB.
 
@@ -1114,40 +1114,43 @@ Operations that expect at most one document read two, not the whole cursor — e
 
 ## Modules
 
-Published for Scala 3 under `org.mongo4s`:
+Published for `Scala 3.9 LTS` under `org.mongo4s`:
 
 ```scala
-"org.mongo4s" %% "mongo4s-<module>" % "2.0.0"
+"org.mongo4s" %% "mongo4s-<module>" % "3.0.0"
 ```
 
-| | Module | Min. Scala | Notes |
-| --- | --- | --- | --- |
-| core | `mongo4s-core` | 3.3 LTS | `MongoClient`/`MongoDatabase`/`MongoCollection`, `Field`/`Filter`/`Update`, `PrimaryKey`, `WithId`; depends on `bson-core` + `bson-direct` only |
-| bson | `mongo4s-bson-core` | 3.3 LTS | `BsonEncoder`/`BsonDecoder`/`BsonDocumentCodec` — the scalar + document codec seam |
-| | `mongo4s-bson-direct` | 3.3 LTS | `WireCodec[A]` — AST-free product/sum derivation, no third-party dependency |
-| | `mongo4s-bson-cats-data` | 3.3 LTS | `cats.data` (`NonEmptyList`/`Chain`/`NonEmptyVector`/`NonEmptySet`/`NonEmptyMap`/`Ior`) instances |
-| | `mongo4s-bson-medeia` | 3.3 LTS | bridges `medeia`'s `derives BsonDocumentCodec` |
-| | `mongo4s-bson-zio` | 3.3 LTS | bridges `zio-bson` (add `zio-schema-bson` yourself for the `Schema`-derived route) |
-| | `mongo4s-bson-calypso` | **3.8** | bridges `calypso`'s `forProductN` |
-| runtime | `mongo4s-cats` | 3.3 LTS | `cats-effect 3` + `fs2` |
-| | `mongo4s-zio` | 3.3 LTS | ZIO 2 + `zio-streams` |
-| | `mongo4s-kyo` | **3.8** | kyo 1.0.0-RC6 |
-| | `mongo4s-rapid` | **3.8** | rapid |
-| repositories | `mongo4s-repositories` | 3.3 LTS | `BaseMongoRepository`, `Repository`, `Page` |
-| testkit | `mongo4s-testkit` | 3.3 LTS | `FakeMongoCollection`, `FakeRepository` — in-memory doubles for unit tests |
+| | Module | Notes |
+| --- | --- | --- |
+| core | `mongo4s-core` | `MongoClient`/`MongoDatabase`/`MongoCollection`, `Field`/`Filter`/`Update`, `PrimaryKey`, `WithId`; depends on `bson-core` + `bson-direct` only |
+| bson | `mongo4s-bson-core` | `BsonEncoder`/`BsonDecoder`/`BsonDocumentCodec` — the scalar + document codec seam |
+| | `mongo4s-bson-direct` | `WireCodec[A]` — AST-free product/sum derivation, no third-party dependency |
+| | `mongo4s-bson-cats-data` | `cats.data` (`NonEmptyList`/`Chain`/`NonEmptyVector`/`NonEmptySet`/`NonEmptyMap`/`Ior`) instances |
+| | `mongo4s-bson-medeia` | bridges `medeia`'s `derives BsonDocumentCodec` |
+| | `mongo4s-bson-zio` | bridges `zio-bson` (add `zio-schema-bson` yourself for the `Schema`-derived route) |
+| | `mongo4s-bson-calypso` | bridges `calypso`'s `forProductN` |
+| runtime | `mongo4s-cats` | `cats-effect 3` + `fs2` |
+| | `mongo4s-zio` | ZIO 2 + `zio-streams` |
+| | `mongo4s-kyo` | kyo 1.0.0-RC6 |
+| | `mongo4s-rapid` | rapid |
+| repositories | `mongo4s-repositories` | `BaseMongoRepository`, `Repository`, `Page` |
+| testkit | `mongo4s-testkit` | `FakeMongoCollection`, `FakeRepository` — in-memory doubles for unit tests |
+
+Every module is built with the same Scala version, so there is no longer a subset that a project on an older
+compiler has to do without.
 
 ### Compatibility
 
 Binary compatibility within a major version is checked by [MiMa](https://github.com/lightbend/mima) on every build,
 new `Effect`/`RsBridge` methods carry default implementations, and deprecations get at least one minor release before
-removal. The `3.8`-pinned modules cannot be consumed from a `3.3 LTS` project, and `mongo4s-kyo` sits outside the
-promise while kyo is on a release candidate.
+removal. `mongo4s-kyo` sits outside the promise while kyo is on a release candidate.
 
-`2.0.0` is a breaking release — mainly because every write operation's options moved from parameters into an
-immutable options value, which is what lets new options arrive in a `2.x` minor without breaking anyone. The compiler
-catches every change; none of them is silent.
+`3.0.0` moves the whole build onto `Scala 3.9 LTS` and drops `3.3 LTS`. The API is unchanged from `2.0.0`, so there
+is nothing to migrate but the Scala version — but `TASTy` is not forward compatible, and that is a break MiMa cannot
+see, which is why it takes a major release rather than a minor. What it buys is one Scala version across every
+module: the three that used to be pinned to a fast-release `3.8` are on the LTS line with the rest.
 
-Full policy, the 1.x → 2.0 migration guide and the Scala-version rules: **[COMPATIBILITY.md](COMPATIBILITY.md)**.
+Full policy, the migration guides and the Scala-version rules: **[COMPATIBILITY.md](COMPATIBILITY.md)**.
 What changed in each release: **[CHANGELOG.md](CHANGELOG.md)**. What is not covered yet and how it will land:
 **[ROADMAP.md](ROADMAP.md)**.
 
