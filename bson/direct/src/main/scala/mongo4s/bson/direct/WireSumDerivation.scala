@@ -2,7 +2,7 @@ package mongo4s.bson.direct
 
 import scala.annotation.publicInBinary
 import scala.deriving.Mirror
-import scala.compiletime.{constValue, erasedValue, summonInline}
+import scala.compiletime.{constValueTuple, summonAll}
 
 import org.bson.{BsonReader, BsonType, BsonWriter}
 
@@ -14,7 +14,7 @@ object WireSumDerivation:
   private[direct] val NestedValueField   = WireDiscriminator.ValueField
 
   inline def derived[A](using mirror: Mirror.SumOf[A], config: WireCodecConfig): WireCodec[A] =
-    val discriminators: Array[String] = labelsOf[mirror.MirroredElemLabels].toArray.map(config.discriminatorNaming.apply)
+    val discriminators: Array[String] = constValueTuple[mirror.MirroredElemLabels].toList.map(label => config.discriminatorNaming(label.asInstanceOf[String])).toArray
     require(
       discriminators.distinct.length == discriminators.length,
       s"WireCodecConfig.discriminatorNaming produced duplicate discriminators: ${discriminators.mkString(", ")}",
@@ -23,7 +23,7 @@ object WireSumDerivation:
       mirror,
       discriminators,
       config.encodeEmptyCasesAsString,
-      () => codecsOf[mirror.MirroredElemTypes].toArray.asInstanceOf[Array[WireCodec[Any]]],
+      () => summonAll[Tuple.Map[mirror.MirroredElemTypes, WireCodec]].toList.asInstanceOf[List[WireCodec[Any]]].toArray,
     )
   end derived
 
@@ -102,13 +102,3 @@ object WireSumDerivation:
           reader.readEndDocument()
           result.asInstanceOf[A]
       end decode
-
-  private inline def labelsOf[T <: Tuple]: List[String] =
-    inline erasedValue[T] match
-      case _: EmptyTuple => Nil
-      case _: (t *: ts)  => constValue[t].asInstanceOf[String] :: labelsOf[ts]
-
-  private inline def codecsOf[T <: Tuple]: List[WireCodec[?]] =
-    inline erasedValue[T] match
-      case _: EmptyTuple => Nil
-      case _: (t *: ts)  => summonInline[WireCodec[t]] :: codecsOf[ts]

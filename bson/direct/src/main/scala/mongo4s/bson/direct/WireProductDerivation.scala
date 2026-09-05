@@ -2,7 +2,7 @@ package mongo4s.bson.direct
 
 import scala.annotation.publicInBinary
 import scala.deriving.Mirror
-import scala.compiletime.{constValue, erasedValue, summonInline}
+import scala.compiletime.{constValueTuple, summonAll}
 
 import org.bson.{BsonReader, BsonType, BsonWriter}
 
@@ -11,7 +11,7 @@ import mongo4s.bson.BsonError
 object WireProductDerivation:
 
   inline def derived[A](using m: Mirror.ProductOf[A], config: WireCodecConfig): WireCodec[A] =
-    val labels: Array[String] = labelsOf[m.MirroredElemLabels].toArray.map(config.fieldNaming.apply)
+    val labels: Array[String] = constValueTuple[m.MirroredElemLabels].toList.map(label => config.fieldNaming(label.asInstanceOf[String])).toArray
 
     require(
       labels.distinct.length == labels.length,
@@ -22,7 +22,7 @@ object WireProductDerivation:
       mirror = m,
       labels = labels,
       omitAbsentFields = config.omitNoneFields,
-      codecsThunk = () => codecsOf[m.MirroredElemTypes].toArray.asInstanceOf[Array[WireCodec[Any]]]
+      codecsThunk = () => summonAll[Tuple.Map[m.MirroredElemTypes, WireCodec]].toList.asInstanceOf[List[WireCodec[Any]]].toArray
     )
   end derived
 
@@ -80,13 +80,3 @@ object WireProductDerivation:
 
         mirror.fromProduct(Tuple.fromArray(values))
       end readFields
-
-  private inline def labelsOf[T <: Tuple]: List[String] =
-    inline erasedValue[T] match
-      case _: EmptyTuple => Nil
-      case _: (t *: ts)  => constValue[t].asInstanceOf[String] :: labelsOf[ts]
-
-  private inline def codecsOf[T <: Tuple]: List[WireCodec[?]] =
-    inline erasedValue[T] match
-      case _: EmptyTuple => Nil
-      case _: (t *: ts)  => summonInline[WireCodec[t]] :: codecsOf[ts]
