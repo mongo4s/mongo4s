@@ -51,6 +51,38 @@ jobs:
       - name: Binary compatibility
         run: sbt mimaReportBinaryIssues
 
+  forward-compat:
+    name: Next Scala release (-source:future)
+    runs-on: ubuntu-latest
+    # Advisory, not a gate: on 3.9 `-source:future` means 3.10 semantics, so this job is the early warning that
+    # the next Scala release will need work — it must not block a change that is fine on the version we ship.
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Set up sbt
+        uses: sbt/setup-sbt@v1
+
+      - name: Cache sbt
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.sbt
+            ~/.cache/coursier
+          key: ${{ runner.os }}-sbt-${{ hashFiles('**/*.sbt', 'project/**.scala', 'project/build.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-sbt-
+
+      - name: Compile
+        run: sbt 'set every sourceLevel := "future"; Test/compile'
+
   integration:
     name: Integration tests (real MongoDB via Testcontainers)
     runs-on: ubuntu-latest

@@ -3,6 +3,12 @@ import com.typesafe.tools.mima.plugin.MimaKeys.mimaPreviousArtifacts
 
 lazy val binaryCompatibleWith = Set.empty[String]
 
+// Pinned rather than `future`, because on 3.9 `-source:future` means 3.10 semantics — a moving target under a
+// published library. CI overrides it in an advisory job
+// (`sbt 'set every sourceLevel := "future"; Test/compile'`), so a break in the next Scala release shows up there
+// instead of in the build everyone depends on.
+lazy val sourceLevel = settingKey[String]("Scala -source level the build compiles against")
+
 lazy val commonSettings = Seq(
   organization           := "org.mongo4s",
   organizationName       := "Mongo4s",
@@ -33,10 +39,11 @@ lazy val commonSettings = Seq(
   ),
   libraryDependencies ++= Dependencies.Testing.all,
   exportJars             := false,
+  sourceLevel            := "3.9",
   scalacOptions ++= Seq(
     "-encoding",
     "UTF-8",
-    "-source:3.9",
+    s"-source:${sourceLevel.value}",
     "-deprecation",
     "-feature",
     "-unchecked",
