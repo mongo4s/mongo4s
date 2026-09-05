@@ -8,8 +8,6 @@ import org.scalatest.matchers.should.Matchers
 
 import com.mongodb.reactivestreams.client.MongoClient as RSMongoClient
 
-import mongo4s.rapid.RapidInstances.given
-
 final class MongoClientResourceSpec extends AnyWordSpec, Matchers:
 
   private def recordingClient(closed: AtomicInteger): RSMongoClient =
@@ -19,7 +17,7 @@ final class MongoClientResourceSpec extends AnyWordSpec, Matchers:
         Array(classOf[RSMongoClient]),
         new InvocationHandler:
           def invoke(proxy: Object, method: Method, args: Array[Object]): Object =
-            if method.getName == "close" then closed.incrementAndGet()
+            if method.getName == "close" then closed.incrementAndGet(): Unit
             null,
       )
       .asInstanceOf[RSMongoClient]

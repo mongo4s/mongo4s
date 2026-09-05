@@ -101,7 +101,7 @@ trait EffectBackendSpec[F[*]] extends AnyWordSpec, Matchers:
     "run the finalizer exactly once" in {
       val runs = AtomicInteger(0)
 
-      run(F.guaranteeCase(F.pure(1))(_ => F.delay(runs.incrementAndGet())))
+      run(F.guaranteeCase(F.pure(1))(_ => F.delay(runs.incrementAndGet(): Unit)))
       runs.get shouldBe 1
     }
 
@@ -127,10 +127,10 @@ trait EffectBackendSpec[F[*]] extends AnyWordSpec, Matchers:
       val runs = AtomicInteger(0)
       val boom = Boom("on-error")
 
-      run(F.onError(F.pure(1))(_ => F.delay(runs.incrementAndGet()))) shouldBe 1
+      run(F.onError(F.pure(1))(_ => F.delay(runs.incrementAndGet(): Unit))) shouldBe 1
       runs.get shouldBe 0
 
-      runAttempt(F.onError(F.raiseError[Int](boom))(_ => F.delay(runs.incrementAndGet()))) shouldBe Left(boom)
+      runAttempt(F.onError(F.raiseError[Int](boom))(_ => F.delay(runs.incrementAndGet(): Unit))) shouldBe Left(boom)
       runs.get shouldBe 1
     }
   }
@@ -139,7 +139,7 @@ trait EffectBackendSpec[F[*]] extends AnyWordSpec, Matchers:
     "release after a successful use" in {
       val released = AtomicInteger(0)
 
-      run(F.bracket(F.pure("resource"))(_ => F.pure(1))(_ => F.delay(released.incrementAndGet()))) shouldBe 1
+      run(F.bracket(F.pure("resource"))(_ => F.pure(1))(_ => F.delay(released.incrementAndGet(): Unit))) shouldBe 1
       released.get shouldBe 1
     }
 
@@ -147,7 +147,7 @@ trait EffectBackendSpec[F[*]] extends AnyWordSpec, Matchers:
       val released = AtomicInteger(0)
       val boom     = Boom("bracket")
 
-      runAttempt(F.bracket(F.pure("resource"))(_ => F.raiseError[Int](boom))(_ => F.delay(released.incrementAndGet()))) shouldBe Left(boom)
+      runAttempt(F.bracket(F.pure("resource"))(_ => F.raiseError[Int](boom))(_ => F.delay(released.incrementAndGet(): Unit))) shouldBe Left(boom)
       released.get shouldBe 1
     }
 
@@ -155,7 +155,7 @@ trait EffectBackendSpec[F[*]] extends AnyWordSpec, Matchers:
       val released = AtomicInteger(0)
       val boom     = Boom("acquire")
 
-      runAttempt(F.bracket(F.raiseError[String](boom))(_ => F.pure(1))(_ => F.delay(released.incrementAndGet()))) shouldBe Left(boom)
+      runAttempt(F.bracket(F.raiseError[String](boom))(_ => F.pure(1))(_ => F.delay(released.incrementAndGet(): Unit))) shouldBe Left(boom)
       released.get shouldBe 0
     }
 

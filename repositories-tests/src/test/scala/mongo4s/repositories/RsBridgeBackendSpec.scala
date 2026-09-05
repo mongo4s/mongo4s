@@ -62,7 +62,7 @@ object RsBridgeBackendSpec:
 
       subscriber.onSubscribe(
         new Subscription:
-          def request(n: Long): Unit = demand.addAndGet(n)
+          def request(n: Long): Unit = demand.addAndGet(n): Unit
           def cancel(): Unit         = cancelled.set(true)
       )
 
