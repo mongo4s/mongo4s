@@ -88,6 +88,11 @@ before assuming the default is safe there. If the runtime can't derive a `Tag`-l
 Formatting is enforced by [scalafmt](https://scalameta.org/scalafmt/) (`.scalafmt.conf`) and checked
 in CI. Run `sbt scalafmtAll` before opening a PR.
 
+The build turns on more warnings than the compiler does by default, because "the compiler is the test" only holds
+if it is asked. Beyond `-Wunused:all` and `-Wvalue-discard`: `-WunstableInlineAccessors` (the one that guards the
+binary-compatibility promise — see [DESIGN.md](DESIGN.md)), `-Wshadow:all`, `-Winfer-union`,
+`-Wimplausible-patterns` and `-Wrecurse-with-default`. Two are deliberately left off, and `build.sbt` says why.
+
 ## Releasing
 
 Two steps are easy to forget because nothing fails when they are missed:

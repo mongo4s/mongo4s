@@ -50,6 +50,14 @@ lazy val commonSettings = Seq(
     "-Xcheck-macros",
     "-Wunused:all",
     "-Wvalue-discard",
+    "-WunstableInlineAccessors",
+    "-Wshadow:all",
+    "-Winfer-union",
+    "-Wimplausible-patterns",
+    "-Wrecurse-with-default",
+    // Not `-Wsafe-init`: its analysis crashes kyo's Tag macro with a MatchError on an HKTypeLambda. The same call
+    // sites already draw "Missing symbol position ... This is a compiler bug" under the plain flags, so the fault is
+    // upstream rather than here. Not `-Wnonunit-statement` either — every non-final ScalaTest assertion trips it.
   ),
   credentials += Credentials(Path.userHome / ".sbt" / "sonatype_credentials"),
   mimaPreviousArtifacts  := binaryCompatibleWith.map(organization.value %% moduleName.value % _),
