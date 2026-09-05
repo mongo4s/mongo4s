@@ -287,8 +287,16 @@ compiling across minor releases. `liveStream` was added this way.
 
 **Binary compatibility is checked, not asserted.** MiMa runs in CI against the previous release. Every deliberate
 break is a MiMa exclusion in `build.sbt` and an entry in [COMPATIBILITY.md](COMPATIBILITY.md) — waivers are visible, not
-silent. `2.0.0` needs no filters at all: a major release is allowed to break, so the list there is a migration guide
+silent. `3.0.0` needs no filters at all: a major release is allowed to break, so the list there is a migration guide
 rather than a set of waivers.
+
+**MiMa has a blind spot, and the compiler covers it.** An `inline` method that reaches a non-public member makes the
+compiler synthesize a public accessor for it. That accessor's name is not part of the stable ABI: recompiling can
+rename it, and code that inlined the old one fails at link time. MiMa never sees this, because the accessor is
+synthesized rather than declared. `-WunstableInlineAccessors` reports each one and `@publicInBinary` pins it. Three
+existed the first time the flag was switched on — both derivations' `make`, and `FieldMacro` reached from
+`Field.of`. For a library this inline-heavy the check is not optional, so it is on in the build rather than left to
+whoever remembers.
 
 **Configuration types are builders, not case classes.** This one was learned the expensive way. Adding a field with
 a default to a `case class` is source-compatible but *never* binary-compatible: default arguments are resolved at the

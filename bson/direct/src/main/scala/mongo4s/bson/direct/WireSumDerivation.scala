@@ -1,5 +1,6 @@
 package mongo4s.bson.direct
 
+import scala.annotation.publicInBinary
 import scala.deriving.Mirror
 import scala.compiletime.{constValue, erasedValue, summonInline}
 
@@ -26,7 +27,7 @@ object WireSumDerivation:
     )
   end derived
 
-  private def make[A](
+  @publicInBinary private[direct] def make[A](
       mirror: Mirror.SumOf[A],
       discriminators: Array[String],
       encodeEmptyCasesAsString: Boolean,

@@ -23,6 +23,8 @@ part of `2.0.0` below.
 - Internally, every `given` moved to the syntax SIP-64 introduced in `3.6` (`given name: [A] => (dep: D) => T`), so
   the whole codebase compiles under `-source:future`. This changes how instances are declared, not what they are,
   and nothing about it is visible to a caller.
+- The accessors the compiler synthesizes for `Field.of` and the two `WireCodec` derivations are pinned with
+  `@publicInBinary`. They were binary-unstable — a name MiMa cannot check because it is synthesized, not declared.
 - `mongo4s-cats` builds against `fs2 3.14.0`. Its Reactive-Streams interop is unchanged from `3.13.0` — the module
   is identical between the two releases — so nothing about streaming behaviour moves with the bump.
 

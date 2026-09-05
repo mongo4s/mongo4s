@@ -1,8 +1,9 @@
 package mongo4s
 
+import scala.annotation.publicInBinary
 import scala.quoted.*
 
-private[mongo4s] object FieldMacro:
+@publicInBinary private[mongo4s] object FieldMacro:
 
   def impl[E: Type, A: Type](selector: Expr[E => A])(using Quotes): Expr[Field[E, A]] =
     import quotes.reflect.*
