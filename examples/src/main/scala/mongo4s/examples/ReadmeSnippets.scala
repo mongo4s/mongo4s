@@ -256,9 +256,9 @@ object ReadmeSnippets:
   def allEvents(collection: MongoCollection[IO, S, User]): S[ChangeEvent[User]] =
     collection.watch()
 
-  val insertsOnly = WatchOptions[User](
-    pipeline = Seq(Stage.raw(BsonDocument("$match", BsonDocument("operationType", BsonString("insert")))))
-  )
+  val insertsOnly = WatchOptions
+    .default[User]
+    .withPipeline(Seq(Stage.raw(BsonDocument("$match", BsonDocument("operationType", BsonString("insert"))))))
 
   def inserts(collection: MongoCollection[IO, S, User]): S[ChangeEvent[User]] =
     collection.watch(insertsOnly)

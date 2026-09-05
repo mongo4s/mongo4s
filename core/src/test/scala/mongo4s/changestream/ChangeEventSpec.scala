@@ -5,8 +5,8 @@ import java.util.Collections
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
-import org.bson.{BsonDocument, BsonInt32, BsonString}
-import com.mongodb.client.model.changestream.{ChangeStreamDocument, OperationType, UpdateDescription}
+import org.bson.{BsonDateTime, BsonDocument, BsonInt32, BsonString}
+import com.mongodb.client.model.changestream.{ChangeStreamDocument, OperationType, SplitEvent, UpdateDescription}
 
 import mongo4s.bson.{BsonDecoder, BsonError}
 
@@ -29,6 +29,8 @@ object ChangeEventSpec:
       fullDocumentBeforeChange: BsonDocument = null,
       documentKey: BsonDocument = null,
       updateDescription: UpdateDescription = null,
+      wallTime: BsonDateTime = null,
+      splitEvent: SplitEvent = null,
   ): ChangeStreamDocument[BsonDocument] =
     ChangeStreamDocument[BsonDocument](
       operationType,
@@ -43,8 +45,8 @@ object ChangeEventSpec:
       updateDescription,
       null,
       null,
-      null,
-      null,
+      wallTime,
+      splitEvent,
       null,
     )
 
@@ -69,6 +71,8 @@ final class ChangeEventSpec extends AnyWordSpec, Matchers:
           updateDescription = None,
           resumeToken = BsonDocument("_data", BsonString("resume-token")),
           clusterTime = None,
+          wallTime = None,
+          splitEvent = None,
         )
       )
     }
@@ -91,6 +95,8 @@ final class ChangeEventSpec extends AnyWordSpec, Matchers:
           updateDescription = Some(update),
           resumeToken = BsonDocument("_data", BsonString("resume-token")),
           clusterTime = None,
+          wallTime = None,
+          splitEvent = None,
         )
       )
     }
@@ -110,8 +116,25 @@ final class ChangeEventSpec extends AnyWordSpec, Matchers:
           updateDescription = None,
           resumeToken = BsonDocument("_data", BsonString("resume-token")),
           clusterTime = None,
+          wallTime = None,
+          splitEvent = None,
         )
       )
+    }
+
+    "carry the wall time and the split marker of a large event" in {
+      val document = changeStreamDocument(
+        operationType = "insert",
+        fullDocument = personDocument("bob", 30),
+        wallTime = BsonDateTime(1700000000000L),
+        splitEvent = SplitEvent(1, 3),
+      )
+
+      val result = ChangeEvent.fromDriver(document, decodePerson)
+
+      result.map(_.wallTime) shouldBe Right(Some(BsonDateTime(1700000000000L)))
+      result.map(_.splitEvent.map(_.getFragment)) shouldBe Right(Some(1))
+      result.map(_.splitEvent.map(_.getOf)) shouldBe Right(Some(3))
     }
 
     "surface a decode failure on a malformed full document" in {

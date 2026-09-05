@@ -1,7 +1,7 @@
 package mongo4s.changestream
 
-import org.bson.{BsonDocument, BsonTimestamp}
-import com.mongodb.client.model.changestream.{ChangeStreamDocument, OperationType, UpdateDescription}
+import org.bson.{BsonDateTime, BsonDocument, BsonTimestamp}
+import com.mongodb.client.model.changestream.{ChangeStreamDocument, OperationType, SplitEvent, UpdateDescription}
 
 import mongo4s.bson.BsonError
 
@@ -13,6 +13,8 @@ final case class ChangeEvent[A](
     updateDescription: Option[UpdateDescription],
     resumeToken: BsonDocument,
     clusterTime: Option[BsonTimestamp],
+    wallTime: Option[BsonDateTime],
+    splitEvent: Option[SplitEvent],
 )
 
 object ChangeEvent:
@@ -31,6 +33,8 @@ object ChangeEvent:
       updateDescription = Option(document.getUpdateDescription),
       resumeToken = document.getResumeToken,
       clusterTime = Option(document.getClusterTime),
+      wallTime = Option(document.getWallTime),
+      splitEvent = Option(document.getSplitEvent),
     )
 
   private def sequence[E, A](o: Option[Either[E, A]]): Either[E, Option[A]] =

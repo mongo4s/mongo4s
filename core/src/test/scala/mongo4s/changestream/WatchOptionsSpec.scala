@@ -27,6 +27,11 @@ final class WatchOptionsSpec extends AnyWordSpec, Matchers:
       options.startAfter shouldBe None
       options.startAtOperationTime shouldBe None
     }
+
+    "report only document events until expanded ones are asked for" in {
+      WatchOptions.default[String].expandedEvents shouldBe false
+      WatchOptions.default[String].withExpandedEvents.expandedEvents shouldBe true
+    }
   }
 
   "resume points" should {
@@ -70,6 +75,7 @@ final class WatchOptionsSpec extends AnyWordSpec, Matchers:
         .startingAt(BsonTimestamp(1, 1))
         .withMaxAwaitTime(2.seconds)
         .withBatchSize(64)
+        .withExpandedEvents
 
       options.pipeline shouldBe stages
       options.fullDocument shouldBe FullDocument.DEFAULT
@@ -77,5 +83,6 @@ final class WatchOptionsSpec extends AnyWordSpec, Matchers:
       options.startAtOperationTime shouldBe Some(BsonTimestamp(1, 1))
       options.maxAwaitTime shouldBe Some(2.seconds)
       options.batchSize shouldBe Some(64)
+      options.expandedEvents shouldBe true
     }
   }

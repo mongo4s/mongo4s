@@ -671,6 +671,8 @@ final case class ChangeEvent[A](
   updateDescription: Option[UpdateDescription], // updated/removed field paths, for UPDATE events
   resumeToken: BsonDocument,
   clusterTime: Option[BsonTimestamp],
+  wallTime: Option[BsonDateTime],  // when the change was applied, in server wall-clock time
+  splitEvent: Option[SplitEvent],  // set only on a fragment of an event too large for one message
 )
 ```
 
@@ -712,15 +714,24 @@ collection.watch(WatchOptions.resumeAfter[User](savedToken))
 `resumingAfter` and `startingAfter` are alternatives — each clears the other, since the server rejects a stream
 carrying both `resumeAfter` and `startAfter`.
 
+`withExpandedEvents` is the driver's `showExpandedEvents`: DDL events — `createIndexes`, `drop`, `rename` and the
+rest — are reported alongside the document ones. It needs MongoDB 6.0, so the flag is sent only when you ask for it
+rather than as a default an older server would reject.
+
+`clusterTime` and `wallTime` answer different questions: the first is the logical timestamp the change is ordered
+by, the second is the server's wall clock when it was applied — useful for lag, useless for ordering. `splitEvent`
+is set only on the fragments of an event too large for one message, and says which fragment of how many; without
+`$changeStreamSplitLargeEvent` in the pipeline you will never see it.
+
 `WatchOptions.pipeline` filters the change stream itself, and matches against the **change event's own shape**
 (`{operationType, fullDocument, ns, ...}`), not the collection's document shape. A `Field.of` path is therefore the
 wrong tool: it would render `"age"` where the event needs `"fullDocument.age"`. Use `Stage.raw`, or `Field.stored`
 for a path under `fullDocument`:
 
 ```scala
-val insertsOnly = WatchOptions[User](
-  pipeline = Seq(Stage.raw(BsonDocument("$match", BsonDocument("operationType", BsonString("insert")))))
-)
+val insertsOnly = WatchOptions
+  .default[User]
+  .withPipeline(Seq(Stage.raw(BsonDocument("$match", BsonDocument("operationType", BsonString("insert"))))))
 
 collection.watch(insertsOnly)
 ```

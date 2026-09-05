@@ -18,5 +18,8 @@ private[mongo4s] object ChangeStreamSupport:
     options.maxAwaitTime.foreach(duration => publisher.maxAwaitTime(duration.toMillis, TimeUnit.MILLISECONDS))
     options.batchSize.foreach(publisher.batchSize)
 
+    // Only when asked: a server older than 6.0 does not know the flag, and there is no reason to send it a default.
+    if options.expandedEvents then publisher.showExpandedEvents(true): Unit
+
     publisher
   end configure

@@ -324,8 +324,10 @@ derivation options will keep arriving, `WireCodecConfig` became a `final class` 
 given WireCodecConfig = WireCodecConfig.SnakeCase.withOmitNoneFields(false)
 ```
 
-`WatchOptions` still is a case class with `withX` on top; it carries the same hazard and should get the same
-treatment the next time it changes.
+`WatchOptions` was the counter-example here for a while — a case class with `withX` on top, carrying the same
+hazard, with a note that it should get the same treatment the next time it changed. Adding `showExpandedEvents` was
+that time, so it is now a `final class` with a private constructor too, and the note has been paid off rather than
+restated.
 
 ## Deliberately not done
 

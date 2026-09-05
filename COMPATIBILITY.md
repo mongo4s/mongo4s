@@ -15,8 +15,8 @@
 
 ## Migrating from 2.x to 3.0.0
 
-`3.0.0` requires **`Scala 3.9 LTS`**, and changes two things in the API: compound `PrimaryKey`s are named tuples,
-and `withTransaction` retries the way the driver does. Nothing else moved.
+`3.0.0` requires **`Scala 3.9 LTS`**, and changes three things in the API: compound `PrimaryKey`s are named tuples,
+`withTransaction` retries the way the driver does, and `WatchOptions` became a builder. Nothing else moved.
 
 ### Why this is a major release
 
@@ -73,6 +73,28 @@ transaction's `readConcern`, `writeConcern`, `readPreference` and `maxCommitTime
 `Effect` gained `monotonic`, needed to bound the retries. It has a default implementation reading `System.nanoTime`,
 so an `Effect` you implement yourself keeps compiling; override it if your runtime has a clock worth substituting in
 tests, as `mongo4s-cats` and `mongo4s-zio` do.
+
+### `WatchOptions` stopped being a `case class`
+
+It is a `final class` with a private constructor, so `WatchOptions(...)`, `.copy(...)`, `unapply` and the `Product`
+methods are gone. Build one from `WatchOptions.default[E]` and chain, exactly as before:
+
+```scala
+WatchOptions[User](pipeline = stages)                 // 2.x
+WatchOptions.default[User].withPipeline(stages)       // 3.0
+```
+
+Reading a field — `options.pipeline`, `options.batchSize` — is unchanged.
+
+The reason is the one `Index` and `WireCodecConfig` already carry: a `case class` cannot gain a field without
+breaking `apply`/`copy` in every release, and change-stream options keep arriving. `withExpandedEvents` is the first
+one that had to, so the treatment happened now rather than being restated as a hazard.
+
+### `ChangeEvent` gained two fields
+
+`wallTime` and `splitEvent`. Reading an event is unaffected; constructing one by hand — which really only happens in
+tests — needs the two extra arguments. It stays a `case class`, because an event is data a consumer destructures
+rather than configuration a caller builds, and `copy`/`unapply` are worth having there.
 
 ### What it buys
 

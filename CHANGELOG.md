@@ -14,6 +14,10 @@ part of `2.0.0` below.
 
 - `TransactionOptions`, carrying a transaction's `readConcern`, `writeConcern`, `readPreference` and
   `maxCommitTime` — and the retry window below. Both `withTransaction` methods take one.
+- `WatchOptions.withExpandedEvents` — the driver's `showExpandedEvents`, so DDL events arrive alongside document
+  ones. Needs MongoDB 6.0, and the flag is sent only when asked for.
+- `ChangeEvent.wallTime` and `ChangeEvent.splitEvent`: the server's wall clock for the change, and which fragment of
+  how many an oversized event was split into.
 - `Effect.monotonic`, with a default reading `System.nanoTime`, so implementors are unaffected; `mongo4s-cats` and
   `mongo4s-zio` override it with their runtime's own clock.
 
@@ -31,6 +35,8 @@ part of `2.0.0` below.
 - Compound `PrimaryKey`s are **named tuples**: `PrimaryKey.compound(o => (userId = o.userId, seq = o.seq))`
   replaces the positional tuple plus its parallel list of names and `_._1`/`_._2` extractors. Any width works, so
   `compound3` and `compound4` were removed.
+- `WatchOptions` is a `final class` with `withX` builders instead of a `case class` — same reason `Index` and
+  `WireCodecConfig` already were. Build from `WatchOptions.default[E]`; reading its fields is unchanged.
 - The accessors the compiler synthesizes for `Field.of` and the two `WireCodec` derivations are pinned with
   `@publicInBinary`. They were binary-unstable — a name MiMa cannot check because it is synthesized, not declared.
 - `mongo4s-cats` builds against `fs2 3.14.0`. Its Reactive-Streams interop is unchanged from `3.13.0` — the module
