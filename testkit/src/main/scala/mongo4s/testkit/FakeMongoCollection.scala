@@ -175,7 +175,7 @@ final class FakeMongoCollection[F[*], S[*], E](
             case None if options.upsert =>
               val encoded = codec.encodeDocument(value)
               storage += encoded
-              upserted += (i -> upsertedId(encoded))
+              upserted.update(i, upsertedId(encoded))
             case None                   => ()
         case (WriteCommand.UpdateOne(filter, update, _), _)       =>
           matching(filter).headOption.foreach { doc =>
