@@ -10,7 +10,7 @@ object Dependencies {
     val cats              = "2.13.0"
     val catsEffect3       = "3.7.1"
     val catsEffectTesting = "1.8.0"
-    val fs2               = "3.13.0"
+    val fs2               = "3.14.0"
 
     val zio                       = "2.1.26"
     val zioPrelude                = "1.0.0-RC48"
