@@ -1,6 +1,6 @@
 package mongo4s.internal
 
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.{CompletableFuture, CompletionException}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
 import scala.collection.mutable.ListBuffer
@@ -13,11 +13,25 @@ private[mongo4s] object PublisherCollector:
     subscribe(publisher, limit, buffered = true)
 
   def drain[A](publisher: Publisher[A]): CompletableFuture[Unit] =
-    subscribe(
-      publisher,
-      Int.MaxValue,
-      buffered = false,
-    ).thenApply(_ => ())
+    val collected = subscribe(publisher, Int.MaxValue, buffered = false)
+    val drained   = CompletableFuture[Unit]()
+
+    // Deriving this with `thenApply` would report the failure wrapped in a CompletionException. Runtimes differ on
+    // whether they unwrap that, so the driver's own exception type — and with it the error labels withTransaction
+    // retries on — survived on some backends and not others.
+    collected.whenComplete { (_, error) =>
+      if error == null
+      then drained.complete(()): Unit
+      else drained.completeExceptionally(unwrap(error)): Unit
+    }
+
+    drained
+  end drain
+
+  private def unwrap(error: Throwable): Throwable =
+    error match
+      case completion: CompletionException if completion.getCause ne null => completion.getCause
+      case other                                                          => other
 
   private def subscribe[A](publisher: Publisher[A], limit: Int, buffered: Boolean): CompletableFuture[List[A]] =
     val future          = CompletableFuture[List[A]]()

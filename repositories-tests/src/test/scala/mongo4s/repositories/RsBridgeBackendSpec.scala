@@ -144,6 +144,14 @@ trait RsBridgeBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers, TimeLimits:
     "consume the publisher and produce unit" in {
       run(bridge.unit(RecordingPublisher(List(1, 2)))) shouldBe ()
     }
+
+    "report the publisher's own error rather than a wrapper around it" in {
+      val boom = RuntimeException("drained")
+
+      // The driver's exception type is what carries the error labels withTransaction retries on, so a backend that
+      // hands back a CompletionException instead loses them.
+      attempt(bridge.unit(FailingPublisher(boom))) shouldBe Left(boom)
+    }
   }
 
   "stream" should {
