@@ -227,6 +227,14 @@ object ReadmeSnippets:
       _      <- collection.dropIndex("name_age")
     yield listed
 
+  // --- Keyset paging ---
+
+  def walk(users: BaseMongoRepository[IO, S, User, String]): IO[List[User]] =
+    for
+      firstPage <- users.findPage(100)
+      nextPage  <- firstPage.lastOption.fold(IO.pure(List.empty[User]))(last => users.findPage(100, after = Some(last.id)))
+    yield firstPage ++ nextPage
+
   // --- AST-free aggregation ---
 
   final case class ByAge(_id: Int, total: Int) derives WireCodec

@@ -14,6 +14,9 @@ part of `2.0.0` below.
 
 - `TransactionOptions`, carrying a transaction's `readConcern`, `writeConcern`, `readPreference` and
   `maxCommitTime` — and the retry window below. Both `withTransaction` methods take one.
+- `Repository.findPage(limit, after, filter)`: keyset paging over the primary key. The repository builds the sort
+  and the comparison that steps past the cursor itself, lexicographically for a compound key. Unlike `skip` it does
+  not re-scan, and a row deleted earlier does not shift the rows still to come.
 - `MongoCollection.aggregateDirect[B]`, which decodes a pipeline's output through a `WireCodec[B]` rather than a
   `BsonDocumentCodec[B]`. On a direct collection that is AST-free, the same trip `find` makes there; on any other
   collection the codec is bridged, so the call means the same thing either way. It carries the direct path's

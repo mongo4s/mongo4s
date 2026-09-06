@@ -1168,8 +1168,24 @@ users.findByFilter(adults, Page.sortedBy(Sort.asc(nameField)).skipping(20).takin
 users.getBy(adults, Page.first(100)) // same, as a stream
 ```
 
-Skip-based paging re-scans what it skips, so it degrades on deep pages; for a large collection, filter on the last
-key you saw instead — `findByFilter` takes any `Filter[E]`.
+Skip-based paging re-scans what it skips, so it degrades on deep pages — and a row deleted earlier in the
+collection shifts everything after it, so a walk can miss rows it never saw. `findPage` avoids both by asking for
+what comes *after* a key rather than for an offset:
+
+```scala
+val firstPage = users.findPage(100)
+val nextPage  = users.findPage(100, after = Some(pk.key(firstPage.last)))
+
+users.findPage(100, after = Some(lastKey), filter = adults) // narrowed, still paged by key
+```
+
+The repository already knows the key's fields, so it builds both halves itself: the sort that gives the page an
+order, and the comparison that steps past the cursor. For a compound key that comparison is lexicographic — an
+`$or` over "first field greater, or first equal and second greater, or …" — which is the part that is easy to get
+subtly wrong by hand. `ensureKeyIndex` builds the index that makes the whole walk a range scan.
+
+The cursor is the key of the last row you handled, so a crash resumes from there rather than from an offset that no
+longer means the same thing.
 
 `ensureKeyIndex` builds the unique index the `PrimaryKey` describes. `WithId[Id, E]` wraps an entity with a
 separately-typed id (`type Oid[E] = WithId[ObjectId, E]`) and ships its own `PrimaryKey`/`BsonDocumentCodec`

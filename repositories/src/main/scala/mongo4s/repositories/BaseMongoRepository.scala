@@ -41,6 +41,19 @@ open class BaseMongoRepository[F[*], S[*], E, K](
   def findByFilter(filter: Filter[E], page: Page[E])(using session: Option[ClientSession]): F[List[E]] =
     paged(collection.find(filter)(using session).projection(defaultProjection), page).all
 
+  def findPage(limit: Int, after: Option[K], filter: Filter[E])(using session: Option[ClientSession]): F[List[E]] =
+    require(limit > 0, s"a page has to hold at least one entity, got $limit")
+
+    val bounded = after.fold(filter)(key => Filter.and(filter, pk.afterFilter(key)))
+
+    collection
+      .find(bounded)(using session)
+      .projection(defaultProjection)
+      .sort(pk.keyOrder)
+      .limit(limit)
+      .all
+  end findPage
+
   def getAll(using session: Option[ClientSession])(using Streamable[S, E]): S[E] =
     collection.find()(using session).projection(defaultProjection).stream
 

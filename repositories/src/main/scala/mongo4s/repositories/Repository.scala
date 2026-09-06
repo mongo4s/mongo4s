@@ -27,6 +27,10 @@ trait Repository[F[*], S[*], E, K]:
 
   def findByFilter(filter: Filter[E], page: Page[E] = Page.all[E])(using session: Option[ClientSession] = None): F[List[E]]
 
+  def findPage(limit: Int, after: Option[K] = None, filter: Filter[E] = Filter.all)(using
+      session: Option[ClientSession] = None
+  ): F[List[E]]
+
   def getAll(using session: Option[ClientSession] = None)(using Streamable[S, E]): S[E]
   def getBy(filter: Filter[E], page: Page[E] = Page.all[E])(using
       session: Option[ClientSession] = None

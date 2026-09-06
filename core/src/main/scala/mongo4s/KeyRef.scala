@@ -4,7 +4,7 @@ import org.bson.BsonObjectId
 import org.bson.types.ObjectId
 
 import mongo4s.bson.BsonEncoder
-import mongo4s.operations.Filter
+import mongo4s.operations.{Filter, Sort}
 
 trait KeyRef[E, K]:
   def fieldNames: List[String]
@@ -17,6 +17,22 @@ trait KeyRef[E, K]:
         Filter.Eq[E](FieldPath.literal(name), value)
       }*
     )
+
+  def keyOrder: Sort[E] =
+    fieldNames.foldLeft(Sort.empty[E])((sort, name) => sort.asc(Field.stored[E, Any](name)))
+
+  def afterFilter(key: K): Filter[E] =
+    val entries = fields(key).toList
+
+    Filter.or(
+      entries.indices.toList.map { position =>
+        val settled = entries.take(position).map((name, value) => Filter.Eq[E](FieldPath.literal(name), value))
+        val greater = Filter.Gt[E](FieldPath.literal(entries(position)._1), entries(position)._2)
+
+        Filter.and((settled :+ greater)*)
+      }*
+    )
+  end afterFilter
 
   def inFilter(keys: List[K]): Filter[E] =
     keys match

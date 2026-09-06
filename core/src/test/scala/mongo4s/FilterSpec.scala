@@ -102,6 +102,27 @@ final class FilterSpec extends AnyWordSpec with Matchers:
       pk.fieldNames shouldBe List("first_name", "age")
     }
 
+    "step past a single-field key with a plain comparison" in {
+      val pk = PrimaryKey.single[User, String]("first_name")(_.firstName)
+
+      pk.afterFilter("bob").toBson(FieldNaming.identity).toJson shouldBe """{"first_name": {"$gt": "bob"}}"""
+    }
+
+    "step past a compound key in lexicographic order" in {
+      val pk: PrimaryKey[User, (firstName: String, age: Int)] =
+        PrimaryKey.compound(user => (firstName = user.firstName, age = user.age), FieldNaming.snakeCase)
+
+      pk.afterFilter((firstName = "bob", age = 30)).toBson(FieldNaming.identity).toJson shouldBe
+        """{"$or": [{"first_name": {"$gt": "bob"}}, {"$and": [{"first_name": "bob"}, {"age": {"$gt": 30}}]}]}"""
+    }
+
+    "order by the key's own fields, in the order it declares them" in {
+      val pk: PrimaryKey[User, (firstName: String, age: Int)] =
+        PrimaryKey.compound(user => (firstName = user.firstName, age = user.age), FieldNaming.snakeCase)
+
+      pk.keyOrder.toBson(FieldNaming.identity).toJson shouldBe """{"first_name": 1, "age": 1}"""
+    }
+
     "build an $in filter for a single-field key" in {
       val pk = PrimaryKey.single[User, String]("first_name")(_.firstName)
 

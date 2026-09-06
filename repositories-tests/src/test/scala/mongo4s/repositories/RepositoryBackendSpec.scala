@@ -76,6 +76,39 @@ trait RepositoryBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
     }
   }
 
+  "findPage" should {
+    "walk the whole collection in key order without repeating or skipping" in {
+      val (collection, repository) = repo()
+      run(collection.insertMany(List(Person("3", "c", 3), Person("1", "a", 1), Person("2", "b", 2), Person("4", "d", 4))))
+
+      val firstPage  = run(repository.findPage(2))
+      val secondPage = run(repository.findPage(2, after = Some(firstPage.last.id)))
+      val thirdPage  = run(repository.findPage(2, after = Some(secondPage.last.id)))
+
+      firstPage.map(_.id) shouldBe List("1", "2")
+      secondPage.map(_.id) shouldBe List("3", "4")
+      thirdPage shouldBe empty
+    }
+
+    "narrow with a filter and still page by key" in {
+      val (collection, repository) = repo()
+      run(collection.insertMany(List(Person("1", "a", 1), Person("2", "b", 9), Person("3", "c", 9), Person("4", "d", 1))))
+
+      val ageField = Field.of[Person, Int](_.age)
+      val page     = run(repository.findPage(1, filter = ageField.equalTo(9)))
+      val next     = run(repository.findPage(1, after = Some(page.last.id), filter = ageField.equalTo(9)))
+
+      page.map(_.id) shouldBe List("2")
+      next.map(_.id) shouldBe List("3")
+    }
+
+    "refuse a page that holds nothing" in {
+      val (_, repository) = repo()
+
+      an[IllegalArgumentException] should be thrownBy repository.findPage(0)
+    }
+  }
+
   "findBy / findByFilter" should {
     "filter by a single field" in {
       val (collection, repository) = repo()
