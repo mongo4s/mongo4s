@@ -142,8 +142,7 @@ library.
 back to the `BsonEncoder`/`BsonDecoder` bridge, which builds exactly the one `BsonValue` per field this path exists
 to avoid — and `Instant`, `ObjectId`, `UUID` and `BigDecimal` sit in almost every real entity, so the fallback was
 the common case rather than the exception. Each native instance writes and accepts exactly what the `BsonValue` path
-writes and accepts, leniency included: `Instant` also reads a `Timestamp`, `BigDecimal` also reads
-`Int32`/`Int64`/`Double`. That symmetry is what lets the same collection be opened either way.
+writes and accepts, leniency included. That symmetry is what lets the same collection be opened either way.
 
 It also makes losing one invisible to behavioural tests: the fallback produces byte-identical documents, so dropping
 a native instance would cost allocations and nothing else — every round-trip and format test would still pass. The
@@ -167,8 +166,8 @@ the signature keeps the type where the compiler cannot approximate it away.
 could use the collection's own `WireCodec`. For `aggregate` that mattered: a pipeline reading a large collection is
 exactly the hot path `bson-direct` exists for, and stopping at a `BsonDocument` there gave the AST-free claim an
 asterisk. `aggregateDirect[B]` takes a `WireCodec[B]` instead and registers it the same way `getDirectCollection`
-registers the entity's, so the output is read straight off the wire. It carries the strictness with it — the same
-numeric-width rules apply to the pipeline's output as to a stored entity.
+registers the entity's, so the output is read straight off the wire. It carries the strictness with it — the output
+type's fields all have to be present, the same rule a stored entity is read under.
 
 The size of that asterisk is now measured rather than assumed: over ten thousand documents `aggregateDirect` is 1.6×
 the bridged path against a real server, and over ten it is a wash, because the round trip is the whole cost at that
@@ -265,6 +264,32 @@ whether the failure carries `TransientTransactionError`, and it used to do that 
 translation it no longer sees one. `MongoError` therefore exposes `labels`/`hasLabel` from the wrapped exception,
 and `hasErrorLabel` accepts both — the existing retry specs caught this on all four runtimes, which is the argument
 for having had them.
+
+## One numeric rule, two paths
+
+The two decoding paths used to disagree about numbers. `BsonDecoder` accepted any numeric BSON type for any numeric
+Scala type, refusing only what would lose information — not whole, or out of range — and that logic had been
+sharpened over several commits: `Decimal128` read exactly rather than through `Double`, the `2^63` boundary closed,
+a non-finite value returned as an error instead of a thrown `ArithmeticException`. The wire codecs had none of it:
+`readInt64` and nothing else. So the same document under the same model read through `getCollection` and failed
+through `getDirectCollection`, with a raw `org.bson.BsonInvalidOperationException` — a driver type that is neither
+a `BsonError` nor a `MongoError`, escaping both of the error stories this library tells.
+
+The fix is not a second copy of the rule, which is how the paths drifted in the first place. A wire codec now
+checks the BSON type it is looking at: the declared one is read straight off the reader, and anything else is handed
+to `BsonDecoder` — the same instance the AST path uses, reached through its companion. Correctly typed data still
+allocates nothing; a width mismatch costs one `BsonValue`, on the read that would previously have thrown. A wrong
+type now arrives as a `BsonError.TypeMismatch` rather than a driver exception, which is worth as much as the
+leniency.
+
+The same shape handles a well-typed value that is still unreadable — a malformed `UUID` string, a `Decimal128` that
+is `NaN`. The fast path attempts the conversion and, if it throws, re-runs the value it has already read through
+`BsonDecoder`, so the error is the one the AST path would have produced rather than whatever the conversion happened
+to throw. `BsonError.fromThrowable` was giving those back re-wrapped as `Thrown`; it now unwraps a
+`DecodingFailure` to the error inside, so a decoding failure reads the same however it reached the surface.
+
+`ScalarWireCodecParitySpec` runs both paths over every numeric width and asserts they agree — value for value and
+message for message — which is the guard that keeps them from separating again.
 
 ## The query AST
 

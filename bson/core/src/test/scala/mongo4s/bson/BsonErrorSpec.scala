@@ -27,3 +27,17 @@ final class BsonErrorSpec extends AnyWordSpec with Matchers:
         Left("Expected object but got string")
     }
   }
+
+  "BsonError.fromThrowable" should {
+    "give back the error a DecodingFailure was carrying, rather than wrapping it again" in {
+      val original = BsonError.TypeMismatch(BsonTypeName.Long, BsonTypeName.String)
+
+      BsonError.fromThrowable(BsonError.DecodingFailure(original)) shouldBe original
+    }
+
+    "still wrap anything else" in {
+      val boom = RuntimeException("boom")
+
+      BsonError.fromThrowable(boom) shouldBe BsonError.Thrown("boom", boom)
+    }
+  }

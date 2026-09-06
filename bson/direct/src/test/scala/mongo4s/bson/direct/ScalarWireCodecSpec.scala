@@ -11,7 +11,9 @@ import org.bson.*
 import org.bson.io.{BasicOutputBuffer, ByteBufferBsonInput}
 import org.bson.codecs.{BsonDocumentCodec as DriverBsonDocumentCodec, DecoderContext, EncoderContext}
 
-import mongo4s.bson.{BsonError, BsonEncoder, BsonDecoder}
+import org.bson.types.Decimal128
+
+import mongo4s.bson.{BsonError, BsonEncoder, BsonDecoder, BsonTypeName}
 
 object ScalarWireCodecSpec:
 
@@ -93,23 +95,30 @@ final class ScalarWireCodecSpec extends AnyWordSpec, Matchers:
   }
 
   "wire numeric decoding" should {
-    "reject an Int32 stored where the model declares a Long, unlike the lenient BsonDecoder path" in {
+
+    def counterFrom(stored: BsonValue): Either[BsonError, CounterHolder] =
       val document = documentOf(CounterHolder(7L))
-      document.put("count", BsonInt32(7))
+      document.put("count", stored)
+      DocumentCodecBridge.toDocumentCodec[CounterHolder].decodeDocument(document)
 
+    "read a narrower width the same way the BsonValue path does" in {
       BsonDecoder[Long].decode(BsonInt32(7)) shouldBe Right(7L)
-
-      val decoded = DocumentCodecBridge.toDocumentCodec[CounterHolder].decodeDocument(document)
-
-      decoded.isLeft shouldBe true
+      counterFrom(BsonInt32(7)) shouldBe Right(CounterHolder(7L))
     }
 
-    "surface that rejection as a BsonError rather than a raw driver exception" in {
-      val document = documentOf(CounterHolder(7L))
-      document.put("count", BsonInt32(7))
+    "read a whole number stored as a Double or a Decimal128" in {
+      counterFrom(BsonDouble(7.0)) shouldBe Right(CounterHolder(7L))
+      counterFrom(BsonDecimal128(Decimal128(java.math.BigDecimal("7")))) shouldBe Right(CounterHolder(7L))
+    }
 
-      DocumentCodecBridge.toDocumentCodec[CounterHolder].decodeDocument(document) match
-        case Left(error)  => error.message should include("INT64")
+    "refuse a number that cannot be a Long without losing something, as the BsonValue path does" in {
+      BsonDecoder[Long].decode(BsonDouble(7.5)).isLeft shouldBe true
+      counterFrom(BsonDouble(7.5)).isLeft shouldBe true
+    }
+
+    "report a wrong type as a BsonError rather than a raw driver exception" in {
+      counterFrom(BsonString("seven")) match
+        case Left(error)  => error shouldBe BsonError.TypeMismatch(BsonTypeName.Long, BsonTypeName.String)
         case Right(value) => fail(s"expected a decoding failure, got $value")
     }
   }

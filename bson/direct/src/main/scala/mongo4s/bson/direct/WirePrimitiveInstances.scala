@@ -3,66 +3,92 @@ package mongo4s.bson.direct
 import java.util.UUID
 import java.time.Instant
 
-import org.bson.{BsonReader, BsonType}
+import scala.util.control.NonFatal
+
+import org.bson.{BsonDecimal128, BsonReader, BsonString, BsonType, BsonValue}
+import org.bson.codecs.{BsonValueCodec, DecoderContext}
 import org.bson.types.{Decimal128, ObjectId}
 
-import mongo4s.bson.{BsonError, BsonTypeName}
+import mongo4s.bson.BsonDecoder
 
 trait WirePrimitiveInstances extends WireFallbackInstances:
+  import WirePrimitiveInstances.*
 
-  private def mismatch(expected: BsonTypeName, actual: BsonType): Nothing =
-    throw BsonError.DecodingFailure(BsonError.TypeMismatch(expected, BsonTypeName.of(actual)))
+  given ScalarWireCodec[String] = ScalarWireCodec.instance(
+    (w, v) => w.writeString(v),
+    r => if r.getCurrentBsonType == BsonType.STRING then r.readString() else relaxed(r, stringDecoder),
+  )
 
-  private def decimalOf(decimal: Decimal128): BigDecimal =
-    if decimal.isNaN || decimal.isInfinite
-    then throw BsonError.DecodingFailure(BsonError.InvalidValue(s"$decimal has no decimal value and cannot be read as BigDecimal"))
-    else
-      try BigDecimal(decimal.bigDecimalValue)
-      catch case _: ArithmeticException => BigDecimal(0)
+  given ScalarWireCodec[Int] = ScalarWireCodec.instance(
+    (w, v) => w.writeInt32(v),
+    r => if r.getCurrentBsonType == BsonType.INT32 then r.readInt32() else relaxed(r, intDecoder),
+  )
 
-  private def readBigDecimal(reader: BsonReader): BigDecimal =
-    reader.getCurrentBsonType match
-      case BsonType.DECIMAL128 => decimalOf(reader.readDecimal128())
-      case BsonType.INT32      => BigDecimal(reader.readInt32())
-      case BsonType.INT64      => BigDecimal(reader.readInt64())
-      case BsonType.DOUBLE     => BigDecimal(reader.readDouble())
-      case other               => mismatch(BsonTypeName.Decimal, other)
+  given ScalarWireCodec[Long] = ScalarWireCodec.instance(
+    (w, v) => w.writeInt64(v),
+    r => if r.getCurrentBsonType == BsonType.INT64 then r.readInt64() else relaxed(r, longDecoder),
+  )
 
-  private def readInstant(reader: BsonReader): Instant =
-    reader.getCurrentBsonType match
-      case BsonType.DATE_TIME => Instant.ofEpochMilli(reader.readDateTime())
-      case BsonType.TIMESTAMP => Instant.ofEpochSecond(reader.readTimestamp().getTime.toLong)
-      case other              => mismatch(BsonTypeName.Date, other)
+  given ScalarWireCodec[Double] = ScalarWireCodec.instance(
+    (w, v) => w.writeDouble(v),
+    r => if r.getCurrentBsonType == BsonType.DOUBLE then r.readDouble() else relaxed(r, doubleDecoder),
+  )
 
-  private def readUuid(reader: BsonReader): UUID =
-    reader.getCurrentBsonType match
-      case BsonType.STRING =>
-        val raw = reader.readString()
+  given ScalarWireCodec[Boolean] = ScalarWireCodec.instance(
+    (w, v) => w.writeBoolean(v),
+    r => if r.getCurrentBsonType == BsonType.BOOLEAN then r.readBoolean() else relaxed(r, booleanDecoder),
+  )
+
+  given ScalarWireCodec[Instant] = ScalarWireCodec.instance(
+    (w, v) => w.writeDateTime(v.toEpochMilli),
+    r => if r.getCurrentBsonType == BsonType.DATE_TIME then Instant.ofEpochMilli(r.readDateTime()) else relaxed(r, instantDecoder),
+  )
+
+  given ScalarWireCodec[ObjectId] = ScalarWireCodec.instance(
+    (w, v) => w.writeObjectId(v),
+    r => if r.getCurrentBsonType == BsonType.OBJECT_ID then r.readObjectId() else relaxed(r, objectIdDecoder),
+  )
+
+  given ScalarWireCodec[BigDecimal] = ScalarWireCodec.instance(
+    (w, v) => w.writeDecimal128(Decimal128(v.bigDecimal)),
+    r =>
+      if r.getCurrentBsonType == BsonType.DECIMAL128
+      then
+        val decimal = r.readDecimal128()
+        try BigDecimal(decimal.bigDecimalValue)
+        catch case NonFatal(_) => decode(BsonDecimal128(decimal), bigDecimalDecoder)
+      else relaxed(r, bigDecimalDecoder),
+  )
+
+  given ScalarWireCodec[UUID] = ScalarWireCodec.instance(
+    (w, v) => w.writeString(v.toString),
+    r =>
+      if r.getCurrentBsonType == BsonType.STRING
+      then
+        val raw = r.readString()
         try UUID.fromString(raw)
-        catch
-          case error: IllegalArgumentException =>
-            throw BsonError.DecodingFailure(BsonError.InvalidValue(s"Invalid UUID: ${error.getMessage}"))
-      case other           => mismatch(BsonTypeName.String, other)
+        catch case NonFatal(_) => decode(BsonString(raw), uuidDecoder)
+      else relaxed(r, uuidDecoder),
+  )
 
-  private def readObjectId(reader: BsonReader): ObjectId =
-    reader.getCurrentBsonType match
-      case BsonType.OBJECT_ID => reader.readObjectId()
-      case other              => mismatch(BsonTypeName.ObjectId, other)
+object WirePrimitiveInstances:
+  private val valueCodec     = BsonValueCodec()
+  private val decoderContext = DecoderContext.builder().build()
 
-  given ScalarWireCodec[String]  = ScalarWireCodec.instance((w, v) => w.writeString(v), r => r.readString())
-  given ScalarWireCodec[Int]     = ScalarWireCodec.instance((w, v) => w.writeInt32(v), r => r.readInt32())
-  given ScalarWireCodec[Long]    = ScalarWireCodec.instance((w, v) => w.writeInt64(v), r => r.readInt64())
-  given ScalarWireCodec[Double]  = ScalarWireCodec.instance((w, v) => w.writeDouble(v), r => r.readDouble())
-  given ScalarWireCodec[Boolean] = ScalarWireCodec.instance((w, v) => w.writeBoolean(v), r => r.readBoolean())
+  private[direct] val stringDecoder: BsonDecoder[String]         = BsonDecoder[String]
+  private[direct] val intDecoder: BsonDecoder[Int]               = BsonDecoder[Int]
+  private[direct] val longDecoder: BsonDecoder[Long]             = BsonDecoder[Long]
+  private[direct] val doubleDecoder: BsonDecoder[Double]         = BsonDecoder[Double]
+  private[direct] val booleanDecoder: BsonDecoder[Boolean]       = BsonDecoder[Boolean]
+  private[direct] val instantDecoder: BsonDecoder[Instant]       = BsonDecoder[Instant]
+  private[direct] val objectIdDecoder: BsonDecoder[ObjectId]     = BsonDecoder[ObjectId]
+  private[direct] val bigDecimalDecoder: BsonDecoder[BigDecimal] = BsonDecoder[BigDecimal]
+  private[direct] val uuidDecoder: BsonDecoder[UUID]             = BsonDecoder[UUID]
 
-  given ScalarWireCodec[BigDecimal] =
-    ScalarWireCodec.instance((w, v) => w.writeDecimal128(Decimal128(v.bigDecimal)), readBigDecimal)
+  private[direct] def decode[A](value: BsonValue, decoder: BsonDecoder[A]): A =
+    decoder.decode(value) match
+      case Right(decoded) => decoded
+      case Left(error)    => throw error.toThrowable
 
-  given ScalarWireCodec[Instant] =
-    ScalarWireCodec.instance((w, v) => w.writeDateTime(v.toEpochMilli), readInstant)
-
-  given ScalarWireCodec[UUID] =
-    ScalarWireCodec.instance((w, v) => w.writeString(v.toString), readUuid)
-
-  given ScalarWireCodec[ObjectId] =
-    ScalarWireCodec.instance((w, v) => w.writeObjectId(v), readObjectId)
+  private[direct] def relaxed[A](reader: BsonReader, decoder: BsonDecoder[A]): A =
+    decode(valueCodec.decode(reader, decoderContext), decoder)

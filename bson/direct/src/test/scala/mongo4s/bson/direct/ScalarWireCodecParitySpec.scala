@@ -19,6 +19,11 @@ object ScalarWireCodecParitySpec:
 
   final case class Audit(id: ObjectId, session: UUID, at: Instant, amount: BigDecimal) derives WireCodec
 
+  final case class Holder[A](v: A)
+
+  object Holder:
+    given [A] => (inner: WireCodec[A]) => WireCodec[Holder[A]] = WireCodec.derived
+
 final class ScalarWireCodecParitySpec extends AnyWordSpec, Matchers:
   import ScalarWireCodecParitySpec.*
 
@@ -115,6 +120,42 @@ final class ScalarWireCodecParitySpec extends AnyWordSpec, Matchers:
 
         decodeAudit(document).amount shouldBe BsonDecoder[BigDecimal].decode(value).toOption.get
       }
+    }
+  }
+
+  "wire decoding of a number" should {
+
+    val widths: List[BsonValue] = List(
+      BsonInt32(7),
+      BsonInt64(7L),
+      BsonDouble(7.0),
+      BsonDecimal128(Decimal128(java.math.BigDecimal("7"))),
+    )
+
+    def throughWire[A](stored: BsonValue)(using codec: WireCodec[A]): Either[String, A] =
+      val document = BsonDocument("v", stored)
+      try Right(WireCodec[Holder[A]].decode(readerOf(bytesOfDocument(document))).v)
+      catch case error: Throwable => Left(error.getMessage)
+
+    def throughValue[A](stored: BsonValue)(using decoder: BsonDecoder[A]): Either[String, A] =
+      decoder.decode(stored).left.map(_.message)
+
+    "accept every width the BsonValue path accepts, for Int" in {
+      widths.foreach(stored => throughWire[Int](stored) shouldBe throughValue[Int](stored))
+    }
+
+    "accept every width the BsonValue path accepts, for Long" in {
+      widths.foreach(stored => throughWire[Long](stored) shouldBe throughValue[Long](stored))
+    }
+
+    "accept every width the BsonValue path accepts, for Double" in {
+      widths.foreach(stored => throughWire[Double](stored) shouldBe throughValue[Double](stored))
+    }
+
+    "reject what the BsonValue path rejects, with the same reason" in {
+      val impossible = List(BsonDouble(7.5), BsonString("seven"), BsonDouble(1e300))
+
+      impossible.foreach(stored => throughWire[Long](stored) shouldBe throughValue[Long](stored))
     }
   }
 

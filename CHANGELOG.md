@@ -74,6 +74,12 @@ part of `2.0.0` below.
 
 ### Changed
 
+- **The direct path reads numbers the way the `BsonValue` path does.** A `Long` field stored as an `Int32`, a
+  `Double` stored as a whole `Int64`, and every other lossless width now decode through `getDirectCollection` as
+  they always did through `getCollection`; what would lose information is still refused on both. The rule lives in
+  `BsonDecoder` alone and the wire codecs defer to it. A wrong type is now a `BsonError.TypeMismatch` rather than a
+  raw `org.bson.BsonInvalidOperationException`, and `BsonError.fromThrowable` unwraps a `DecodingFailure` instead of
+  re-wrapping it as `Thrown`.
 - **Driver exceptions no longer reach your code from an operation.** `com.mongodb.MongoWriteException` and friends
   arrive as `MongoError` instead; code that caught the driver's types directly has to match on `MongoError`, or on
   `cause`, which still holds the original. Errors `mongo4s` raises itself — `BsonError.DecodingFailure`,

@@ -110,6 +110,19 @@ Constructing them is unchanged — the new parameter is defaulted.
 Both are public traits, so anything implementing one outside this library has to add the method. Calling code is
 unaffected.
 
+### The direct path stopped refusing narrower numbers
+
+`getDirectCollection` used to demand the exact BSON width its encoder writes — a `Long` field had to be an `Int64`
+on disk. It now follows the same rule `getCollection` always did: any numeric type is accepted as long as the value
+survives the conversion whole and in range.
+
+Nothing to change at the call site. What changes is that reads which used to fail now succeed, so a collection with
+mixed widths for a field no longer has to be read through `getCollection`. If you were relying on the failure to
+detect drifted data, `find(...).attempting` no longer reports it — compare BSON types explicitly instead.
+
+A wrong *type* — a string where a number is modelled — is still an error, and is now a `BsonError.TypeMismatch`
+rather than the driver's `BsonInvalidOperationException`.
+
 ### Operations raise `MongoError`, not driver exceptions
 
 Anything the server reports now arrives as `mongo4s.MongoError`. Code that caught the driver's own types has to

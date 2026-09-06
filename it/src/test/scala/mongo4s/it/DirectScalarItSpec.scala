@@ -10,7 +10,7 @@ import cats.effect.testing.scalatest.AsyncIOSpec
 import org.testcontainers.containers.MongoDBContainer
 
 import cats.effect.IO
-import org.bson.{BsonDocument, BsonType}
+import org.bson.{BsonDateTime, BsonDocument, BsonInt32, BsonObjectId, BsonString, BsonType}
 import org.bson.types.ObjectId
 
 import mongo4s.bson.direct.WireCodec
@@ -86,6 +86,22 @@ final class DirectScalarItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Bef
             )
           )
         )
+    }
+
+    "read a number the server stored in a narrower width than the model declares" in {
+      val program =
+        for
+          (collection, documents) <- seeded("narrow_width")
+          _                       <- documents.insertOne(
+                                       BsonDocument("_id", BsonObjectId(ObjectId.get()))
+                                         .append("session", BsonString(session.toString))
+                                         .append("at", BsonDateTime(epoch.toEpochMilli))
+                                         .append("amount", BsonInt32(42))
+                                     )
+          found                   <- collection.find(Field.of[Audit, BigDecimal](_.amount).equalTo(BigDecimal(42))).all
+        yield found.map(_.amount)
+
+      program.timeout(30.seconds).asserting(_ shouldBe List(BigDecimal(42)))
     }
 
     "compare a date server-side rather than lexicographically" in {

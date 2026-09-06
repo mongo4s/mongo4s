@@ -792,9 +792,9 @@ final case class ByAge(_id: Int, total: Int) derives WireCodec
 collection.aggregateDirect[ByAge](Seq(Stage.groupBy(ageField)("total" -> Accumulator.count[User]))).all
 ```
 
-It carries the direct path's strictness with it: the output's numeric types have to match what the pipeline
-produced, exactly as they do for an entity read through `getDirectCollection`. `$count` yields an Int32, so a
-`count: Long` there is a decode error rather than a widening. `attempting` reports it per document.
+It carries the direct path's strictness with it — every field the output type declares has to be present, exactly
+as for an entity read through `getDirectCollection`, so a model with a field the pipeline does not produce is a
+decode error rather than a default. `attempting` reports it per document.
 
 On a collection opened with `getCollection` the same call still works — the `WireCodec` is bridged to a document
 codec — so the method is about the codec you have, not about which constructor you used.
@@ -1031,12 +1031,15 @@ supplies a default — which `Option` does. So a **projection that drops a field
 back** through the entity's own codec. That is what `selectAs` is for — see [Partial reads](#partial-reads) — and
 `getCollection` with a `BsonDocumentCodec` of your own remains the escape hatch below that.
 
-Strictness extends to BSON numeric types. A `Long` field is read with `readInt64`, an `Int` with `readInt32`, a
-`Double` with `readDouble` — the exact type the encoder writes. So a document that stores `42` as an Int32 (written
-by `mongosh`, by a `$inc`, or by another client) decodes fine through `getCollection`, whose `BsonDecoder[Long]`
-accepts any whole number, and **fails** through `getDirectCollection`. The failure is an ordinary `BsonError`, so
-`attempting` reports it per document like any other decode error. If a collection holds mixed numeric widths for the
-same field, read it through `getCollection`.
+Strictness stops at the field list, though — **not** at BSON numeric widths. A document that stores `42` as an
+Int32 where the model says `Long` (written by `mongosh`, by a `$inc`, or by another service) reads the same through
+`getDirectCollection` as through `getCollection`: any whole number in range is accepted, and one that would lose
+something — `7.5` into a `Long`, a value past `2^63` — is refused on both. The rule is written once, in
+`BsonDecoder`, and the wire codec defers to it, so the two cannot drift apart.
+
+What that costs: a field stored in the width the model declares is read straight off the wire, allocating nothing;
+a field stored in some other numeric width costs one `BsonValue` for the conversion. Matching data pays nothing for
+the leniency.
 
 `aggregate` decodes through `BsonDocumentCodec` because its output shape isn't `A`; `aggregateDirect` is the
 AST-free counterpart for an output that has a `WireCodec`. `distinct` still goes through `BsonDecoder`, which reads

@@ -7,7 +7,7 @@ import cats.effect.testing.scalatest.AsyncIOSpec
 import org.testcontainers.containers.MongoDBContainer
 
 import cats.effect.IO
-import org.bson.{BsonDocument, BsonInt64}
+import org.bson.{BsonDocument, BsonInt64, BsonString}
 
 import mongo4s.bson.direct.WireCodec
 import mongo4s.bson.{BsonDecoder, BsonDocumentCodec, BsonError}
@@ -24,15 +24,15 @@ object DirectAggregateItSpec:
 
   final case class ByAge(_id: Int, total: Int) derives WireCodec
 
-  final case class Counted(count: Long) derives WireCodec
+  final case class Counted(count: Long, label: String) derives WireCodec
 
   val lenientCounted: BsonDocumentCodec[Counted] = BsonDocumentCodec.make(
-    counted => BsonDocument("count", BsonInt64(counted.count)),
+    counted => BsonDocument("count", BsonInt64(counted.count)).append("label", BsonString(counted.label)),
     document =>
       Option(document.get("count"))
         .toRight(BsonError.MissingField("count"))
         .flatMap(BsonDecoder[Long].decode)
-        .map(Counted.apply),
+        .map(count => Counted(count, Option(document.get("label")).fold("total")(_.asString.getValue))),
   )
 
 final class DirectAggregateItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAfterAll:
@@ -100,7 +100,7 @@ final class DirectAggregateItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, 
         yield (lenient, strict)
 
       program.timeout(30.seconds).asserting { (lenient, strict) =>
-        lenient shouldBe Some(Counted(3L))
+        lenient shouldBe Some(Counted(3L, "total"))
         strict.isLeft shouldBe true
       }
     }
