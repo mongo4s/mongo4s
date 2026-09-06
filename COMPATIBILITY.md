@@ -90,6 +90,29 @@ The reason is the one `Index` and `WireCodecConfig` already carry: a `case class
 breaking `apply`/`copy` in every release, and change-stream options keep arriving. `withExpandedEvents` is the first
 one that had to, so the treatment happened now rather than being restated as a hazard.
 
+### Operations raise `MongoError`, not driver exceptions
+
+Anything the server reports now arrives as `mongo4s.MongoError`. Code that caught the driver's own types has to
+change shape, and it gets shorter:
+
+```scala
+// 2.x
+insert.recoverWith {
+  case e: MongoWriteException if e.getError.getCategory == ErrorCategory.DUPLICATE_KEY => replace
+}
+
+// 3.0
+insert.recoverWith { case MongoError.DuplicateKey(_) => replace }
+```
+
+The driver's exception is still there as `cause`, so a `case e: MongoError if e.cause.isInstanceOf[...]` escape
+hatch exists for anything not modelled. `BsonError.DecodingFailure` and `RsBridgeError` are unchanged — only
+failures that came from the server are translated.
+
+This is the one change in this release that is a behaviour change rather than a compile error: code catching
+`com.mongodb.MongoException` still compiles and stops matching. Search for `com.mongodb.Mongo*Exception` in your
+`recover`/`catch` blocks.
+
 ### `RsBridgeConfig` stopped being a `case class`
 
 Same treatment, same reason. `RsBridgeConfig(...)` and `.copy(...)` are gone, and `RsBridgeConfig.Default` is now

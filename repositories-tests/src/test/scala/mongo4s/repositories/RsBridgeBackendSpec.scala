@@ -9,7 +9,9 @@ import org.scalatest.concurrent.{Signaler, ThreadSignaler, TimeLimits}
 
 import org.reactivestreams.{Publisher, Subscriber, Subscription}
 
-import mongo4s.{RsBridge, RsBridgeConfig, RsBridgeError, Streamable}
+import com.mongodb.{MongoException, ServerAddress, WriteError, MongoWriteException}
+
+import mongo4s.{MongoError, RsBridge, RsBridgeConfig, RsBridgeError, Streamable}
 
 import scala.concurrent.duration.given
 
@@ -107,6 +109,14 @@ trait RsBridgeBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers, TimeLimits:
     try Right(run(fa))
     catch case error: Throwable => Left(error)
 
+  private def unwrapped(error: Throwable): Throwable =
+    LazyList
+      .iterate(Option(error))(_.flatMap(e => Option(e.getCause)))
+      .takeWhile(_.isDefined)
+      .flatten
+      .collectFirst { case typed: MongoError => typed }
+      .getOrElse(error)
+
   private given Signaler = ThreadSignaler
 
   private def promptly[A](body: => A): A = failAfter(Span(30, Seconds))(body)
@@ -171,6 +181,53 @@ trait RsBridgeBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers, TimeLimits:
       val boom = RuntimeException("publisher failed")
 
       attempt(bridge.list(FailingPublisher(boom))).left.map(_.getMessage) shouldBe Left("publisher failed")
+    }
+  }
+
+  "a driver failure" should {
+
+    def duplicateKey: MongoWriteException =
+      MongoWriteException(WriteError(11000, "E11000 duplicate key", org.bson.BsonDocument()), ServerAddress())
+
+    def translated[A](fa: F[A]): Throwable =
+      attempt(fa).left.getOrElse(fail("expected the operation to fail"))
+
+    "arrive typed from one" in {
+      translated(bridge.one(FailingPublisher(duplicateKey))) shouldBe a[MongoError.DuplicateKey]
+    }
+
+    "arrive typed from option" in {
+      translated(bridge.option(FailingPublisher(duplicateKey))) shouldBe a[MongoError.DuplicateKey]
+    }
+
+    "arrive typed from list" in {
+      translated(bridge.list(FailingPublisher(duplicateKey))) shouldBe a[MongoError.DuplicateKey]
+    }
+
+    "arrive typed from unit" in {
+      translated(bridge.unit(FailingPublisher(duplicateKey))) shouldBe a[MongoError.DuplicateKey]
+    }
+
+    "arrive typed from stream, which does not share the other four's plumbing" in {
+      val failed =
+        try
+          drainStream(bridge.stream(FailingPublisher(duplicateKey)))
+          fail("expected the stream to fail")
+        catch case error: Throwable => error
+
+      unwrapped(failed) shouldBe a[MongoError.DuplicateKey]
+    }
+
+    "keep the driver's exception reachable as the cause" in {
+      val original = duplicateKey
+
+      translated(bridge.one(FailingPublisher(original))).getCause shouldBe original
+    }
+
+    "leave an error the driver did not raise alone" in {
+      val boom = RuntimeException("not a driver failure")
+
+      translated(bridge.one(FailingPublisher(boom))) shouldBe boom
     }
   }
 

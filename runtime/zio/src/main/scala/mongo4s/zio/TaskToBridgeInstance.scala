@@ -20,7 +20,7 @@ trait TaskToBridgeInstance:
 
     private def sourceOf[A](publisher: => Publisher[A]): ZStream[Any, Throwable, A] =
       ZStream.unwrap(
-        ZIO.attempt(publisher).map { publisher =>
+        ZIO.attempt(RsBridgeSupport.translating(publisher)).map { publisher =>
           publisherToStream(publisher).toZIOStream(config.bufferSize)
         }
       )

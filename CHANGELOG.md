@@ -12,6 +12,11 @@ part of `2.0.0` below.
 
 ### Added
 
+- `MongoError`, a typed failure for everything the server reports: `DuplicateKey`, `WriteConflict`,
+  `ExecutionTimeout`, `Unauthorized`, `Unavailable`, `BulkWriteFailed` and a `Failed` catch-all that keeps the
+  server's code. Translation happens on the `Publisher`, so every runtime and every bridge method — `one`, `option`,
+  `list`, `unit`, `stream` — reports the same type for the same failure, and the driver's exception stays reachable
+  as `cause`.
 - `FakeMongoCollection.aggregate` now simulates `$match`, `$sort`, `$skip`, `$limit`, `$project`, `$count` and
   `$group` (with `$sum`, `$avg`, `$min`, `$max`, `$first`, `$last`, `$push`) in memory, so service code that
   aggregates is unit-testable without Docker. Anything outside that subset still throws by name, `$addToSet`
@@ -55,6 +60,10 @@ part of `2.0.0` below.
 
 ### Changed
 
+- **Driver exceptions no longer reach your code from an operation.** `com.mongodb.MongoWriteException` and friends
+  arrive as `MongoError` instead; code that caught the driver's types directly has to match on `MongoError`, or on
+  `cause`, which still holds the original. Errors `mongo4s` raises itself — `BsonError.DecodingFailure`,
+  `RsBridgeError` — are unchanged.
 - `RsBridgeConfig` is a `final class` with a private constructor and `withX` builders, and `RsBridgeConfig.Default`
   is now `RsBridgeConfig.default` — the same shape every other options type already had, and the last one that could
   not gain a field without a major. `bufferSize` must now be positive.

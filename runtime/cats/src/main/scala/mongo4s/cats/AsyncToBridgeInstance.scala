@@ -17,20 +17,23 @@ trait AsyncToBridgeInstance:
       case Some(d) => F.timeoutTo(fa, d, F.raiseError(RsBridgeError.Timeout(d)))
       case None    => fa
 
+    private def source[A](publisher: => Publisher[A]): F[Publisher[A]] =
+      F.delay(RsBridgeSupport.translating(publisher))
+
     def stream[A](publisher: => Publisher[A])(using Streamable[CatsStream[F], A]): Stream[F, A] =
       Stream
-        .eval(F.delay(publisher))
+        .eval(source(publisher))
         .flatMap(fromPublisher[F, A](_, config.bufferSize))
 
     override def liveStream[A](publisher: => Publisher[A])(using Streamable[CatsStream[F], A]): Stream[F, A] =
       Stream
-        .eval(F.delay(publisher))
+        .eval(source(publisher))
         .flatMap(fromPublisher[F, A](_, 1))
 
     private def collect[A](publisher: => Publisher[A], limit: Int): F[List[A]] =
       withTimeout(
         F.fromCompletableFuture(
-          F.delay(PublisherCollector.collect(publisher, limit))
+          F.map(source(publisher))(PublisherCollector.collect(_, limit))
         )
       )
 
@@ -41,7 +44,7 @@ trait AsyncToBridgeInstance:
       withTimeout(
         F.void(
           F.fromCompletableFuture(
-            F.delay(PublisherCollector.drain(publisher))
+            F.map(source(publisher))(PublisherCollector.drain)
           )
         )
       )

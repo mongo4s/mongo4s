@@ -37,7 +37,7 @@ trait TaskToBridgeInstance:
         case Left(error) => Task.error(error)
 
     def stream[A](publisher: => Publisher[A])(using Streamable[RapidStream, A]): Stream[A] =
-      Stream.fromIteratorManaged[A](Task(PublisherIterator(publisher, config.bufferSize))) {
+      Stream.fromIteratorManaged[A](Task(PublisherIterator(RsBridgeSupport.translating(publisher), config.bufferSize))) {
         case iterator: PublisherIterator[?] => Task(iterator.cancel())
         case _                              => Task.pure(())
       }

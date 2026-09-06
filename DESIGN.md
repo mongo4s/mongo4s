@@ -178,6 +178,42 @@ deprecated in favour of it.
 `distinct` is left alone deliberately: it reads one `BsonValue` per result rather than a document, so there is no
 intermediate tree to skip and nothing to win.
 
+## Errors the server raises
+
+`mongo4s` translates every driver failure into `MongoError` before any runtime sees it. The reason is the same one
+behind `Filter` being an AST rather than driver builders: a library that exists so you never write
+`com.mongodb.*` in service code cannot then require you to catch `com.mongodb.MongoWriteException` and compare
+`getError.getCategory` to decide whether a unique index fired.
+
+**Where it happens is the interesting part.** There is no single point in the bridge: `cats` and `kyo` collect
+through `PublisherCollector`, `zio` goes through `zio-interop-reactivestreams`, and `rapid` runs everything —
+including `list` and `unit` — through `PublisherIterator`. Translating in any one of those would have covered some
+runtimes and some methods. So the translation wraps the `Publisher` itself, upstream of all of it, which is the only
+place all four runtimes and all five bridge methods provably meet. `RsBridgeBackendSpec` asserts it for `one`,
+`option`, `list`, `unit` *and* `stream` on every runtime, because "wrap the publisher here too" is exactly the kind
+of thing a fifth runtime would forget.
+
+**Classification comes from the driver, not from a table of numbers.** `ErrorCategory.fromErrorCode` already knows
+which codes mean a duplicate key or an execution timeout, so `MongoError` asks it instead of hard-coding 11000 and
+11001. Only `WriteConflict` and the two authorisation codes are named here, because the driver has no category for
+them.
+
+**A bulk write keeps all of its failures.** One `bulkWrite` or `insertMany` can fail several documents at once, and
+collapsing that to a single `DuplicateKey` would silently drop the rest, so `BulkWriteFailed` carries every failure
+with the index of the operation that produced it, and `duplicateKeys` is a filter over them rather than a different
+shape.
+
+**`DuplicateKey` does not name the index, on purpose.** The server does report `keyPattern` and `keyValue`, but the
+driver's `WriteError.getDetails` comes back empty for a duplicate key — verified against MongoDB 7 — so the only
+remaining source is the human-readable message. Parsing it would produce a field that works until a server upgrade
+rewords the string, then silently returns nothing. The message stays reachable through `getMessage`.
+
+Translating changed one thing that had nothing to do with errors: `withTransaction` decides what to retry by asking
+whether the failure carries `TransientTransactionError`, and it used to do that by matching `MongoException`. After
+translation it no longer sees one. `MongoError` therefore exposes `labels`/`hasLabel` from the wrapped exception,
+and `hasErrorLabel` accepts both — the existing retry specs caught this on all four runtimes, which is the argument
+for having had them.
+
 ## The query AST
 
 `Filter` and `Update` are real `enum` ADTs that `mongo4s` interprets itself, not thin wrappers over the driver's

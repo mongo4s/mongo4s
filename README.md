@@ -457,6 +457,40 @@ val everything: S[DecodeResult[User]] = collection.find().attempting.stream
 `watchAttempting` on a collection's `watch` — `watchAsAttempting` at the client and database level, where the
 element type is named at the call site. Transport errors still fail the effect — only decoding is made per-document.
 
+### Errors the server raises
+
+A failed write does not arrive as a driver exception. `mongo4s` translates every failure the driver reports into
+`MongoError`, so branching on one is a pattern match rather than a code comparison:
+
+```scala
+import mongo4s.MongoError
+
+collection.insertOne(user).recoverWith {
+  case MongoError.DuplicateKey(_)  => collection.replaceOne(byEmail, user).void
+  case MongoError.WriteConflict(_) => retry
+}
+```
+
+| Case | Raised for |
+| --- | --- |
+| `DuplicateKey` | a unique index violation |
+| `WriteConflict` | two transactions touching the same document |
+| `ExecutionTimeout` | `maxTime` expired, or the server's own limit |
+| `Unauthorized` | the credentials do not allow the operation |
+| `Unavailable` | the socket failed, or no server could be selected |
+| `BulkWriteFailed` | one bulk command, several failures — `failures` keeps them all, `duplicateKeys` filters |
+| `Failed` | anything else the server reported, with its `code` intact |
+
+Every case carries `cause`, the driver's own exception, so nothing is lost — along with `code`, `labels` and
+`hasLabel`, which is how `withTransaction` decides what to retry. Errors `mongo4s` raises itself are untouched:
+`BsonError.DecodingFailure` for a document that does not fit, `RsBridgeError` for the stream bridge.
+
+Translation happens on the `Publisher` before any runtime sees it, so `IO`, `Task`, `KIO`, `rapid.Task` and every
+stream get the same type for the same failure. What `MongoError.DuplicateKey` deliberately does *not* carry is the
+name of the index that was violated: the server sends it, but the driver's `WriteError.getDetails` comes back empty,
+so the only remaining source is the human-readable message — and scraping that would be a guess that silently
+changes with a server upgrade. Read `getMessage` when you need it.
+
 ### Primary keys
 
 `PrimaryKey[E, K]` turns an entity into a key-based filter — a single field, a native `_id` (`ObjectId` or your own

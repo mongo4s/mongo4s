@@ -36,6 +36,7 @@ object MongoSession:
   private[mongo4s] def hasErrorLabel(error: Throwable, label: String): Boolean =
     error match
       case mongo: MongoException => mongo.hasErrorLabel(label)
+      case typed: MongoError     => typed.hasLabel(label)
       case _                     => false
 
 extension (session: ClientSession)

@@ -14,7 +14,7 @@ import mongo4s.repositories.{BaseMongoRepository, Page}
 import mongo4s.bson.{BsonDocumentCodec, BsonTypeName, DecodeResult, FieldNaming}
 import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec, WireCodecConfig}
 import mongo4s.operations.*
-import mongo4s.{Field, MongoClient, MongoCollection, MongoDatabase, PrimaryKey, RsBridgeConfig, WithId, withTransaction}
+import mongo4s.{Field, MongoClient, MongoCollection, MongoDatabase, MongoError, PrimaryKey, RsBridgeConfig, WithId, withTransaction}
 
 import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
@@ -363,6 +363,17 @@ object ReadmeSnippets:
     def client: IO[MongoClient[IO, S]] = MongoClient.fromConnectionString[IO, S]("mongodb://localhost:27017")
 
   // --- Update results as a decision ---
+
+  def insertOrReplace(
+      collection: MongoCollection[IO, S, User],
+      user: User,
+      byEmail: Filter[User],
+      retry: IO[Unit],
+  ): IO[Unit] =
+    collection.insertOne(user).void.recoverWith {
+      case MongoError.DuplicateKey(_)  => collection.replaceOne(byEmail, user).void
+      case MongoError.WriteConflict(_) => retry
+    }
 
   def report(result: UpdateResult): String =
     if result.wasUpserted then s"inserted ${result.upsertedId}"

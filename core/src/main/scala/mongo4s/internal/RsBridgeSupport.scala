@@ -1,10 +1,22 @@
 package mongo4s.internal
 
-import mongo4s.RsBridgeError
+import org.reactivestreams.{Publisher, Subscriber, Subscription}
+
+import mongo4s.{MongoError, RsBridgeError}
 
 private[mongo4s] object RsBridgeSupport:
 
   val SingleResultProbe: Int = 2
+
+  def translating[A](publisher: Publisher[A]): Publisher[A] =
+    (subscriber: Subscriber[? >: A]) =>
+      publisher.subscribe(
+        new Subscriber[A]:
+          def onSubscribe(subscription: Subscription): Unit = subscriber.onSubscribe(subscription)
+          def onNext(value: A): Unit                        = subscriber.onNext(value)
+          def onError(error: Throwable): Unit               = subscriber.onError(MongoError.translate(error))
+          def onComplete(): Unit                            = subscriber.onComplete()
+      )
 
   def selectOne[A](xs: List[A], strict: Boolean): Either[RsBridgeError, A] =
     xs match
