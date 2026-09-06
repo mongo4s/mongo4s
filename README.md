@@ -636,6 +636,10 @@ Stage.setWindowFields(Sort.asc(ageField), partitionBy = Some(sensorField.path))(
 `Window.documents` counts in rows, `Window.range` in the sort field's own values — rows sharing a value fall in the
 same window — and `Window.rangeOver` does the same for a date field measured in a `DateUnit`.
 
+Both stages take their partition fields as `FieldPath` rather than `Field`, which is why the examples above write
+`sensorField.path`: a partition is a list of fields of unrelated types, and `Field[E, ?]` loses the type the path
+extension needs. Everything else about them is the usual typed selector.
+
 `on` names fields of the **target** collection, so it is a list of stored names rather than `Field` values — the
 target's shape is not `A`. A single field renders as a string and several as an array, which is what the server
 expects. Note that `aggregate(...).first` does not append its usual `$limit` after a terminal stage, since the server
