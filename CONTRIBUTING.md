@@ -88,6 +88,11 @@ before assuming the default is safe there. If the runtime can't derive a `Tag`-l
 Formatting is enforced by [scalafmt](https://scalameta.org/scalafmt/) (`.scalafmt.conf`) and checked
 in CI. Run `sbt scalafmtAll` before opening a PR.
 
+The code carries no comments and no scaladoc. Make it type-safe and obvious instead; where the logic is subtle
+enough that it needs explaining, the explanation belongs in the docs — [README.md](README.md),
+[DESIGN.md](DESIGN.md) or [COMPATIBILITY.md](COMPATIBILITY.md) — not in a comment nobody reading the docs will
+find. `examples/` is the exception: its section markers are what tie the code to the README.
+
 The build turns on more warnings than the compiler does by default, because "the compiler is the test" only holds
 if it is asked. Beyond `-Wunused:all` and `-Wvalue-discard`: `-WunstableInlineAccessors` (the one that guards the
 binary-compatibility promise — see [DESIGN.md](DESIGN.md)), `-Wshadow:all`, `-Winfer-union`,
