@@ -3,7 +3,7 @@ package mongo4s.examples
 import cats.effect.IO
 import org.bson.types.ObjectId
 import org.bson.{BsonDocument, BsonInt32, BsonString, BsonTimestamp}
-import com.mongodb.WriteConcern
+import com.mongodb.{ExplainVerbosity, WriteConcern}
 import com.mongodb.client.model.{Collation, TimeSeriesGranularity}
 import com.mongodb.client.model.changestream.FullDocument
 
@@ -363,6 +363,12 @@ object ReadmeSnippets:
     def client: IO[MongoClient[IO, S]] = MongoClient.fromConnectionString[IO, S]("mongodb://localhost:27017")
 
   // --- Update results as a decision ---
+
+  def queryPlan(collection: MongoCollection[IO, S, User], adults: Filter[User], nameField: Field[User, String]): IO[BsonDocument] =
+    collection.find(adults).sort(Sort.asc(nameField)).explain()
+
+  def measuredPlan(collection: MongoCollection[IO, S, User], adults: Filter[User]): IO[BsonDocument] =
+    collection.find(adults).explain(ExplainVerbosity.EXECUTION_STATS)
 
   def insertOrReplace(
       collection: MongoCollection[IO, S, User],

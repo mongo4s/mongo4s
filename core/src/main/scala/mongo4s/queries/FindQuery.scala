@@ -5,6 +5,7 @@ import scala.concurrent.duration.FiniteDuration
 import scala.quoted.*
 
 import org.bson.BsonDocument
+import com.mongodb.ExplainVerbosity
 
 import mongo4s.bson.{BsonDocumentDecoder, FieldNaming}
 import mongo4s.operations.{Filter, Projection, Sort}
@@ -21,6 +22,8 @@ trait FindQuery[F[*], S[*], A]:
   def maxTime(duration: FiniteDuration): FindQuery[F, S, A]
   def batchSize(n: Int): FindQuery[F, S, A]
   def comment(value: String): FindQuery[F, S, A]
+
+  def explain(verbosity: ExplainVerbosity = ExplainVerbosity.QUERY_PLANNER): F[BsonDocument]
 
   def first: F[Option[A]]
 

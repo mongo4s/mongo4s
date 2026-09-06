@@ -178,6 +178,18 @@ deprecated in favour of it.
 `distinct` is left alone deliberately: it reads one `BsonValue` per result rather than a document, so there is no
 intermediate tree to skip and nothing to win.
 
+## `explain` returns a document, not a type
+
+The point of a `Filter` AST is that the query is a value you can build and pass around; the question that follows is
+whether the server can serve it from an index, and until now nothing in `mongo4s` could answer it. `explain` runs
+the publisher the builder had already configured, so what is explained is the query that would have run, hint and
+collation included — not a reconstruction of it.
+
+Its result stays a `BsonDocument` on purpose. The explain output is one of the least stable shapes MongoDB
+publishes: it differs by server version, by verbosity, and between a standalone and a sharded cluster, where the
+winning plan gains a layer per shard. A case class over that would be a guess that compiles and then quietly stops
+matching what the server sends. The `it` spec asserts on `IXSCAN`/`COLLSCAN` for the same reason.
+
 ## Errors the server raises
 
 `mongo4s` translates every driver failure into `MongoError` before any runtime sees it. The reason is the same one

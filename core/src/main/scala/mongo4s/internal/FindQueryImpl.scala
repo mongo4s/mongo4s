@@ -4,6 +4,7 @@ import scala.concurrent.duration.FiniteDuration
 
 import org.bson.BsonDocument
 import org.reactivestreams.Publisher
+import com.mongodb.ExplainVerbosity
 import com.mongodb.client.model.Collation
 import com.mongodb.reactivestreams.client.{ClientSession, FindPublisher, MongoCollection as RSMongoCollection}
 
@@ -37,6 +38,9 @@ private[mongo4s] final class FindQueryImpl[F[*], S[*], A](
   def maxTime(duration: FiniteDuration): FindQuery[F, S, A] = copy(options = options.withMaxTime(duration))
   def batchSize(n: Int): FindQuery[F, S, A]                 = copy(options = options.withBatchSize(n))
   def comment(value: String): FindQuery[F, S, A]            = copy(options = options.withComment(value))
+
+  def explain(verbosity: ExplainVerbosity): F[BsonDocument] =
+    rs.one(documents(limit).explain(classOf[BsonDocument], verbosity))
 
   def first: F[Option[A]]                  = rs.option(publisher(Some(1)))
   def all: F[List[A]]                      = rs.list(publisher(limit))

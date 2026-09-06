@@ -5,6 +5,7 @@ import scala.concurrent.duration.FiniteDuration
 import org.bson.conversions.Bson
 import org.bson.{BsonDocument, BsonInt32}
 import org.reactivestreams.Publisher
+import com.mongodb.ExplainVerbosity
 import com.mongodb.client.model.Collation
 import com.mongodb.reactivestreams.client.{AggregatePublisher, ClientSession, MongoCollection as RSMongoCollection}
 
@@ -30,9 +31,12 @@ private[mongo4s] final class AggregateQueryImpl[F[*], S[*], A](
   def maxTime(duration: FiniteDuration): AggregateQuery[F, S, A] = copy(options = options.withMaxTime(duration))
   def batchSize(n: Int): AggregateQuery[F, S, A]                 = copy(options = options.withBatchSize(n))
   def comment(value: String): AggregateQuery[F, S, A]            = copy(options = options.withComment(value))
-  def first: F[Option[A]]                                        = rs.option(publisher(limited = true))
-  def all: F[List[A]]                                            = rs.list(publisher(limited = false))
-  def stream(using Streamable[S, A]): S[A]                       = rs.stream(publisher(limited = false))
+  def explain(verbosity: ExplainVerbosity): F[BsonDocument]      =
+    rs.one(documents(limited = false).explain(classOf[BsonDocument], verbosity))
+
+  def first: F[Option[A]]                  = rs.option(publisher(limited = true))
+  def all: F[List[A]]                      = rs.list(publisher(limited = false))
+  def stream(using Streamable[S, A]): S[A] = rs.stream(publisher(limited = false))
 
   def attempting: DecodeAttempts[F, S, A] = new DecodeAttempts[F, S, A]:
     def all: F[List[DecodeResult[A]]] =

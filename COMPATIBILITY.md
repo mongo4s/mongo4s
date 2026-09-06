@@ -90,6 +90,11 @@ The reason is the one `Index` and `WireCodecConfig` already carry: a `case class
 breaking `apply`/`copy` in every release, and change-stream options keep arriving. `withExpandedEvents` is the first
 one that had to, so the treatment happened now rather than being restated as a hazard.
 
+### `FindQuery` and `AggregateQuery` gained `explain`
+
+Both are public traits, so anything implementing one outside this library has to add the method. Calling code is
+unaffected.
+
 ### Operations raise `MongoError`, not driver exceptions
 
 Anything the server reports now arrives as `mongo4s.MongoError`. Code that caught the driver's own types has to

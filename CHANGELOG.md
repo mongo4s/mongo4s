@@ -12,6 +12,9 @@ part of `2.0.0` below.
 
 ### Added
 
+- `explain` on `FindQuery` and `AggregateQuery`, taking an optional `ExplainVerbosity` and returning the server's
+  plan as a `BsonDocument`. It explains the query the builder already produced, and the whole pipeline rather than
+  the `$limit`-ed form `first` sends. The fake refuses it by name.
 - `MongoError`, a typed failure for everything the server reports: `DuplicateKey`, `WriteConflict`,
   `ExecutionTimeout`, `Unauthorized`, `Unavailable`, `BulkWriteFailed` and a `Failed` catch-all that keeps the
   server's code. Translation happens on the `Publisher`, so every runtime and every bridge method — `one`, `option`,

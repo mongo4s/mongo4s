@@ -394,6 +394,20 @@ types — `Projection.empty` starts neutral and the first `include` or `exclude`
 an inclusion projection does not compile at all, rather than silently returning more fields than you asked for. `_id`
 is the exception: `withoutId` drops it from an inclusion projection, giving `{"field": 1, "_id": 0}`.
 
+`explain` answers the question a typed filter otherwise leaves open — did it use an index?
+
+```scala
+val plan: IO[BsonDocument] = collection.find(adults).sort(Sort.asc(nameField)).explain()
+
+val measured: IO[BsonDocument] =
+  collection.find(adults).explain(ExplainVerbosity.EXECUTION_STATS)
+```
+
+It is on `find` and on `aggregate`, runs the query the builder had already produced — options, hint and collation
+included — and returns the server's plan as a `BsonDocument`. Not a modelled type: the shape of an explain document
+depends on the server version and on whether the collection is sharded, so anything typed here would be a guess with
+a short shelf life. `explain` on `aggregate` describes the whole pipeline, not the `$limit`-ed form `first` sends.
+
 ### Partial reads
 
 `find(...).all` decodes whole entities, which means every modelled field has to be there. When you want a few

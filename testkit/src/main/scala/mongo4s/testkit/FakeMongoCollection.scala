@@ -3,7 +3,7 @@ package mongo4s.testkit
 import scala.collection.mutable
 
 import org.bson.{BsonArray, BsonDocument, BsonDouble, BsonInt32, BsonInt64, BsonNull, BsonString, BsonValue}
-import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
+import com.mongodb.{ExplainVerbosity, ReadConcern, ReadPreference, WriteConcern}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
@@ -450,6 +450,9 @@ final class FakeMongoCollection[F[*], S[*], E](
     def batchSize(n: Int): AggregateQuery[F, S, B]                                           = this
     def comment(value: String): AggregateQuery[F, S, B]                                      = this
 
+    def explain(verbosity: ExplainVerbosity): F[BsonDocument] =
+      throw UnsupportedOperationException("FakeMongoCollection: explain needs a real query planner, so it is not simulated")
+
     def first: F[Option[B]] = F.delay(decoded.headOption)
     def all: F[List[B]]     = F.delay(decoded)
 
@@ -484,6 +487,9 @@ final class FakeMongoCollection[F[*], S[*], E](
     def maxTime(duration: scala.concurrent.duration.FiniteDuration): FindQuery[F, S, E] = this
     def batchSize(n: Int): FindQuery[F, S, E]                                           = this
     def comment(value: String): FindQuery[F, S, E]                                      = this
+
+    def explain(verbosity: ExplainVerbosity): F[BsonDocument] =
+      throw UnsupportedOperationException("FakeMongoCollection: explain needs a real query planner, so it is not simulated")
 
     def first: F[Option[E]]                  = F.delay(results.headOption)
     def all: F[List[E]]                      = F.delay(results)
