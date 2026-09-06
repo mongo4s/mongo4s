@@ -25,7 +25,7 @@ final class MongoErrorSpec extends AnyWordSpec, Matchers:
   private val address = ServerAddress()
 
   private def writeError(code: Int, message: String): MongoWriteException =
-    MongoWriteException(WriteError(code, message, BsonDocument()), address)
+    MongoWriteException(WriteError(code, message, BsonDocument()), address, java.util.Collections.emptyList())
 
   "MongoError.translate" should {
 
