@@ -14,6 +14,10 @@ part of `2.0.0` below.
 
 - `TransactionOptions`, carrying a transaction's `readConcern`, `writeConcern`, `readPreference` and
   `maxCommitTime` — and the retry window below. Both `withTransaction` methods take one.
+- `CreateCollectionOptions`, taken by `MongoDatabase.createCollection`: capped size and document cap, a validator
+  with its level and action, time-series and clustered collections, `expireAfter`, collation and storage engine.
+  Combinations the server accepts and then ignores — a document cap without `capped`, a validation level without a
+  validator — are rejected rather than sent.
 - `WatchOptions.withExpandedEvents` — the driver's `showExpandedEvents`, so DDL events arrive alongside document
   ones. Needs MongoDB 6.0, and the flag is sent only when asked for.
 - `ChangeEvent.wallTime` and `ChangeEvent.splitEvent`: the server's wall clock for the change, and which fragment of
@@ -35,6 +39,8 @@ part of `2.0.0` below.
 - Compound `PrimaryKey`s are **named tuples**: `PrimaryKey.compound(o => (userId = o.userId, seq = o.seq))`
   replaces the positional tuple plus its parallel list of names and `_._1`/`_._2` extractors. Any width works, so
   `compound3` and `compound4` were removed.
+- `MongoDatabase.createCollection` takes a `CreateCollectionOptions`, defaulted, so the no-options call is
+  unchanged at the source level.
 - `WatchOptions` is a `final class` with `withX` builders instead of a `case class` — same reason `Index` and
   `WireCodecConfig` already were. Build from `WatchOptions.default[E]`; reading its fields is unchanged.
 - The accessors the compiler synthesizes for `Field.of` and the two `WireCodec` derivations are pinned with

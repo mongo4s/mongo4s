@@ -4,7 +4,7 @@ import cats.effect.IO
 import org.bson.types.ObjectId
 import org.bson.{BsonDocument, BsonInt32, BsonString, BsonTimestamp}
 import com.mongodb.WriteConcern
-import com.mongodb.client.model.Collation
+import com.mongodb.client.model.{Collation, TimeSeriesGranularity}
 import com.mongodb.client.model.changestream.FullDocument
 
 import mongo4s.cats.{CatsStream, MongoClientResource}
@@ -226,6 +226,21 @@ object ReadmeSnippets:
       listed <- collection.listIndexes
       _      <- collection.dropIndex("name_age")
     yield listed
+
+  // --- Creating a collection ---
+
+  def createCollections(database: MongoDatabase[IO, S], jsonSchema: BsonDocument): IO[Unit] =
+    for
+      _ <- database.createCollection("events", CreateCollectionOptions.capped(8 * 1024 * 1024).withMaxDocuments(10000))
+      _ <- database.createCollection(
+             "readings",
+             CreateCollectionOptions.default
+               .withTimeSeries(TimeSeries.on("recordedAt").withMetaField("sensor").withGranularity(TimeSeriesGranularity.MINUTES))
+               .expiringAfter(30.days),
+           )
+      _ <- database.createCollection("people", CreateCollectionOptions.default.withValidator(jsonSchema))
+      _ <- database.createCollection("orders", CreateCollectionOptions.default.withClusteredIndex(ClusteredIndex.onId))
+    yield ()
 
   // --- Aggregation: a stage's own output is named raw ---
 

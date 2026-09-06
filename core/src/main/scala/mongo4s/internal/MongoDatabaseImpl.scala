@@ -8,6 +8,7 @@ import com.mongodb.reactivestreams.client.{ChangeStreamPublisher, ClientSession,
 
 import mongo4s.bson.direct.WireCodec
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
+import mongo4s.operations.CreateCollectionOptions
 import mongo4s.{Effect, MongoCollection, MongoDatabase, RsBridge, Streamable}
 import mongo4s.bson.{BsonDocumentCodec, BsonDocumentDecoder, DecodeResult, FieldNaming}
 
@@ -68,10 +69,12 @@ private[mongo4s] final class MongoDatabaseImpl[F[*], S[*]](
     rs.stream(publisher)
   end listCollections
 
-  def createCollection(name: String)(using session: Option[ClientSession]): F[Unit] =
+  def createCollection(name: String, options: CreateCollectionOptions)(using session: Option[ClientSession]): F[Unit] =
+    val driverOptions = options.toDriver
+
     val publisher = session match
-      case Some(s) => underlying.createCollection(s, name)
-      case None    => underlying.createCollection(name)
+      case Some(s) => underlying.createCollection(s, name, driverOptions)
+      case None    => underlying.createCollection(name, driverOptions)
 
     rs.unit(publisher)
   end createCollection

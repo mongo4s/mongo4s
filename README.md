@@ -650,6 +650,36 @@ to "expire immediately".
 From a repository, `ensureKeyIndex` builds the unique index the `PrimaryKey` describes, without you restating its
 fields.
 
+### Creating a collection
+
+MongoDB creates a collection on first write, so `createCollection` is for the cases where the shape has to be
+declared up front — a capped log, a schema the server enforces, a time series, a clustered collection:
+
+```scala
+import mongo4s.operations.{ClusteredIndex, CreateCollectionOptions, TimeSeries}
+
+database.createCollection("events", CreateCollectionOptions.capped(8 * 1024 * 1024).withMaxDocuments(10000))
+
+database.createCollection(
+  "readings",
+  CreateCollectionOptions.default
+    .withTimeSeries(TimeSeries.on("recordedAt").withMetaField("sensor").withGranularity(TimeSeriesGranularity.MINUTES))
+    .expiringAfter(30.days),
+)
+
+database.createCollection("people", CreateCollectionOptions.default.withValidator(jsonSchema))
+database.createCollection("orders", CreateCollectionOptions.default.withClusteredIndex(ClusteredIndex.onId))
+```
+
+`withCapped` takes the size because the server rejects a capped collection without one — there is no way to spell a
+broken request here. Two combinations the server accepts and then quietly ignores are rejected instead: a
+`maxDocuments` on a collection that is not capped, and a validation level or action with no validator to apply to.
+Sub-second `expiringAfter` is refused for the same reason it is on an index — the server stores whole seconds, and
+truncating to zero means "expire immediately".
+
+`ClusteredIndex.onId` is the only clustered key offered because `_id` is the only one the server clusters on today.
+Anything else this API does not model is still reachable through `database.runCommand`.
+
 ### Change streams
 
 `watch` exists at all three levels, matching the driver's own scope hierarchy — `MongoClient.watch` (the whole

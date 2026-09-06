@@ -6,6 +6,7 @@ import org.bson.BsonDocument
 
 import mongo4s.bson.direct.WireCodec
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
+import mongo4s.operations.CreateCollectionOptions
 import mongo4s.bson.{BsonDocumentCodec, BsonDocumentDecoder, DecodeResult, FieldNaming}
 
 import scala.reflect.ClassTag
@@ -26,7 +27,9 @@ trait MongoDatabase[F[*], S[*]]:
   def listCollectionNames(using session: Option[ClientSession] = None)(using Streamable[S, String]): S[String]
   def listCollections(using session: Option[ClientSession] = None)(using Streamable[S, BsonDocument]): S[BsonDocument]
 
-  def createCollection(collectionName: String)(using session: Option[ClientSession] = None): F[Unit]
+  def createCollection(collectionName: String, options: CreateCollectionOptions = CreateCollectionOptions.default)(using
+      session: Option[ClientSession] = None
+  ): F[Unit]
   def runCommand(command: BsonDocument)(using session: Option[ClientSession] = None): F[BsonDocument]
 
   def drop(using session: Option[ClientSession] = None): F[Unit]

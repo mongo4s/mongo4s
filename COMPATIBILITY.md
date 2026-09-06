@@ -90,6 +90,12 @@ The reason is the one `Index` and `WireCodecConfig` already carry: a `case class
 breaking `apply`/`copy` in every release, and change-stream options keep arriving. `withExpandedEvents` is the first
 one that had to, so the treatment happened now rather than being restated as a hazard.
 
+### `createCollection` takes options
+
+`MongoDatabase.createCollection(name)` gained a defaulted `CreateCollectionOptions` parameter, so calls are
+unchanged at the source level — but a parameter is never binary-compatible, and `MongoDatabase` is a trait, so
+anything implementing it outside this library has to follow.
+
 ### `ChangeEvent` gained two fields
 
 `wallTime` and `splitEvent`. Reading an event is unaffected; constructing one by hand — which really only happens in
