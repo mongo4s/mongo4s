@@ -227,6 +227,13 @@ object ReadmeSnippets:
       _      <- collection.dropIndex("name_age")
     yield listed
 
+  // --- AST-free aggregation ---
+
+  final case class ByAge(_id: Int, total: Int) derives WireCodec
+
+  def byAge(collection: MongoCollection[IO, S, User]): IO[List[ByAge]] =
+    collection.aggregateDirect[ByAge](Seq(Stage.groupBy(ageField)("total" -> Accumulator.count[User]))).all
+
   // --- Partial reads ---
 
   def summaries(collection: MongoCollection[IO, S, User]): IO[List[(name: String, age: Int)]] =

@@ -14,10 +14,11 @@ import mongo4s.queries.{AggregateQuery, DecodeAttempts}
 
 import scala.jdk.CollectionConverters.given
 
-private[mongo4s] final class AggregateQueryImpl[F[*], S[*], A](
-    collection: RSMongoCollection[BsonDocument],
+private[mongo4s] final class DirectAggregateQueryImpl[F[*], S[*], A](
+    typedCollection: RSMongoCollection[A],
+    documentCollection: RSMongoCollection[BsonDocument],
+    documentCodec: BsonDocumentCodec[A],
     pipeline: Seq[Bson],
-    codec: BsonDocumentCodec[A],
     allowDiskUse: Option[Boolean],
     session: Option[ClientSession],
     options: QueryOptions = QueryOptions.empty,
@@ -30,35 +31,51 @@ private[mongo4s] final class AggregateQueryImpl[F[*], S[*], A](
   def maxTime(duration: FiniteDuration): AggregateQuery[F, S, A] = copy(options = options.withMaxTime(duration))
   def batchSize(n: Int): AggregateQuery[F, S, A]                 = copy(options = options.withBatchSize(n))
   def comment(value: String): AggregateQuery[F, S, A]            = copy(options = options.withComment(value))
-  def first: F[Option[A]]                                        = rs.option(publisher(limited = true))
-  def all: F[List[A]]                                            = rs.list(publisher(limited = false))
-  def stream(using Streamable[S, A]): S[A]                       = rs.stream(publisher(limited = false))
+
+  def first: F[Option[A]]                  = rs.option(typed(limited = true))
+  def all: F[List[A]]                      = rs.list(typed(limited = false))
+  def stream(using Streamable[S, A]): S[A] = rs.stream(typed(limited = false))
 
   def attempting: DecodeAttempts[F, S, A] = new DecodeAttempts[F, S, A]:
     def all: F[List[DecodeResult[A]]] =
-      rs.list(AttemptingPublisher(documents(limited = false), codec.decodeDocument))
+      rs.list(AttemptingPublisher(documents(limited = false), documentCodec.decodeDocument))
 
     def stream(using Streamable[S, DecodeResult[A]]): S[DecodeResult[A]] =
-      rs.stream(AttemptingPublisher(documents(limited = false), codec.decodeDocument))
-
-  private def publisher(limited: Boolean): Publisher[A] = DecodingPublisher(documents(limited), codec.decodeDocument)
+      rs.stream(AttemptingPublisher(documents(limited = false), documentCodec.decodeDocument))
 
   private def writesToCollection: Boolean =
     pipeline.lastOption match
       case Some(document: BsonDocument) => document.keySet.asScala.exists(AggregateQueryImpl.TerminalStages.contains)
       case _                            => false
 
+  private def stagesFor(limited: Boolean): Seq[Bson] =
+    if limited && !writesToCollection
+    then pipeline :+ BsonDocument("$limit", BsonInt32(1))
+    else pipeline
+
+  private def typed(limited: Boolean): Publisher[A] =
+    val stages = stagesFor(limited)
+
+    val base: AggregatePublisher[A] =
+      session match
+        case Some(s) => typedCollection.aggregate(s, stages.asJava, typedCollection.getDocumentClass)
+        case None    => typedCollection.aggregate(stages.asJava, typedCollection.getDocumentClass)
+
+    configure(base)
+  end typed
+
   private def documents(limited: Boolean): AggregatePublisher[BsonDocument] =
-    val stages =
-      if limited && !writesToCollection
-      then pipeline :+ BsonDocument("$limit", BsonInt32(1))
-      else pipeline
+    val stages = stagesFor(limited)
 
     val base: AggregatePublisher[BsonDocument] =
       session match
-        case Some(s) => collection.aggregate(s, stages.asJava, classOf[BsonDocument])
-        case None    => collection.aggregate(stages.asJava, classOf[BsonDocument])
+        case Some(s) => documentCollection.aggregate(s, stages.asJava, classOf[BsonDocument])
+        case None    => documentCollection.aggregate(stages.asJava, classOf[BsonDocument])
 
+    configure(base)
+  end documents
+
+  private def configure[T](base: AggregatePublisher[T]): AggregatePublisher[T] =
     var aggregate = base
     allowDiskUse.foreach(allow => aggregate = aggregate.allowDiskUse(allow))
     options.hint.foreach(keys => aggregate = aggregate.hint(keys))
@@ -66,15 +83,11 @@ private[mongo4s] final class AggregateQueryImpl[F[*], S[*], A](
     options.maxTimeMillis.foreach(millis => aggregate = aggregate.maxTime(millis, QueryOptions.MillisUnit))
     options.batchSize.foreach(n => aggregate = aggregate.batchSize(n))
     options.comment.foreach(value => aggregate = aggregate.comment(value))
-
     aggregate
-  end documents
+  end configure
 
   private def copy(
       allowDiskUse: Option[Boolean] = allowDiskUse,
       options: QueryOptions = options,
-  ): AggregateQueryImpl[F, S, A] =
-    AggregateQueryImpl(collection, pipeline, codec, allowDiskUse, session, options)
-
-private[mongo4s] object AggregateQueryImpl:
-  private[internal] val TerminalStages = Set("$out", "$merge")
+  ): DirectAggregateQueryImpl[F, S, A] =
+    DirectAggregateQueryImpl(typedCollection, documentCollection, documentCodec, pipeline, allowDiskUse, session, options)

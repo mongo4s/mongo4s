@@ -14,6 +14,10 @@ part of `2.0.0` below.
 
 - `TransactionOptions`, carrying a transaction's `readConcern`, `writeConcern`, `readPreference` and
   `maxCommitTime` — and the retry window below. Both `withTransaction` methods take one.
+- `MongoCollection.aggregateDirect[B]`, which decodes a pipeline's output through a `WireCodec[B]` rather than a
+  `BsonDocumentCodec[B]`. On a direct collection that is AST-free, the same trip `find` makes there; on any other
+  collection the codec is bridged, so the call means the same thing either way. It carries the direct path's
+  numeric strictness with it.
 - `FindQuery.selectAs[K]`, a partial read into a named tuple: `find(...).selectAs[(name: String, age: Int)]` builds
   the projection and the decoder from one shape, so they cannot drift. A label that is not a field of the entity, or
   one asked for at the wrong type, is a compile error. It works on a direct collection too, where a partial read was

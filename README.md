@@ -688,8 +688,22 @@ val buckets = Seq(
 For an output shape you'd rather not model, `BsonDocumentCodec[BsonDocument]` is in scope by default, so
 `aggregate[BsonDocument]` just works — useful for `$facet` and ad-hoc `$project`s.
 
-For a `bson-direct` entity, the output codec comes from `DocumentCodecBridge.toDocumentCodec[User]` — `aggregate`
-and `distinct` decode through `BsonDocumentCodec`, not `WireCodec`.
+`aggregateDirect[B]` is the AST-free counterpart: it asks for a `WireCodec[B]` rather than a `BsonDocumentCodec[B]`
+and, on a collection opened with `getDirectCollection`, decodes the pipeline's output straight off the wire with no
+`BsonDocument` in between — the same trip `find` already makes there.
+
+```scala
+final case class ByAge(_id: Int, total: Int) derives WireCodec
+
+collection.aggregateDirect[ByAge](Seq(Stage.groupBy(ageField)("total" -> Accumulator.count[User]))).all
+```
+
+It carries the direct path's strictness with it: the output's numeric types have to match what the pipeline
+produced, exactly as they do for an entity read through `getDirectCollection`. `$count` yields an Int32, so a
+`count: Long` there is a decode error rather than a widening. `attempting` reports it per document.
+
+On a collection opened with `getCollection` the same call still works — the `WireCodec` is bridged to a document
+codec — so the method is about the codec you have, not about which constructor you used.
 
 ### Indexes
 
@@ -922,9 +936,10 @@ accepts any whole number, and **fails** through `getDirectCollection`. The failu
 `attempting` reports it per document like any other decode error. If a collection holds mixed numeric widths for the
 same field, read it through `getCollection`.
 
-`aggregate`/`distinct` still go through `BsonDocumentCodec`/`BsonDecoder` on a direct collection (their output shape
-isn't `A`, and they're not the hot path); everything else — `Filter`/`Update`/`Field` construction — is identical
-regardless of which codec backs the collection.
+`aggregate` decodes through `BsonDocumentCodec` because its output shape isn't `A`; `aggregateDirect` is the
+AST-free counterpart for an output that has a `WireCodec`. `distinct` still goes through `BsonDecoder`, which reads
+one `BsonValue` per result rather than a document, so there is no tree to skip. Everything else —
+`Filter`/`Update`/`Field` construction — is identical regardless of which codec backs the collection.
 
 #### Field naming
 

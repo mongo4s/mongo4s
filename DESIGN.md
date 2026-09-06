@@ -151,8 +151,15 @@ and the labels are gone by the time the caller sees it. The bare tuple still *co
 that same lower bound, which makes the failure look like success until a field is read by name. Naming the shape in
 the signature keeps the type where the compiler cannot approximate it away.
 
-`aggregate` and `distinct` on a direct collection still go through `BsonDocumentCodec`/`BsonDecoder`, because their
-output shape is not `A`. They are also not the hot path, so the inconsistency buys more than it costs.
+`aggregate` and `distinct` take their output type from the call site rather than from the collection, so neither
+could use the collection's own `WireCodec`. For `aggregate` that mattered: a pipeline reading a large collection is
+exactly the hot path `bson-direct` exists for, and stopping at a `BsonDocument` there gave the AST-free claim an
+asterisk. `aggregateDirect[B]` takes a `WireCodec[B]` instead and registers it the same way `getDirectCollection`
+registers the entity's, so the output is read straight off the wire. It carries the strictness with it — the same
+numeric-width rules apply to the pipeline's output as to a stored entity.
+
+`distinct` is left alone deliberately: it reads one `BsonValue` per result rather than a document, so there is no
+intermediate tree to skip and nothing to win.
 
 ## The query AST
 

@@ -1,5 +1,7 @@
 package mongo4s
 
+import scala.reflect.ClassTag
+
 import org.bson.BsonDocument
 import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
@@ -7,6 +9,7 @@ import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSM
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.queries.{AggregateQuery, DistinctQuery, FindQuery}
 import mongo4s.operations.*
+import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec}
 import mongo4s.bson.{BsonDecoder, BsonDocumentCodec, DecodeResult, FieldNaming}
 import mongo4s.results.{BulkWriteResult, DeleteResult, InsertManyResult, InsertOneResult, UpdateResult}
 
@@ -71,6 +74,14 @@ trait MongoCollection[F[*], S[*], A]:
   )(using
       BsonDocumentCodec[B]
   ): AggregateQuery[F, S, B]
+
+  def aggregateDirect[B](pipeline: Seq[Stage[A]])(using
+      session: Option[ClientSession] = None
+  )(using
+      WireCodec[B],
+      ClassTag[B],
+  ): AggregateQuery[F, S, B] =
+    aggregate[B](pipeline)(using session)(using DocumentCodecBridge.toDocumentCodec[B])
 
   def distinct[B](field: Field[A, B], filter: Filter[A] = Filter.all)(using
       session: Option[ClientSession] = None

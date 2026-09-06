@@ -213,6 +213,33 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
       }
   end bulkWrite
 
+  override def aggregateDirect[B](pipeline: Seq[Stage[A]])(using
+      session: Option[ClientSession]
+  )(using
+      codecB: WireCodec[B],
+      tagB: ClassTag[B],
+  ): AggregateQuery[F, S, B] =
+    val documentClass = tagB.runtimeClass.asInstanceOf[Class[B]]
+
+    val typed = underlying
+      .withCodecRegistry(
+        CodecRegistries.fromRegistries(
+          CodecRegistries.fromCodecs(DriverCodecBridge.toDriverCodec[B](using codecB, tagB)),
+          underlying.getCodecRegistry,
+        )
+      )
+      .withDocumentClass(documentClass)
+
+    DirectAggregateQueryImpl(
+      typedCollection = typed,
+      documentCollection = underlying,
+      documentCodec = DocumentCodecBridge.toDocumentCodec[B](using codecB),
+      pipeline = pipeline.map(_.toBson(naming)),
+      allowDiskUse = None,
+      session = session,
+    )
+  end aggregateDirect
+
   def aggregate[B](pipeline: Seq[Stage[A]])(using session: Option[ClientSession])(using codec: BsonDocumentCodec[B]): AggregateQuery[F, S, B] =
     AggregateQueryImpl(
       collection = underlying,
