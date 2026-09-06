@@ -7,7 +7,6 @@ import com.mongodb.reactivestreams.client.ChangeStreamPublisher
 import mongo4s.changestream.WatchOptions
 
 private[mongo4s] object ChangeStreamSupport:
-
   def configure[E, T](publisher: ChangeStreamPublisher[T], options: WatchOptions[E]): ChangeStreamPublisher[T] =
     publisher.fullDocument(options.fullDocument)
 
@@ -18,7 +17,6 @@ private[mongo4s] object ChangeStreamSupport:
     options.maxAwaitTime.foreach(duration => publisher.maxAwaitTime(duration.toMillis, TimeUnit.MILLISECONDS))
     options.batchSize.foreach(publisher.batchSize)
 
-    // Only when asked: a server older than 6.0 does not know the flag, and there is no reason to send it a default.
     if options.expandedEvents then publisher.showExpandedEvents(true): Unit
 
     publisher

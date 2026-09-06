@@ -34,7 +34,6 @@ final class CreateCollectionOptionsSpec extends AnyWordSpec, Matchers:
     }
 
     "refuse a document cap on a collection that is not capped" in {
-      // The server ignores maxDocuments without capped, which reads as a cap that silently does not apply.
       an[IllegalArgumentException] should be thrownBy CreateCollectionOptions.default.withMaxDocuments(100).toDriver
     }
 

@@ -26,9 +26,6 @@ trait Effect[F[*]]:
           else unit
     }
 
-  /** A monotonic clock, used to bound transaction retries. The default reads `System.nanoTime`, which is what every runtime's own monotonic clock does anyway; override
-    * it where the runtime has a clock worth substituting in tests.
-    */
   def monotonic: F[FiniteDuration] = delay(FiniteDuration(System.nanoTime(), TimeUnit.NANOSECONDS))
 
   def suspend[A](fa: => F[A]): F[A] = flatMap(delay(()))(_ => fa)

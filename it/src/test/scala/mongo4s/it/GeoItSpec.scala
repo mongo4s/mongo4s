@@ -16,7 +16,6 @@ import mongo4s.{Field, MongoClient, MongoCollection}
 import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
 
-/** The geometry is built here and interpreted by the server, so what is under test is that the two agree. */
 final class GeoItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAfterAll:
 
   private val container = new MongoDBContainer("mongo:7")
@@ -31,11 +30,8 @@ final class GeoItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAft
   private def place(name: String, longitude: Double, latitude: Double): BsonDocument =
     BsonDocument("name", BsonString(name)).append("location", Geometry.Point(longitude, latitude).toBson)
 
-  // Berlin, and two points roughly 1.5km and 40km east of it.
   private val berlin: Geometry.Point = Geometry.Point(13.4050, 52.5200)
 
-  /** Fresh documents every time: the driver stamps `_id` into the one it is handed, so a shared value can only be inserted once.
-    */
   private def seeded(name: String): IO[MongoCollection[IO, S, BsonDocument]] =
     for
       client     <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
@@ -95,7 +91,6 @@ final class GeoItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAft
       val program =
         for
           collection <- seeded("within_sphere")
-          // ~5km expressed in radians, which is what $centerSphere takes.
           found      <- collection.find(location.within(GeoShape.CenterSphere(berlin, 5.0 / 6378.1))).all
         yield namesOf(found)
 

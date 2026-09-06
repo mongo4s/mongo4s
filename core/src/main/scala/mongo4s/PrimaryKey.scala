@@ -27,11 +27,6 @@ object PrimaryKey:
   def single[E, F1](name: String)(keyOf: E => F1)(using encoder: BsonEncoder[F1]): PrimaryKey[E, F1] =
     make(keyOf, List(name), key => KeyFields.one(name, encoder.encode(key)))
 
-  /** A compound key described by a named tuple: `(userId = order.userId, seq = order.seq)`.
-    *
-    * The tuple's labels are the field names, so there is nothing to keep in step by hand and no arity limit. Like every other key, those names are *stored* names — pass
-    * a `naming` if the collection spells them differently from the Scala labels.
-    */
   inline def compound[E, N <: Tuple, V <: Tuple](
       inline keyOf: E => NamedTuple[N, V],
       naming: FieldNaming = FieldNaming.identity,

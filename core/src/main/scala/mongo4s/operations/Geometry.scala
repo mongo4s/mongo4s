@@ -4,7 +4,6 @@ import org.bson.{BsonArray, BsonDocument, BsonDouble, BsonString, BsonValue}
 
 import scala.jdk.CollectionConverters.given
 
-/** The GeoJSON shapes MongoDB understands, in the order it expects them: longitude first, then latitude. */
 enum Geometry:
   case Point(longitude: Double, latitude: Double)
   case LineString(points: List[Geometry.Point])
@@ -32,9 +31,7 @@ enum Geometry:
   def toBson: BsonDocument = BsonDocument("type", BsonString(typeName)).append("coordinates", coordinates)
 
 object Geometry:
-
   object Polygon:
-    /** A polygon with no holes. */
     def apply(exterior: List[Point]): Polygon = Polygon(exterior, Nil)
 
   private def pair(point: Point): BsonValue =
@@ -54,12 +51,8 @@ object Geometry:
 
     BsonArray(all.map(line).asJava)
 
-/** What `$geoWithin` is asked to contain a document. */
 enum GeoShape:
-  /** A GeoJSON shape, which is what a `2dsphere` index is built for. */
   case Within(geometry: Geometry)
-
-  /** Legacy `2d` circles and rectangles, in the coordinate system the collection stores. */
   case CenterSphere(centre: Geometry.Point, radiusInRadians: Double)
   case Centre(centre: Geometry.Point, radius: Double)
   case Box(bottomLeft: Geometry.Point, topRight: Geometry.Point)

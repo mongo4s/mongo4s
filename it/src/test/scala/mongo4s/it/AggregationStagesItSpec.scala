@@ -17,7 +17,6 @@ import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
 import mongo4s.bson.BsonInstances.given
 
-/** The stages below build their BSON by hand, so what matters is that the server accepts it and answers. */
 final class AggregationStagesItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAfterAll:
   import CoreItSpec.Person
 
@@ -73,7 +72,6 @@ final class AggregationStagesItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers
         yield densified.map(_.getNumber("age").intValue)
 
       program.timeout(30.seconds).asserting { ages =>
-        // 0, 10, 20, 30 are synthesised around the four stored documents.
         ages should contain allOf (0, 10, 20, 30)
         ages should contain allOf (5, 15, 25, 35)
       }

@@ -7,8 +7,6 @@ import com.mongodb.client.model.changestream.{FullDocument, FullDocumentBeforeCh
 
 import mongo4s.operations.Stage
 
-/** How a change stream is opened. Built by chaining from `default`, never constructed directly, so an option added later stays binary-compatible.
-  */
 final class WatchOptions[E] private (
     val pipeline: Seq[Stage[E]],
     val fullDocument: FullDocument,
@@ -44,8 +42,6 @@ final class WatchOptions[E] private (
   def withBatchSize(value: Int): WatchOptions[E] =
     copy(batchSize = Some(value))
 
-  /** The driver's `showExpandedEvents`: DDL events — `createIndexes`, `drop`, `rename` and the rest — are reported alongside the document ones. Needs MongoDB 6.0.
-    */
   def withExpandedEvents: WatchOptions[E] =
     copy(expandedEvents = true)
 

@@ -8,7 +8,6 @@ import com.mongodb.reactivestreams.client.ClientSession
 import mongo4s.operations.TransactionOptions
 
 object MongoSession:
-
   def startTransaction[F[*]](session: ClientSession, options: TransactionOptions = TransactionOptions.default)(using F: Effect[F]): F[Unit] =
     F.delay {
       session.startTransaction(options.toDriver)
@@ -46,7 +45,6 @@ extension (session: ClientSession)
   )(using F: Effect[F], rs: RsBridge[F, S]): F[A] =
     given Option[ClientSession] = Some(session)
 
-    // A deadline is taken once, before the first attempt, so the retries are bounded in total rather than per round.
     def deadline: F[Option[FiniteDuration]] =
       options.retryTimeout match
         case Some(timeout) => F.map(F.monotonic)(now => Some(now + timeout))
@@ -64,8 +62,6 @@ extension (session: ClientSession)
         else F.raiseError(error)
       }
 
-    // An unknown commit result says the commit may already have landed; the driver's answer is to ask again rather
-    // than to redo the work, so only the commit is repeated here.
     def commit(until: Option[FiniteDuration]): F[Unit] =
       F.handleErrorWith(MongoSession.commitTransaction[F, S](session)) { error =>
         if MongoSession.hasErrorLabel(error, MongoException.UNKNOWN_TRANSACTION_COMMIT_RESULT_LABEL)
@@ -84,7 +80,6 @@ extension (session: ClientSession)
         }
       }
 
-    // A transient error leaves nothing committed, so the whole transaction is started again from the top.
     def run(until: Option[FiniteDuration]): F[A] =
       F.handleErrorWith(F.suspend(attempt(until))) { error =>
         if MongoSession.hasErrorLabel(error, MongoException.TRANSIENT_TRANSACTION_ERROR_LABEL)

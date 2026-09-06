@@ -16,13 +16,11 @@ import com.mongodb.client.model.{
   ValidationOptions,
 }
 
-/** A time-series collection, keyed on the field carrying each measurement's timestamp. */
 final class TimeSeries private (
     val timeField: String,
     val metaField: Option[String],
     val granularity: Option[TimeSeriesGranularity],
 ):
-  /** The field holding what the measurement is *about* — the sensor, the account — which the server groups by. */
   def withMetaField(value: String): TimeSeries = copy(metaField = Some(value))
 
   def withGranularity(value: TimeSeriesGranularity): TimeSeries = copy(granularity = Some(value))
@@ -43,7 +41,6 @@ final class TimeSeries private (
 object TimeSeries:
   def on(timeField: String): TimeSeries = new TimeSeries(timeField, None, None)
 
-/** A clustered collection, whose documents are stored in the order of the clustered index itself. */
 final class ClusteredIndex private (val key: BsonDocument, val name: Option[String]):
   def named(value: String): ClusteredIndex = new ClusteredIndex(key, Some(value))
 
@@ -55,7 +52,6 @@ final class ClusteredIndex private (val key: BsonDocument, val name: Option[Stri
     options
 
 object ClusteredIndex:
-  /** `_id` is the only key the server clusters on today, so it is the only one offered. */
   val onId: ClusteredIndex = new ClusteredIndex(BsonDocument("_id", org.bson.BsonInt32(1)), None)
 
 final class CreateCollectionOptions private (
@@ -70,9 +66,6 @@ final class CreateCollectionOptions private (
     val collation: Option[Collation],
     val storageEngine: Option[BsonDocument],
 ):
-  /** A capped collection of at most `sizeInBytes`. The size is not optional because the server rejects a capped collection without one, so there is no way to ask for a
-    * broken collection here.
-    */
   def withCapped(sizeInBytes: Long): CreateCollectionOptions = copy(capped = Some(sizeInBytes))
 
   def withMaxDocuments(value: Long): CreateCollectionOptions = copy(maxDocuments = Some(value))

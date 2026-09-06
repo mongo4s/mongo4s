@@ -9,7 +9,6 @@ import zio.{Cause, Clock, Exit, Task, ZIO}
 import mongo4s.{Effect, ExitCase}
 
 trait TaskToEffectInstance:
-
   given taskEffect: Effect[Task] = new Effect[Task]:
     def pure[A](a: A): Task[A]                               = ZIO.succeed(a)
     def delay[A](a: => A): Task[A]                           = ZIO.attempt(a)
@@ -19,7 +18,6 @@ trait TaskToEffectInstance:
 
     override def suspend[A](fa: => Task[A]): Task[A] = ZIO.suspendSucceed(fa)
 
-    // Through ZIO's own Clock, so TestClock drives a transaction's retry window.
     override def monotonic: Task[FiniteDuration] = Clock.nanoTime.map(FiniteDuration(_, TimeUnit.NANOSECONDS))
 
     def handleErrorWith[A](fa: Task[A])(f: Throwable => Task[A]): Task[A] =
@@ -60,7 +58,6 @@ trait TaskToEffectInstance:
       }
 
 object TaskToEffectInstance extends TaskToEffectInstance:
-
   private def errorOf(cause: Cause[Throwable]): Option[Throwable] =
     if cause.isInterrupted
     then None

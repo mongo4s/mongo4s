@@ -6,11 +6,6 @@ import scala.concurrent.duration.FiniteDuration
 
 import com.mongodb.{ReadConcern, ReadPreference, WriteConcern, TransactionOptions as DriverTransactionOptions}
 
-/** How a transaction is started, and how long `withTransaction` keeps retrying it.
-  *
-  * `retryTimeout` mirrors the driver's own `withTransaction`: a `TransientTransactionError` restarts the whole transaction and an `UnknownTransactionCommitResult`
-  * retries just the commit, both until the timeout is spent. `withoutRetries` turns that off and reports the first failure, which is what `2.x` did.
-  */
 final class TransactionOptions private (
     val readConcern: Option[ReadConcern],
     val writeConcern: Option[WriteConcern],
@@ -57,7 +52,6 @@ final class TransactionOptions private (
     )
 
 object TransactionOptions:
-  /** The driver's own retry window. */
   val DefaultRetryTimeout: FiniteDuration = FiniteDuration(120, TimeUnit.SECONDS)
 
   val default: TransactionOptions =

@@ -94,21 +94,14 @@ object Field:
     def hasSize(size: Int): Filter[E] = Filter.Size(field.path, size)
 
   extension [E, A](field: Field[E, A])
-    /** `$near`: nearest first, in metres, and it needs a geospatial index on the field.
-      *
-      * The server refuses `$near` inside `$or` and inside an aggregation `$match` — use `$geoNear` as the first stage of a pipeline there.
-      */
     def near(point: Geometry.Point, maxDistance: Option[Double] = None, minDistance: Option[Double] = None): Filter[E] =
       Filter.Near(field.path, point, minDistance, maxDistance, spherical = false)
 
-    /** `$nearSphere`: the same, measured on a sphere, which is what a `2dsphere` index stores. */
     def nearSphere(point: Geometry.Point, maxDistance: Option[Double] = None, minDistance: Option[Double] = None): Filter[E] =
       Filter.Near(field.path, point, minDistance, maxDistance, spherical = true)
 
-    /** `$geoWithin`: entirely inside the shape. Unlike `$near` this needs no index and no sorting. */
     def within(shape: GeoShape): Filter[E] = Filter.GeoWithin(field.path, shape)
 
-    /** `$geoIntersects`: overlapping the shape at all, rather than contained by it. */
     def intersects(geometry: Geometry): Filter[E] = Filter.GeoIntersects(field.path, geometry)
 
   extension [E, A](field: Field[E, A])

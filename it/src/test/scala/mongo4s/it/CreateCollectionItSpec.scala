@@ -29,7 +29,6 @@ final class CreateCollectionItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers,
   private def database(name: String): IO[MongoDatabase[IO, S]] =
     MongoClient.fromConnectionString[IO, S](container.getConnectionString).flatMap(_.getDatabase(name))
 
-  /** What the server itself says it created, rather than what we asked for. */
   private def optionsOf(db: MongoDatabase[IO, S], name: String): IO[BsonDocument] =
     db.listCollections.compile.toList
       .map(_.find(_.getString("name").getValue == name).getOrElse(fail(s"$name was not created")))

@@ -8,7 +8,6 @@ import scala.collection.mutable.ListBuffer
 import org.reactivestreams.{Publisher, Subscriber, Subscription}
 
 private[mongo4s] object PublisherCollector:
-
   def collect[A](publisher: Publisher[A], limit: Int = Int.MaxValue): CompletableFuture[List[A]] =
     subscribe(publisher, limit, buffered = true)
 
@@ -16,9 +15,6 @@ private[mongo4s] object PublisherCollector:
     val collected = subscribe(publisher, Int.MaxValue, buffered = false)
     val drained   = CompletableFuture[Unit]()
 
-    // Deriving this with `thenApply` would report the failure wrapped in a CompletionException. Runtimes differ on
-    // whether they unwrap that, so the driver's own exception type — and with it the error labels withTransaction
-    // retries on — survived on some backends and not others.
     collected.whenComplete { (_, error) =>
       if error == null
       then drained.complete(()): Unit

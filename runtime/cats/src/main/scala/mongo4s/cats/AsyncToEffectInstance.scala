@@ -7,7 +7,6 @@ import cats.effect.kernel.{Async, Outcome}
 import mongo4s.{Effect, ExitCase}
 
 trait AsyncToEffectInstance:
-
   given asyncEffect: [F[*]] => (F: Async[F]) => Effect[F] = new Effect[F]:
     def pure[A](a: A): F[A]                                      = F.pure(a)
     def delay[A](a: => A): F[A]                                  = F.delay(a)
@@ -19,7 +18,6 @@ trait AsyncToEffectInstance:
     override def suspend[A](fa: => F[A]): F[A]                 = F.defer(fa)
     override def attempt[A](fa: F[A]): F[Either[Throwable, A]] = F.attempt(fa)
 
-    // Async is a Clock, and going through it is what lets TestControl drive a transaction's retry window.
     override def monotonic: F[FiniteDuration] = F.monotonic
 
     def guaranteeCase[A](fa: F[A])(finalizer: ExitCase => F[Unit]): F[A] =
@@ -34,7 +32,6 @@ trait AsyncToEffectInstance:
       }
 
 object AsyncToEffectInstance extends AsyncToEffectInstance:
-
   private def exitCaseOf[F[*], A](outcome: Outcome[F, Throwable, A]): ExitCase =
     outcome match
       case Outcome.Succeeded(_) => ExitCase.Succeeded

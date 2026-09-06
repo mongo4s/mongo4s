@@ -67,7 +67,6 @@ final class QueryItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndA
                             Seq(
                               Stage.matching(ageField.gte(18)),
                               Stage.groupBy(ageField)("count" -> Accumulator.count[Person]),
-                              // `_id` belongs to the stage's output, not to Person, so it is sorted raw.
                               Stage.raw[Person](BsonDocument("$sort", BsonDocument("_id", BsonInt32(1)))),
                             )
                           )

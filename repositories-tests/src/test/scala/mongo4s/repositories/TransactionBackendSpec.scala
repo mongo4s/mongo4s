@@ -41,7 +41,6 @@ object TransactionBackendSpec:
         case Some(cause) => subscriber.onError(cause)
         case None        => subscriber.onComplete()
 
-  /** A `ClientSession` that counts what was asked of it and fails the commit as many times as it is told to. */
   final class FakeSession(commitFailures: List[Throwable] = Nil):
     val started = AtomicInteger(0)
     val commits = AtomicInteger(0)
@@ -87,7 +86,6 @@ trait TransactionBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
 
   private def runAttempt[A](fa: F[A]): Either[Throwable, A] = run(F.attempt(fa))
 
-  /** A body that raises the given errors on its first calls, then returns 1. */
   private def bodyFailing(errors: List[Throwable]): (AtomicInteger, F[Int]) =
     val calls = AtomicInteger(0)
     val body  = F.suspend {
