@@ -119,7 +119,7 @@ enum Stage[E]:
       then
         val fields = BsonDocument()
         output.foreach((name, accumulator) => fields.append(name, accumulator.toBson(naming)))
-        bucket.append("output", fields)
+        bucket.append("output", fields): Unit
 
       BsonDocument("$bucket", bucket)
 
@@ -127,7 +127,7 @@ enum Stage[E]:
       val densify = BsonDocument("field", BsonString(path.render(naming)))
 
       if partitionBy.nonEmpty
-      then densify.append("partitionByFields", BsonArray(partitionBy.map(p => BsonString(p.render(naming)): BsonValue).asJava))
+      then densify.append("partitionByFields", BsonArray(partitionBy.map(p => BsonString(p.render(naming)): BsonValue).asJava)): Unit
 
       densify.append("range", range.toBson)
 
@@ -139,7 +139,7 @@ enum Stage[E]:
       partitionBy.foreach(path => windowFields.append("partitionBy", BsonString("$" + path.render(naming))))
 
       if !sortBy.isEmpty
-      then windowFields.append("sortBy", sortBy.toBson(naming))
+      then windowFields.append("sortBy", sortBy.toBson(naming)): Unit
 
       val fields = BsonDocument()
       output.foreach { (name, windowed) =>

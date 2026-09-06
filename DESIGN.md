@@ -286,6 +286,7 @@ appears once a write exceeds one batch, which is to say in production and not in
 Because `Filter`/`Update` are an AST rather than driver builders, they can be interpreted twice: once into real
 `Bson` for the server, and once against an in-memory buffer. `FakeMongoCollection` is that second interpreter —
 filters, updates, sorting, paging and projections are simulated, while `aggregate`, `distinct`, `watch`, `$text`,
+the geospatial operators,
 `$expr`, `Filter.Raw` and an update carrying `arrayFilters` throw `UnsupportedOperationException` naming what was
 asked for rather than quietly answering wrong. A fake that lies is worse than no fake.
 

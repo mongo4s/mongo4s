@@ -14,6 +14,9 @@ part of `2.0.0` below.
 
 - `TransactionOptions`, carrying a transaction's `readConcern`, `writeConcern`, `readPreference` and
   `maxCommitTime` — and the retry window below. Both `withTransaction` methods take one.
+- Geospatial filters: `near`, `nearSphere`, `within` and `intersects` on a `Field`, over a GeoJSON `Geometry`
+  vocabulary (`Point`, `LineString`, `Polygon`, and the `Multi*` forms) plus the legacy `2d` shapes in `GeoShape`.
+  A polygon ring that does not close is refused rather than sent.
 - `Stage.bucketBy`, `Stage.densify` and `Stage.setWindowFields` — `$bucket`, `$densify` and `$setWindowFields`,
   with `DensifyRange`/`DensifyBounds`/`DateUnit` and `Window`/`WindowBound`/`WindowOutput` for the vocabulary they
   need. `$bucket`'s boundaries are values of the field being grouped rather than raw BSON.

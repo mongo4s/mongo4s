@@ -207,7 +207,20 @@ scoreField.hasType(BsonTypeName.Int)     // $type
 totalField.mod(4, 1)                     // $mod
 Filter.text[User]("scala")               // $text
 Filter.expr[User](someBsonDocument)      // $expr
+locationField.near(berlin, maxDistance = Some(1500)) // $near — also $nearSphere
+locationField.within(GeoShape.Within(area))          // $geoWithin
+areaField.intersects(point)                          // $geoIntersects
 ```
+
+The geospatial operators take GeoJSON `Geometry` values — `Point`, `LineString`, `Polygon` and the `Multi*` forms,
+with longitude first as MongoDB expects. A polygon's rings have to close, so a ring that does not repeat its first
+point is refused rather than sent for the server to reject. `$geoWithin` also takes the legacy `2d` shapes through
+`GeoShape.Centre`, `CenterSphere` and `Box`.
+
+`$near` sorts by distance and needs a geospatial index; distances are in metres for GeoJSON. The server refuses it
+inside `$or` and inside an aggregation `$match` — `$geoNear` as a pipeline's first stage is the tool there, and it
+goes through `Stage.raw` for now. `$geoWithin` needs neither an index nor a sort, so it is the cheaper choice when
+you only want containment.
 
 The comparisons have symbolic aliases where they read better — `===`, `=!=`, `>`, `>=`, `<`, `<=` — spelling the
 same `Filter` as `equalTo`/`notEqualTo`/`gt`/`gte`/`lt`/`lte`.
@@ -1128,7 +1141,8 @@ For unit tests, `FakeMongoCollection` (in `mongo4s-testkit`, a published module 
 repository logic is testable without a running MongoDB.
 
 Filters, updates, sorting, paging and projections are simulated. `aggregate`, `distinct`, `watch`, `$text`, `$expr`,
-`Filter.Raw` and an update carrying `arrayFilters` throw `UnsupportedOperationException` naming what was asked for,
+the geospatial operators, `Filter.Raw` and an update carrying `arrayFilters` throw `UnsupportedOperationException`
+naming what was asked for,
 rather than quietly answering wrong — a fake that lies is worse than no fake. Replace-based upserts — what
 `upsert`/`upsertMany` go through — insert on a miss the way the server does; an `update`-based `UpdateOptions.upsert`
 that matches nothing throws instead of guessing what the operators would have built.

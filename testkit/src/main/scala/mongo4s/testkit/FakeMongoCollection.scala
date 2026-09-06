@@ -274,6 +274,15 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Filter.Expr(_) =>
       throw UnsupportedOperationException("FakeMongoCollection: $expr is not simulated")
 
+    case Filter.Near(_, _, _, _, _) =>
+      throw UnsupportedOperationException("FakeMongoCollection: $near needs a geospatial index and a real distance, so it is not simulated")
+
+    case Filter.GeoWithin(_, _) =>
+      throw UnsupportedOperationException("FakeMongoCollection: $geoWithin is not simulated")
+
+    case Filter.GeoIntersects(_, _) =>
+      throw UnsupportedOperationException("FakeMongoCollection: $geoIntersects is not simulated")
+
     case Filter.Raw(_) => throw UnsupportedOperationException("FakeMongoCollection: Filter.Raw is not simulated")
 
   private def storedSegments(path: mongo4s.FieldPath): List[String] = path.render(naming).split('.').toList
