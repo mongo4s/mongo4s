@@ -101,7 +101,7 @@ trait RsBridgeBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers, TimeLimits:
 
   protected def drainStream(stream: S[Int]): List[Int]
 
-  private val bridge = bridgeWith(RsBridgeConfig.Default)
+  private val bridge = bridgeWith(RsBridgeConfig.default)
 
   private def attempt[A](fa: F[A]): Either[Throwable, A] =
     try Right(run(fa))
@@ -175,7 +175,7 @@ trait RsBridgeBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers, TimeLimits:
   }
 
   "strictSingleResult" should {
-    val strict = bridgeWith(RsBridgeConfig.Default.copy(strictSingleResult = true))
+    val strict = bridgeWith(RsBridgeConfig.default.withStrictSingleResult)
 
     "fail with TooManyResults when more than one element is available" in {
       attempt(strict.one(RecordingPublisher(List(1, 2)))) shouldBe Left(RsBridgeError.TooManyResults())
@@ -191,7 +191,7 @@ trait RsBridgeBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers, TimeLimits:
   }
 
   "timeout" should {
-    val timed = bridgeWith(RsBridgeConfig.Default.copy(timeout = Some(200.millis)))
+    val timed = bridgeWith(RsBridgeConfig.default.withTimeout(200.millis))
 
     "fail with RsBridgeError.Timeout when the publisher never responds" in {
       attempt(timed.list(NeverPublisher())) shouldBe Left(RsBridgeError.Timeout(200.millis))

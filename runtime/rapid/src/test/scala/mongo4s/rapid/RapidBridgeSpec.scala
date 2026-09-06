@@ -61,7 +61,7 @@ final class RapidBridgeSpec extends AnyWordSpec, Matchers:
   }
 
   "rapid RsBridge with strictSingleResult" should {
-    given RsBridgeConfig = RsBridgeConfig.Default.copy(strictSingleResult = true)
+    given RsBridgeConfig = RsBridgeConfig.default.withStrictSingleResult
     val strictBridge     = summon[RsBridge[Task, RapidStream]]
 
     "fail one with TooManyResults for a 2-element publisher" in {
@@ -79,7 +79,7 @@ final class RapidBridgeSpec extends AnyWordSpec, Matchers:
   }
 
   "rapid RsBridge with a timeout" should {
-    given RsBridgeConfig = RsBridgeConfig.Default.copy(timeout = Some(50.millis))
+    given RsBridgeConfig = RsBridgeConfig.default.withTimeout(50.millis)
     val timeoutBridge    = summon[RsBridge[Task, RapidStream]]
 
     "fail with RsBridgeError.Timeout when the publisher never completes" in {

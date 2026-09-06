@@ -1297,11 +1297,10 @@ default wherever an `RsBridge` is summoned:
 ```scala
 import mongo4s.RsBridgeConfig
 
-given RsBridgeConfig = RsBridgeConfig(
-  bufferSize         = 512,             // outstanding demand for streaming reads
-  timeout            = Some(5.seconds), // per non-streaming operation; unset by default
-  strictSingleResult = false,           // fail on a second result instead of taking the first
-)
+given RsBridgeConfig = RsBridgeConfig.default
+  .withBufferSize(512)        // outstanding demand for streaming reads
+  .withTimeout(5.seconds)     // per non-streaming operation; unset by default
+  .withStrictSingleResult     // fail on a second result instead of taking the first
 ```
 
 `bufferSize` bounds memory against a fast cursor; it does not apply to `all`, which asks for everything by

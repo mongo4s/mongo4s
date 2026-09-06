@@ -2,13 +2,38 @@ package mongo4s
 
 import scala.concurrent.duration.FiniteDuration
 
-final case class RsBridgeConfig(
-    bufferSize: Int,
-    timeout: Option[FiniteDuration] = None,
-    strictSingleResult: Boolean = false,
-)
+final class RsBridgeConfig private (
+    val bufferSize: Int,
+    val timeout: Option[FiniteDuration],
+    val strictSingleResult: Boolean,
+):
+  require(bufferSize > 0, s"RsBridgeConfig.bufferSize must be positive, got $bufferSize")
+
+  def withBufferSize(value: Int): RsBridgeConfig = copy(bufferSize = value)
+
+  def withTimeout(value: FiniteDuration): RsBridgeConfig = copy(timeout = Some(value))
+
+  def withoutTimeout: RsBridgeConfig = copy(timeout = None)
+
+  def withStrictSingleResult: RsBridgeConfig = copy(strictSingleResult = true)
+
+  private def copy(
+      bufferSize: Int = bufferSize,
+      timeout: Option[FiniteDuration] = timeout,
+      strictSingleResult: Boolean = strictSingleResult,
+  ): RsBridgeConfig =
+    new RsBridgeConfig(
+      bufferSize = bufferSize,
+      timeout = timeout,
+      strictSingleResult = strictSingleResult,
+    )
 
 object RsBridgeConfig:
-  val Default: RsBridgeConfig = RsBridgeConfig(bufferSize = 256)
+  val default: RsBridgeConfig =
+    new RsBridgeConfig(
+      bufferSize = 256,
+      timeout = None,
+      strictSingleResult = false,
+    )
 
-  given default: RsBridgeConfig = Default
+  given RsBridgeConfig = default

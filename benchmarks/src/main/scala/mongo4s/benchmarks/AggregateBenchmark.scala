@@ -8,7 +8,7 @@ import org.openjdk.jmh.annotations.*
 
 import cats.effect.IO
 
-import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec}
+import mongo4s.bson.direct.DocumentCodecBridge
 import mongo4s.bson.BsonDocumentCodec
 import mongo4s.cats.CatsStream
 import mongo4s.operations.Stage

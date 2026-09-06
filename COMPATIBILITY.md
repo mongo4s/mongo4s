@@ -90,6 +90,23 @@ The reason is the one `Index` and `WireCodecConfig` already carry: a `case class
 breaking `apply`/`copy` in every release, and change-stream options keep arriving. `withExpandedEvents` is the first
 one that had to, so the treatment happened now rather than being restated as a hazard.
 
+### `RsBridgeConfig` stopped being a `case class`
+
+Same treatment, same reason. `RsBridgeConfig(...)` and `.copy(...)` are gone, and `RsBridgeConfig.Default` is now
+`RsBridgeConfig.default`, matching every other options type in the library:
+
+```scala
+given RsBridgeConfig = RsBridgeConfig(bufferSize = 512, strictSingleResult = true)          // 2.x
+given RsBridgeConfig = RsBridgeConfig.default.withBufferSize(512).withStrictSingleResult    // 3.0
+```
+
+Reading a field — `config.bufferSize`, `config.timeout` — is unchanged, and the `given` in the companion still
+supplies the default, so code that never configured the bridge is untouched.
+
+It was the last public `case class` among the option types, which made it the one place where a new knob would have
+cost a major. A `bufferSize` of zero is now rejected on construction instead of hanging the first stream that used
+it.
+
 ### `createCollection` takes options
 
 `MongoDatabase.createCollection(name)` gained a defaulted `CreateCollectionOptions` parameter, so calls are

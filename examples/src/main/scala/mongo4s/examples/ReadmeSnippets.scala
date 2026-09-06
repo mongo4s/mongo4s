@@ -358,7 +358,7 @@ object ReadmeSnippets:
   // --- Bridge configuration ---
 
   object tuned:
-    given RsBridgeConfig = RsBridgeConfig(bufferSize = 512, timeout = Some(5.seconds), strictSingleResult = true)
+    given RsBridgeConfig = RsBridgeConfig.default.withBufferSize(512).withTimeout(5.seconds).withStrictSingleResult
 
     def client: IO[MongoClient[IO, S]] = MongoClient.fromConnectionString[IO, S]("mongodb://localhost:27017")
 

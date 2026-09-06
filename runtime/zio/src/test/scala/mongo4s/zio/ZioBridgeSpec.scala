@@ -64,7 +64,7 @@ final class ZioBridgeSpec extends AnyWordSpec, Matchers:
   }
 
   "zio RsBridge with strictSingleResult" should {
-    given RsBridgeConfig = RsBridgeConfig.Default.copy(strictSingleResult = true)
+    given RsBridgeConfig = RsBridgeConfig.default.withStrictSingleResult
     val strictBridge     = summon[RsBridge[Task, ZioStream]]
 
     "fail one with TooManyResults for a 2-element publisher" in {
@@ -82,7 +82,7 @@ final class ZioBridgeSpec extends AnyWordSpec, Matchers:
   }
 
   "zio RsBridge with a timeout" should {
-    given RsBridgeConfig = RsBridgeConfig.Default.copy(timeout = Some(50.millis))
+    given RsBridgeConfig = RsBridgeConfig.default.withTimeout(50.millis)
     val timeoutBridge    = summon[RsBridge[Task, ZioStream]]
 
     "fail with RsBridgeError.Timeout when the publisher never completes" in {
