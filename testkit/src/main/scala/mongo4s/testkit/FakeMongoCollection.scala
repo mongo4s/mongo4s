@@ -206,9 +206,9 @@ final class FakeMongoCollection[F[*], S[*], E](
   def distinct[B](field: Field[E, B], filter: Filter[E])(using
       session: Option[ClientSession]
   )(using
-      mongo4s.bson.BsonDecoder[B]
+      decoder: mongo4s.bson.BsonDecoder[B]
   ): DistinctQuery[F, S, B] =
-    throw UnsupportedOperationException("FakeMongoCollection: distinct is not simulated")
+    FakeDistinctQuery(field.path, filter, decoder)
 
   def createIndex(index: Index[E])(using session: Option[ClientSession]): F[String] =
     F.delay {
@@ -467,6 +467,38 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   private def extreme(values: List[BsonValue], keep: Int => Boolean): BsonValue =
     values.reduceOption((left, right) => if keep(BsonOrdering.compare(left, right)) then left else right).getOrElse(BsonNull.VALUE)
+
+  private def distinctValues(path: mongo4s.FieldPath, filter: Filter[E]): List[BsonValue] =
+    matching(filter).flatMap { document =>
+      at(document, path) match
+        case Some(array) if array.isArray => array.asArray.getValues.asScala.toList
+        case other                        => other.toList
+    }.distinct
+
+  private final class FakeDistinctQuery[B](
+      path: mongo4s.FieldPath,
+      filter: Filter[E],
+      decoder: mongo4s.bson.BsonDecoder[B],
+  ) extends DistinctQuery[F, S, B]:
+
+    def collation(value: com.mongodb.client.model.Collation): DistinctQuery[F, S, B]        = this
+    def maxTime(duration: scala.concurrent.duration.FiniteDuration): DistinctQuery[F, S, B] = this
+    def batchSize(n: Int): DistinctQuery[F, S, B]                                           = this
+
+    def first: F[Option[B]] = F.delay(decoded.headOption)
+    def all: F[List[B]]     = F.delay(decoded)
+
+    def stream(using Streamable[S, B]): S[B] =
+      throw UnsupportedOperationException("FakeMongoCollection: streaming distinct values needs an emitter for their type")
+
+    def attempting: DecodeAttempts[F, S, B] = new DecodeAttempts[F, S, B]:
+      def all: F[List[DecodeResult[B]]] = F.delay(distinctValues(path, filter).map(decoder.decode))
+
+      def stream(using Streamable[S, DecodeResult[B]]): S[DecodeResult[B]] =
+        throw UnsupportedOperationException("FakeMongoCollection: streaming distinct values needs an emitter for their type")
+
+    private def decoded: List[B] =
+      distinctValues(path, filter).map(decoder.decode(_).fold(error => throw error.toThrowable, identity))
 
   private final class FakeAggregateQuery[B](stages: List[Stage[E]], codecB: BsonDocumentCodec[B]) extends AggregateQuery[F, S, B]:
     def allowDiskUse(allow: Boolean): AggregateQuery[F, S, B] = this

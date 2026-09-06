@@ -383,10 +383,10 @@ appears once a write exceeds one batch, which is to say in production and not in
 
 Because `Filter`/`Update` are an AST rather than driver builders, they can be interpreted twice: once into real
 `Bson` for the server, and once against an in-memory buffer. `FakeMongoCollection` is that second interpreter —
-filters, updates, sorting, paging, projections and a subset of `aggregate` are simulated, while `distinct`, `watch`,
-`$text`, `$expr`, the geospatial operators, `Filter.Raw`, `Stage.Raw` and an update carrying `arrayFilters` throw
-`UnsupportedOperationException` naming what was asked for rather than quietly answering wrong. A fake that lies is
-worse than no fake.
+filters, updates, sorting, paging, projections, `distinct` and a subset of `aggregate` are simulated, while `watch`,
+`explain`, `$text`, `$expr`, the geospatial operators, `Filter.Raw`, `Stage.Raw` and an update carrying
+`arrayFilters` throw `UnsupportedOperationException` naming what was asked for rather than quietly answering wrong.
+A fake that lies is worse than no fake.
 
 **The aggregation subset is drawn along one line: whether MongoDB's answer is unambiguous.** `$match`, `$sort`,
 `$skip`, `$limit`, `$project`, `$count` and `$group` over `$sum`/`$avg`/`$min`/`$max`/`$first`/`$last`/`$push` all

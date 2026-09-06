@@ -25,6 +25,8 @@ part of `2.0.0` below.
   server's code. Translation happens on the `Publisher`, so every runtime and every bridge method — `one`, `option`,
   `list`, `unit`, `stream` — reports the same type for the same failure, and the driver's exception stays reachable
   as `cause`.
+- `FakeMongoCollection.distinct` is simulated, array fields flattened into their elements as the server does, and
+  checked against a real server by a parity spec.
 - `FakeMongoCollection.aggregate` now simulates `$match`, `$sort`, `$skip`, `$limit`, `$project`, `$count` and
   `$group` (with `$sum`, `$avg`, `$min`, `$max`, `$first`, `$last`, `$push`) in memory, so service code that
   aggregates is unit-testable without Docker. Anything outside that subset still throws by name, `$addToSet`

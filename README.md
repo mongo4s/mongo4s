@@ -1285,17 +1285,21 @@ Filters, updates, sorting, paging and projections are simulated, and so is a sub
 `$first`, `$last` and `$push`. That covers the pipelines most service code writes, so aggregating no longer forces a
 test to reach for Docker.
 
+`distinct` is simulated too, array fields flattened into their elements the way the server does, and so is `$slice`
+in a projection.
+
 Everything else throws `UnsupportedOperationException` naming what was asked for, rather than quietly answering
-wrong — a fake that lies is worse than no fake. That includes `distinct`, `watch`, `$text`, `$expr`, the geospatial
-operators, `Filter.Raw`, `Stage.Raw`, an update carrying `arrayFilters`, every aggregation stage outside the list
-above, and `$addToSet`, which is refused on purpose: MongoDB leaves the order of its result undefined, so no fake can
-be faithful to it. Replace-based upserts — what `upsert`/`upsertMany` go through — insert on a miss the way the
+wrong — a fake that lies is worse than no fake. That includes `watch`, `explain`, `$text` and ranking by
+`$meta textScore`, `$expr`, the geospatial operators, `Filter.Raw`, `Stage.Raw`, an update carrying `arrayFilters`,
+every aggregation stage outside the list above, and `$addToSet`, which is refused on purpose: MongoDB leaves the
+order of its result undefined, so no fake can be faithful to it. Replace-based upserts — what `upsert`/`upsertMany` go through — insert on a miss the way the
 server does; an `update`-based `UpdateOptions.upsert` that matches nothing throws instead of guessing what the
 operators would have built.
 
 One caveat carries over from `find`: where MongoDB does not define an order, neither does the fake, and the two need
-not agree. `$group` emits its buckets in the order their keys were first seen. End the pipeline with `$sort` if the
-order matters — as you would have to against a real server anyway.
+not agree. `$group` emits its buckets in the order their keys were first seen, and `distinct` the order it first met
+each value. End the pipeline with `$sort`, or sort the values yourself, if the order matters — as you would have to
+against a real server anyway.
 
 `FakeRepository` is the same idea one layer up: a real `BaseMongoRepository` over a `FakeMongoCollection`, so the
 repository logic under test is the one that ships. `repository.fake` reaches the collection underneath, for seeding
