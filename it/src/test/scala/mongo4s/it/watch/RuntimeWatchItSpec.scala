@@ -56,7 +56,7 @@ trait RuntimeWatchItSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
       val events = collecting(2)(collection.watch(WatchOptions.default[Person].startingAt(now))) {
         run(collection.insertOne(Person("bob", 30)))
         run(collection.updateOne(Field.of[Person, String](_.name).equalTo("bob"), Field.of[Person, Int](_.age).set(31)))
-        run(collection.insertOne(Person("carol", 41)))
+        run(collection.insertOne(Person("carol", 41))): Unit
       }
 
       run(client.close)

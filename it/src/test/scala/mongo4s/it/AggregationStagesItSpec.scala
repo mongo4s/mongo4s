@@ -16,7 +16,6 @@ import mongo4s.{Field, MongoClient, MongoCollection}
 import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
 import mongo4s.bson.BsonInstances.given
-import mongo4s.bson.medeia.MedeiaInstances.given
 
 /** The stages below build their BSON by hand, so what matters is that the server accepts it and answers. */
 final class AggregationStagesItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAfterAll:
@@ -29,8 +28,7 @@ final class AggregationStagesItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers
 
   type S[A] = CatsStream[IO][A]
 
-  private val nameField = Field.of[Person, String](_.name)
-  private val ageField  = Field.of[Person, Int](_.age)
+  private val ageField = Field.of[Person, Int](_.age)
 
   private def seeded(name: String): IO[MongoCollection[IO, S, Person]] =
     for

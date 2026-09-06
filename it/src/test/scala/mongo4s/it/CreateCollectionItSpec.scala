@@ -16,7 +16,6 @@ import mongo4s.{MongoClient, MongoDatabase}
 
 import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
-import mongo4s.bson.BsonInstances.given
 
 final class CreateCollectionItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAfterAll:
 

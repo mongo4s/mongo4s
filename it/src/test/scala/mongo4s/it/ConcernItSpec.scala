@@ -11,11 +11,10 @@ import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
 
 import mongo4s.cats.CatsStream
 import mongo4s.operations.Filter
-import mongo4s.{Field, MongoClient}
+import mongo4s.MongoClient
 import mongo4s.bson.direct.WireCodec
 
 import mongo4s.cats.CatsInstances.given
-import mongo4s.bson.BsonInstances.given
 
 object ConcernItSpec:
   final case class Note(id: String, body: String) derives WireCodec
