@@ -14,6 +14,10 @@ part of `2.0.0` below.
 
 - `TransactionOptions`, carrying a transaction's `readConcern`, `writeConcern`, `readPreference` and
   `maxCommitTime` — and the retry window below. Both `withTransaction` methods take one.
+- `FindQuery.selectAs[K]`, a partial read into a named tuple: `find(...).selectAs[(name: String, age: Int)]` builds
+  the projection and the decoder from one shape, so they cannot drift. A label that is not a field of the entity, or
+  one asked for at the wrong type, is a compile error. It works on a direct collection too, where a partial read was
+  not possible before, because the entity's `WireCodec` demands every modelled field.
 - Geospatial filters: `near`, `nearSphere`, `within` and `intersects` on a `Field`, over a GeoJSON `Geometry`
   vocabulary (`Point`, `LineString`, `Polygon`, and the `Multi*` forms) plus the legacy `2d` shapes in `GeoShape`.
   A polygon ring that does not close is refused rather than sent.

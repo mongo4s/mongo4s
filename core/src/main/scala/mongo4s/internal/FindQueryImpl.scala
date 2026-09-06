@@ -8,9 +8,9 @@ import com.mongodb.client.model.Collation
 import com.mongodb.reactivestreams.client.{ClientSession, FindPublisher, MongoCollection as RSMongoCollection}
 
 import mongo4s.{RsBridge, Streamable}
-import mongo4s.queries.{DecodeAttempts, FindQuery}
+import mongo4s.queries.{DecodeAttempts, FindQuery, SelectQuery}
 import mongo4s.operations.{Filter, Projection, Sort}
-import mongo4s.bson.{BsonDocumentCodec, DecodeResult, FieldNaming}
+import mongo4s.bson.{BsonDocumentCodec, BsonDocumentDecoder, DecodeResult, FieldNaming}
 
 private[mongo4s] final class FindQueryImpl[F[*], S[*], A](
     collection: RSMongoCollection[BsonDocument],
@@ -42,12 +42,15 @@ private[mongo4s] final class FindQueryImpl[F[*], S[*], A](
   def all: F[List[A]]                      = rs.list(publisher(limit))
   def stream(using Streamable[S, A]): S[A] = rs.stream(publisher(limit))
 
+  def selecting[B](selected: Projection[A], decoder: FieldNaming => BsonDocumentDecoder[B]): SelectQuery[F, S, B] =
+    SelectQueryImpl(documents(_, selected), limit, decoder(naming))
+
   def attempting: DecodeAttempts[F, S, A] = new DecodeAttempts[F, S, A]:
     def all: F[List[DecodeResult[A]]]                                    = rs.list(attemptingPublisher(limit))
     def stream(using Streamable[S, DecodeResult[A]]): S[DecodeResult[A]] = rs.stream(attemptingPublisher(limit))
   end attempting
 
-  private def documents(effectiveLimit: Option[Int]): FindPublisher[BsonDocument] =
+  private def documents(effectiveLimit: Option[Int], selected: Projection[A] = projection): FindPublisher[BsonDocument] =
     val base: FindPublisher[BsonDocument] = session match
       case Some(s) => collection.find(s, filter.toBson(naming))
       case None    => collection.find(filter.toBson(naming))
@@ -55,8 +58,8 @@ private[mongo4s] final class FindQueryImpl[F[*], S[*], A](
     var find = base
     if !sort.isEmpty
     then find = find.sort(sort.toBson(naming))
-    if !projection.isEmpty
-    then find = find.projection(projection.toBson(naming))
+    if !selected.isEmpty
+    then find = find.projection(selected.toBson(naming))
 
     skip.foreach(n => find = find.skip(n))
     effectiveLimit.foreach(n => find = find.limit(n))

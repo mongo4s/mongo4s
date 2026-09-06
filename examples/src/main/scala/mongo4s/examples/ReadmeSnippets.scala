@@ -227,6 +227,14 @@ object ReadmeSnippets:
       _      <- collection.dropIndex("name_age")
     yield listed
 
+  // --- Partial reads ---
+
+  def summaries(collection: MongoCollection[IO, S, User]): IO[List[(name: String, age: Int)]] =
+    collection.find(adults).sort(Sort.asc(Field.of[User, String](_.name))).selectAs[(name: String, age: Int)].all
+
+  def summaryNames(collection: MongoCollection[IO, S, User]): IO[List[String]] =
+    summaries(collection).map(_.map(_.name))
+
   // --- Creating a collection ---
 
   def createCollections(database: MongoDatabase[IO, S], jsonSchema: BsonDocument): IO[Unit] =

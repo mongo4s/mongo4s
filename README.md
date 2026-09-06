@@ -394,6 +394,34 @@ types — `Projection.empty` starts neutral and the first `include` or `exclude`
 an inclusion projection does not compile at all, rather than silently returning more fields than you asked for. `_id`
 is the exception: `withoutId` drops it from an inclusion projection, giving `{"field": 1, "_id": 0}`.
 
+### Partial reads
+
+`find(...).all` decodes whole entities, which means every modelled field has to be there. When you want a few
+fields rather than the document, `selectAs` names the shape you want and gives you exactly that:
+
+```scala
+val summaries = collection.find(adults).sort(Sort.asc(nameField)).selectAs[(name: String, age: Int)].all
+// F[List[(name: String, age: Int)]]
+
+summaries.map(_.map(_.name)) // fields are read by label, not by position
+```
+
+The named tuple is the whole specification. The projection sent to the server is built from its labels, and so is
+the decoder, so the two cannot drift apart — there is no second place to keep in step, and no case class and codec
+to declare for a shape you only wanted once. A label that is not a field of the entity, or a field asked for at the
+wrong type, is a compile error naming it.
+
+`selectAs` closes the chain: `filter`, `sort`, `skip` and `limit` are set before it, and `first`, `all`, `stream`
+and `attempting` after it. It works the same on a `getDirectCollection`, which is where it matters most — the
+entity's `WireCodec` demands every modelled field, so before this a partial read there was not possible at all.
+
+Labels are *derived* names, spelled through the collection's `FieldNaming` exactly as `Field.of` is, so a
+`(fullName: String)` on a `snakeCase` collection projects and reads `full_name`.
+
+One field per label: `selectAs[(city: String)]` cannot reach `address.city`, because a nested projection comes back
+as a nested document that a flat result cannot represent. Project the outer field, or read the shape through
+`getCollection` with a codec of your own.
+
 ### Results
 
 Writes report what actually happened. `UpdateResult` carries `matchedCount`, `modifiedCount` and `upsertedId`, which
@@ -884,8 +912,8 @@ yield ()
 
 The trade for that speed is strictness: derivation requires every modelled field to be present, unless its decoder
 supplies a default — which `Option` does. So a **projection that drops a field the entity declares cannot be read
-back** through a direct collection. Use `getCollection` with a `BsonDocumentCodec`, or model the projected shape as
-its own type, when you need partial reads.
+back** through the entity's own codec. That is what `selectAs` is for — see [Partial reads](#partial-reads) — and
+`getCollection` with a `BsonDocumentCodec` of your own remains the escape hatch below that.
 
 Strictness extends to BSON numeric types. A `Long` field is read with `readInt64`, an `Int` with `readInt32`, a
 `Double` with `readDouble` — the exact type the encoder writes. So a document that stores `42` as an Int32 (written

@@ -8,8 +8,8 @@ import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSM
 
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.{Effect, Field, MongoCollection, Streamable}
-import mongo4s.bson.{BsonDocumentCodec, DecodeResult, FieldNaming}
-import mongo4s.queries.{AggregateQuery, DecodeAttempts, DistinctQuery, FindQuery}
+import mongo4s.bson.{BsonDocumentCodec, BsonDocumentDecoder, DecodeResult, FieldNaming}
+import mongo4s.queries.{AggregateQuery, DecodeAttempts, DistinctQuery, FindQuery, SelectQuery}
 import mongo4s.operations.*
 import mongo4s.results.{BulkWriteResult, DeleteResult, InsertManyResult, InsertOneResult, UpdateResult}
 
@@ -377,20 +377,42 @@ final class FakeMongoCollection[F[*], S[*], E](
     def all: F[List[E]]                      = F.delay(results)
     def stream(using Streamable[S, E]): S[E] = emit(results)
 
+    def selecting[B](selected: Projection[E], decoder: FieldNaming => BsonDocumentDecoder[B]): SelectQuery[F, S, B] =
+      val decode            = decoder(naming).decodeDocument
+      val selectedDocuments = () => sourceDocuments.map(applyProjection(_, selected)).map(decode)
+
+      new SelectQuery[F, S, B]:
+        def first: F[Option[B]] = F.delay(selectedDocuments().headOption.map(orThrow))
+        def all: F[List[B]]     = F.delay(selectedDocuments().map(orThrow))
+
+        def stream(using Streamable[S, B]): S[B] =
+          throw UnsupportedOperationException("FakeMongoCollection: streaming a selection needs an emitter for its element type")
+
+        def attempting: DecodeAttempts[F, S, B] = new DecodeAttempts[F, S, B]:
+          def all: F[List[DecodeResult[B]]] = F.delay(selectedDocuments())
+
+          def stream(using Streamable[S, DecodeResult[B]]): S[DecodeResult[B]] =
+            throw UnsupportedOperationException("FakeMongoCollection: streaming a selection needs an emitter for its element type")
+    end selecting
+
+    private def orThrow[B](result: DecodeResult[B]): B = result.fold(error => throw error.toThrowable, identity)
+
     def attempting: DecodeAttempts[F, S, E] = new DecodeAttempts[F, S, E]:
       def all: F[List[DecodeResult[E]]] = F.delay(documents.map(codec.decodeDocument))
 
       def stream(using Streamable[S, DecodeResult[E]]): S[DecodeResult[E]] = emitAttempts(documents.map(codec.decodeDocument))
 
-    private def documents: List[BsonDocument] =
+    private def sourceDocuments: List[BsonDocument] =
       val ordered =
         if ordering.isEmpty
         then matching(filter)
         else matching(filter).sortWith(before)
 
       val afterSkip = skipped.fold(ordered)(ordered.drop)
-      limited.fold(afterSkip)(afterSkip.take).map(applyProjection(_, projection))
-    end documents
+      limited.fold(afterSkip)(afterSkip.take)
+    end sourceDocuments
+
+    private def documents: List[BsonDocument] = sourceDocuments.map(applyProjection(_, projection))
 
     private def results: List[E] =
       documents.map { document =>

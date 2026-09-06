@@ -140,8 +140,16 @@ library.
 
 **It is strict by construction, and that is a trade, not an oversight.** Derivation requires every modelled field to
 be present unless its decoder supplies a default (`Option` does). So a projection that drops a modelled field cannot
-be read back through a direct collection — use `getCollection` with a `BsonDocumentCodec`, or model the projected
-shape as its own type. Strictness catches the far more common bug, which is a document that quietly lost a field.
+be read back through the entity's own codec. Strictness catches the far more common bug, which is a document that
+quietly lost a field, so the codec keeps it — and `selectAs` answers the partial read instead.
+
+**`selectAs` names the shape rather than deriving it from the query.** `find(...).selectAs[(name: String, age: Int)]`
+builds both the projection and the decoder from one named tuple, so they cannot drift apart. Reading the shape off
+the selectors instead — `select(_.name, _.age)`, with the type inferred — was tried first and does not work:
+`NamedTuple[N, V]` is opaque with `V` as its lower bound, so a `transparent inline` result widens to the bare tuple
+and the labels are gone by the time the caller sees it. The bare tuple still *conforms* to the named type through
+that same lower bound, which makes the failure look like success until a field is read by name. Naming the shape in
+the signature keeps the type where the compiler cannot approximate it away.
 
 `aggregate` and `distinct` on a direct collection still go through `BsonDocumentCodec`/`BsonDecoder`, because their
 output shape is not `A`. They are also not the hot path, so the inconsistency buys more than it costs.
