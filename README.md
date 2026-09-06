@@ -1211,12 +1211,22 @@ For unit tests, `FakeMongoCollection` (in `mongo4s-testkit`, a published module 
 `Filter`/`Update`/`Field` AST the real driver interprets is interpreted against an in-memory buffer instead, so
 repository logic is testable without a running MongoDB.
 
-Filters, updates, sorting, paging and projections are simulated. `aggregate`, `distinct`, `watch`, `$text`, `$expr`,
-the geospatial operators, `Filter.Raw` and an update carrying `arrayFilters` throw `UnsupportedOperationException`
-naming what was asked for,
-rather than quietly answering wrong — a fake that lies is worse than no fake. Replace-based upserts — what
-`upsert`/`upsertMany` go through — insert on a miss the way the server does; an `update`-based `UpdateOptions.upsert`
-that matches nothing throws instead of guessing what the operators would have built.
+Filters, updates, sorting, paging and projections are simulated, and so is a subset of `aggregate`:
+`$match`, `$sort`, `$skip`, `$limit`, `$project`, `$count` and `$group` with `$sum`, `$avg`, `$min`, `$max`,
+`$first`, `$last` and `$push`. That covers the pipelines most service code writes, so aggregating no longer forces a
+test to reach for Docker.
+
+Everything else throws `UnsupportedOperationException` naming what was asked for, rather than quietly answering
+wrong — a fake that lies is worse than no fake. That includes `distinct`, `watch`, `$text`, `$expr`, the geospatial
+operators, `Filter.Raw`, `Stage.Raw`, an update carrying `arrayFilters`, every aggregation stage outside the list
+above, and `$addToSet`, which is refused on purpose: MongoDB leaves the order of its result undefined, so no fake can
+be faithful to it. Replace-based upserts — what `upsert`/`upsertMany` go through — insert on a miss the way the
+server does; an `update`-based `UpdateOptions.upsert` that matches nothing throws instead of guessing what the
+operators would have built.
+
+One caveat carries over from `find`: where MongoDB does not define an order, neither does the fake, and the two need
+not agree. `$group` emits its buckets in the order their keys were first seen. End the pipeline with `$sort` if the
+order matters — as you would have to against a real server anyway.
 
 `FakeRepository` is the same idea one layer up: a real `BaseMongoRepository` over a `FakeMongoCollection`, so the
 repository logic under test is the one that ships. `repository.fake` reaches the collection underneath, for seeding

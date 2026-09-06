@@ -12,6 +12,11 @@ part of `2.0.0` below.
 
 ### Added
 
+- `FakeMongoCollection.aggregate` now simulates `$match`, `$sort`, `$skip`, `$limit`, `$project`, `$count` and
+  `$group` (with `$sum`, `$avg`, `$min`, `$max`, `$first`, `$last`, `$push`) in memory, so service code that
+  aggregates is unit-testable without Docker. Anything outside that subset still throws by name, `$addToSet`
+  included — MongoDB leaves the order of its result undefined. A parity spec checks the subset against a real server,
+  BSON types and all.
 - `ScalarWireCodecBenchmark` and `AggregateBenchmark`, and the numbers they produced, in
   [BENCHMARKS.md](BENCHMARKS.md): what a bridged scalar costs, and what `aggregateDirect` is worth against a real
   server at ten documents and at ten thousand.

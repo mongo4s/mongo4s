@@ -327,6 +327,7 @@ lazy val it = project
     rapid,
     bsonMedeia,
     repositories,
+    testkit,
   )
 
 lazy val root = project

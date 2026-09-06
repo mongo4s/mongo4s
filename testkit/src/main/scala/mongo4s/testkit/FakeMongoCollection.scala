@@ -2,7 +2,7 @@ package mongo4s.testkit
 
 import scala.collection.mutable
 
-import org.bson.{BsonDocument, BsonString, BsonValue}
+import org.bson.{BsonArray, BsonDocument, BsonDouble, BsonInt32, BsonInt64, BsonNull, BsonString, BsonValue}
 import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
@@ -200,8 +200,8 @@ final class FakeMongoCollection[F[*], S[*], E](
       BulkWriteResult(inserted, matched, modified, deleted, upserted.toMap)
     }
 
-  def aggregate[B](pipeline: Seq[Stage[E]])(using session: Option[ClientSession])(using BsonDocumentCodec[B]): AggregateQuery[F, S, B] =
-    throw UnsupportedOperationException("FakeMongoCollection: aggregate is not simulated")
+  def aggregate[B](pipeline: Seq[Stage[E]])(using session: Option[ClientSession])(using codecB: BsonDocumentCodec[B]): AggregateQuery[F, S, B] =
+    FakeAggregateQuery(pipeline.toList, codecB)
 
   def distinct[B](field: Field[E, B], filter: Filter[E])(using
       session: Option[ClientSession]
@@ -353,6 +353,118 @@ final class FakeMongoCollection[F[*], S[*], E](
           case None         => document
           case Some(nested) => copyOf(document).append(seg, unsetAt(nested, rest))
 
+  private def orderedBy(sort: Sort[E])(left: BsonDocument, right: BsonDocument): Boolean =
+    sort.fields.view.map { (path, ascending) =>
+      val comparison = (at(left, path), at(right, path)) match
+        case (Some(l), Some(r)) => BsonOrdering.compare(l, r)
+        case (None, Some(_))    => -1
+        case (Some(_), None)    => 1
+        case (None, None)       => 0
+      if ascending then comparison else -comparison
+    }.find(_ != 0).exists(_ < 0)
+
+  private def runPipeline(stages: List[Stage[E]]): List[BsonDocument] =
+    stages.foldLeft(storage.toList)(runStage)
+
+  private def runStage(documents: List[BsonDocument], stage: Stage[E]): List[BsonDocument] = stage match
+    case Stage.MatchStage(filter)      => documents.filter(matches(_, filter))
+    case Stage.SortStage(sort)         => documents.sortWith(orderedBy(sort))
+    case Stage.Skip(n)                 => documents.drop(n)
+    case Stage.Limit(n)                => documents.take(n)
+    case Stage.ProjectStage(selected)  => documents.map(applyProjection(_, selected))
+    case Stage.Count(fieldName)        => List(BsonDocument(fieldName, BsonInt32(documents.size)))
+    case Stage.Group(by, accumulators) => grouped(documents, by, accumulators)
+    case other                         =>
+      throw UnsupportedOperationException(s"FakeMongoCollection: ${other.toBson(naming).getFirstKey} is not simulated")
+
+  private def grouped(
+      documents: List[BsonDocument],
+      by: Option[mongo4s.FieldPath],
+      accumulators: List[(String, Accumulator[E])],
+  ): List[BsonDocument] =
+    val keyed = documents.map(document => keyOf(document, by) -> document)
+
+    keyed.map(_._1).distinct.map { key =>
+      val members = keyed.collect { case (candidate, document) if candidate == key => document }
+      accumulators.foldLeft(BsonDocument("_id", key)) { (acc, entry) =>
+        acc.append(entry._1, accumulated(entry._2, members))
+      }
+    }
+  end grouped
+
+  private def keyOf(document: BsonDocument, by: Option[mongo4s.FieldPath]): BsonValue =
+    by.flatMap(at(document, _)).getOrElse(BsonNull.VALUE)
+
+  private def accumulated(accumulator: Accumulator[E], documents: List[BsonDocument]): BsonValue = accumulator match
+    case Accumulator.Count()           => BsonInt32(documents.size)
+    case Accumulator.Sum(expression)   => summed(valuesOf(expression, documents))
+    case Accumulator.Avg(expression)   => averaged(valuesOf(expression, documents))
+    case Accumulator.Min(expression)   => extreme(valuesOf(expression, documents), _ < 0)
+    case Accumulator.Max(expression)   => extreme(valuesOf(expression, documents), _ > 0)
+    case Accumulator.First(expression) => valuesOf(expression, documents).headOption.getOrElse(BsonNull.VALUE)
+    case Accumulator.Last(expression)  => valuesOf(expression, documents).lastOption.getOrElse(BsonNull.VALUE)
+    case Accumulator.Push(expression)  => BsonArray(valuesOf(expression, documents).asJava)
+
+    case Accumulator.AddToSet(_) =>
+      throw UnsupportedOperationException(
+        "FakeMongoCollection: $addToSet is not simulated because MongoDB leaves the order of its result undefined"
+      )
+
+    case Accumulator.Raw(document) =>
+      throw UnsupportedOperationException(s"FakeMongoCollection: the raw accumulator $document is not simulated")
+
+  private def valuesOf(expression: Accumulator.Expression[E], documents: List[BsonDocument]): List[BsonValue] =
+    expression match
+      case Accumulator.Expression.FieldRef(path) => documents.flatMap(at(_, path))
+      case Accumulator.Expression.Literal(value) => documents.map(_ => value)
+
+  private def summed(values: List[BsonValue]): BsonValue =
+    if values.exists(_.isDecimal128)
+    then throw UnsupportedOperationException("FakeMongoCollection: $sum over a Decimal128 is not simulated")
+    else
+      val numbers = values.filter(_.isNumber)
+
+      if numbers.exists(_.isDouble)
+      then BsonDouble(numbers.map(_.asNumber.doubleValue).sum)
+      else
+        val total = numbers.map(_.asNumber.longValue).sum
+        if numbers.forall(_.isInt32) && total.isValidInt then BsonInt32(total.toInt) else BsonInt64(total)
+  end summed
+
+  private def averaged(values: List[BsonValue]): BsonValue =
+    if values.exists(_.isDecimal128)
+    then throw UnsupportedOperationException("FakeMongoCollection: $avg over a Decimal128 is not simulated")
+    else
+      val numbers = values.filter(_.isNumber)
+      if numbers.isEmpty then BsonNull.VALUE else BsonDouble(numbers.map(_.asNumber.doubleValue).sum / numbers.size)
+
+  private def extreme(values: List[BsonValue], keep: Int => Boolean): BsonValue =
+    values.reduceOption((left, right) => if keep(BsonOrdering.compare(left, right)) then left else right).getOrElse(BsonNull.VALUE)
+
+  private final class FakeAggregateQuery[B](stages: List[Stage[E]], codecB: BsonDocumentCodec[B]) extends AggregateQuery[F, S, B]:
+    def allowDiskUse(allow: Boolean): AggregateQuery[F, S, B] = this
+
+    def hint(keys: BsonDocument): AggregateQuery[F, S, B]                                    = this
+    def collation(value: com.mongodb.client.model.Collation): AggregateQuery[F, S, B]        = this
+    def maxTime(duration: scala.concurrent.duration.FiniteDuration): AggregateQuery[F, S, B] = this
+    def batchSize(n: Int): AggregateQuery[F, S, B]                                           = this
+    def comment(value: String): AggregateQuery[F, S, B]                                      = this
+
+    def first: F[Option[B]] = F.delay(decoded.headOption)
+    def all: F[List[B]]     = F.delay(decoded)
+
+    def stream(using Streamable[S, B]): S[B] =
+      throw UnsupportedOperationException("FakeMongoCollection: streaming an aggregation needs an emitter for its output type")
+
+    def attempting: DecodeAttempts[F, S, B] = new DecodeAttempts[F, S, B]:
+      def all: F[List[DecodeResult[B]]] = F.delay(runPipeline(stages).map(codecB.decodeDocument))
+
+      def stream(using Streamable[S, DecodeResult[B]]): S[DecodeResult[B]] =
+        throw UnsupportedOperationException("FakeMongoCollection: streaming an aggregation needs an emitter for its output type")
+
+    private def decoded: List[B] =
+      runPipeline(stages).map(codecB.decodeDocument(_).fold(error => throw error.toThrowable, identity))
+
   private final class FakeFindQuery(
       filter: Filter[E],
       projection: Projection[E] = Projection.empty[E],
@@ -406,7 +518,7 @@ final class FakeMongoCollection[F[*], S[*], E](
       val ordered =
         if ordering.isEmpty
         then matching(filter)
-        else matching(filter).sortWith(before)
+        else matching(filter).sortWith(orderedBy(ordering))
 
       val afterSkip = skipped.fold(ordered)(ordered.drop)
       limited.fold(afterSkip)(afterSkip.take)
@@ -420,16 +532,6 @@ final class FakeMongoCollection[F[*], S[*], E](
           .decodeDocument(document)
           .fold(error => throw error.toThrowable, identity)
       }
-
-    private def before(left: BsonDocument, right: BsonDocument): Boolean =
-      ordering.fields.view.map { (path, ascending) =>
-        val comparison = (at(left, path), at(right, path)) match
-          case (Some(l), Some(r)) => BsonOrdering.compare(l, r)
-          case (None, Some(_))    => -1
-          case (Some(_), None)    => 1
-          case (None, None)       => 0
-        if ascending then comparison else -comparison
-      }.find(_ != 0).exists(_ < 0)
 
 private object BsonOrdering:
   def compare(a: BsonValue, b: BsonValue): Int =

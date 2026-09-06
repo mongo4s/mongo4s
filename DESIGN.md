@@ -317,10 +317,25 @@ appears once a write exceeds one batch, which is to say in production and not in
 
 Because `Filter`/`Update` are an AST rather than driver builders, they can be interpreted twice: once into real
 `Bson` for the server, and once against an in-memory buffer. `FakeMongoCollection` is that second interpreter —
-filters, updates, sorting, paging and projections are simulated, while `aggregate`, `distinct`, `watch`, `$text`,
-the geospatial operators,
-`$expr`, `Filter.Raw` and an update carrying `arrayFilters` throw `UnsupportedOperationException` naming what was
-asked for rather than quietly answering wrong. A fake that lies is worse than no fake.
+filters, updates, sorting, paging, projections and a subset of `aggregate` are simulated, while `distinct`, `watch`,
+`$text`, `$expr`, the geospatial operators, `Filter.Raw`, `Stage.Raw` and an update carrying `arrayFilters` throw
+`UnsupportedOperationException` naming what was asked for rather than quietly answering wrong. A fake that lies is
+worse than no fake.
+
+**The aggregation subset is drawn along one line: whether MongoDB's answer is unambiguous.** `$match`, `$sort`,
+`$skip`, `$limit`, `$project`, `$count` and `$group` over `$sum`/`$avg`/`$min`/`$max`/`$first`/`$last`/`$push` all
+have exactly one right answer, down to the BSON type — `$count` and a `$sum` of `Int32`s yield an `Int32`, `$avg`
+always yields a `Double`. `$addToSet` does not: MongoDB leaves the order of its result undefined, so any array a fake
+returned would be a guess a test could then depend on. It is refused for that reason rather than for effort, as are
+`$sum`/`$avg` over `Decimal128`, whose rounding is the server's to define.
+
+The subset is not maintained by reading the manual. `FakeAggregateParityItSpec` runs the same pipelines through the
+fake and through a real MongoDB and compares the raw `BsonDocument`s, so a divergence in value *or* in numeric width
+fails the build. That spec is the reason the paragraph above can state the types as fact.
+
+Order is the one thing the fake deliberately does not promise: where MongoDB leaves it undefined, so does the fake,
+and the two need not agree — `$group` emits buckets in first-seen order, exactly as `find` without a `Sort` returns
+insertion order. A pipeline whose output order matters has to end in `$sort` against a real server too.
 
 It ships as its own published module, `mongo4s-testkit`, so it is usable from a consumer's own tests rather than only
 inside this build. Alongside it, `FakeRepository` is a `BaseMongoRepository` over a `FakeMongoCollection` — the real
