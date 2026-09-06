@@ -8,7 +8,7 @@ import com.mongodb.client.model.{Collation, TimeSeriesGranularity}
 import com.mongodb.client.model.changestream.FullDocument
 
 import mongo4s.cats.{CatsStream, MongoClientResource}
-import mongo4s.results.{BulkWriteResult, UpdateResult}
+import mongo4s.results.{BulkWriteResult, ExplainSummary, UpdateResult}
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.repositories.{BaseMongoRepository, Page}
 import mongo4s.bson.{BsonDocumentCodec, BsonTypeName, DecodeResult, FieldNaming}
@@ -379,6 +379,9 @@ object ReadmeSnippets:
 
   def queryPlan(collection: MongoCollection[IO, S, User], adults: Filter[User], nameField: Field[User, String]): IO[BsonDocument] =
     collection.find(adults).sort(Sort.asc(nameField)).explain()
+
+  def planSummary(collection: MongoCollection[IO, S, User], adults: Filter[User]): IO[ExplainSummary] =
+    collection.find(adults).explain(ExplainVerbosity.EXECUTION_STATS).map(ExplainSummary.of)
 
   def measuredPlan(collection: MongoCollection[IO, S, User], adults: Filter[User]): IO[BsonDocument] =
     collection.find(adults).explain(ExplainVerbosity.EXECUTION_STATS)

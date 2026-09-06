@@ -11,7 +11,8 @@ import org.bson.{BsonDocument, BsonInt32, BsonString}
 import com.mongodb.ExplainVerbosity
 
 import mongo4s.cats.CatsStream
-import mongo4s.operations.{Index, Stage}
+import mongo4s.operations.{Index, Sort, Stage}
+import mongo4s.results.ExplainSummary
 import mongo4s.{Field, MongoClient, MongoCollection}
 
 import scala.concurrent.duration.given
@@ -89,6 +90,90 @@ final class ExplainItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAn
         yield (planner.containsKey("executionStats"), stats.containsKey("executionStats"))
 
       program.timeout(30.seconds).asserting(_ shouldBe (false, true))
+    }
+  }
+
+  "ExplainSummary" should {
+
+    "name the index a plan used" in {
+      val program =
+        for
+          collection <- seeded("summary_indexed")
+          summary    <- collection.find(email.equalTo("a@b.c")).explain().map(ExplainSummary.of)
+        yield summary
+
+      program.timeout(30.seconds).asserting { summary =>
+        summary.indexes shouldBe List("email_1")
+        summary.usedIndex shouldBe true
+        summary.scannedCollection shouldBe false
+      }
+    }
+
+    "report a collection scan, with no index to name" in {
+      val program =
+        for
+          collection <- seeded("summary_collscan")
+          summary    <- collection.find(city.equalTo("berlin")).explain().map(ExplainSummary.of)
+        yield summary
+
+      program.timeout(30.seconds).asserting { summary =>
+        summary.indexes shouldBe empty
+        summary.scannedCollection shouldBe true
+      }
+    }
+
+    "tell an index-provided order apart from a blocking sort" in {
+      val program =
+        for
+          collection <- seeded("summary_sort")
+          byIndex    <- collection.find().sort(Sort.asc(email)).explain().map(ExplainSummary.of)
+          inMemory   <- collection.find().sort(Sort.asc(city)).explain().map(ExplainSummary.of)
+        yield (byIndex.sortedInMemory, inMemory.sortedInMemory)
+
+      program.timeout(30.seconds).asserting(_ shouldBe (false, true))
+    }
+
+    "carry execution counts only when they were asked for" in {
+      val program =
+        for
+          collection <- seeded("summary_stats")
+          planner    <- collection.find(email.equalTo("a@b.c")).explain().map(ExplainSummary.of)
+          measured   <- collection
+                          .find(email.equalTo("a@b.c"))
+                          .explain(ExplainVerbosity.EXECUTION_STATS)
+                          .map(ExplainSummary.of)
+        yield (planner.execution, measured.execution)
+
+      program.timeout(30.seconds).asserting { (planner, measured) =>
+        planner shouldBe None
+        measured.map(_.returned) shouldBe Some(1L)
+        measured.map(_.docsExamined) shouldBe Some(1L)
+      }
+    }
+
+    "read the same summary out of both shapes an aggregation explain can take" in {
+      val program =
+        for
+          collection <- seeded("summary_shapes")
+          optimised  <- collection
+                          .aggregate[BsonDocument](Seq(Stage.matching(email.equalTo("a@b.c"))))
+                          .explain()
+          staged     <- collection
+                          .aggregate[BsonDocument](
+                            Seq(Stage.groupBy(city)("n" -> mongo4s.operations.Accumulator.count[BsonDocument]))
+                          )
+                          .explain()
+        yield (optimised, staged)
+
+      program.timeout(30.seconds).asserting { (optimised, staged) =>
+        optimised.containsKey("queryPlanner") shouldBe true
+        optimised.containsKey("stages") shouldBe false
+        staged.containsKey("stages") shouldBe true
+        staged.containsKey("queryPlanner") shouldBe false
+
+        ExplainSummary.of(optimised).indexes shouldBe List("email_1")
+        ExplainSummary.of(staged).scannedCollection shouldBe true
+      }
     }
   }
 

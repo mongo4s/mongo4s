@@ -425,9 +425,34 @@ val measured: IO[BsonDocument] =
 ```
 
 It is on `find` and on `aggregate`, runs the query the builder had already produced — options, hint and collation
-included — and returns the server's plan as a `BsonDocument`. Not a modelled type: the shape of an explain document
-depends on the server version and on whether the collection is sharded, so anything typed here would be a guess with
-a short shelf life. `explain` on `aggregate` describes the whole pipeline, not the `$limit`-ed form `first` sends.
+included — and returns the server's plan as a `BsonDocument`. `explain` on `aggregate` describes the whole pipeline,
+not the `$limit`-ed form `first` sends.
+
+The document stays a document because an explain result is not one shape. It is a union that depends on how the
+server chose to optimise: the same `aggregate(...).explain()` call returns a top-level `queryPlanner` when MongoDB
+collapses the pipeline into a plain query, and a top-level `stages` array when it does not. Inside, the plan is a
+recursive tree over an open set of stage names, each carrying its own fields, with a layer per shard on a sharded
+cluster — and the server stamps `explainVersion` on it precisely because it reserves the right to change.
+
+`ExplainSummary` types the part that *is* stable — the questions you actually ask of a plan:
+
+```scala
+import mongo4s.results.ExplainSummary
+
+val summary: IO[ExplainSummary] =
+  collection.find(adults).explain(ExplainVerbosity.EXECUTION_STATS).map(ExplainSummary.of)
+
+// summary.indexes            List("age_1")
+// summary.usedIndex          true
+// summary.scannedCollection  false
+// summary.sortedInMemory     false — a SORT stage means the order was not index-provided
+// summary.execution          Some(ExecutionSummary(returned, keysExamined, docsExamined, durationMillis))
+```
+
+It reads by walking for field names rather than by following a fixed path, so it answers the same way for a find, a
+pipeline the server optimised into a find, and a pipeline it kept as stages. `execution` is present only when the
+plan was actually run — `ExplainVerbosity.EXECUTION_STATS` or higher. It is a summary, not a model of the output:
+when it cannot recognise something it says nothing rather than guessing, and the full document is still there.
 
 ### Partial reads
 

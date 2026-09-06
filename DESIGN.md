@@ -203,10 +203,32 @@ whether the server can serve it from an index, and until now nothing in `mongo4s
 the publisher the builder had already configured, so what is explained is the query that would have run, hint and
 collation included — not a reconstruction of it.
 
-Its result stays a `BsonDocument` on purpose. The explain output is one of the least stable shapes MongoDB
-publishes: it differs by server version, by verbosity, and between a standalone and a sharded cluster, where the
-winning plan gains a layer per shard. A case class over that would be a guess that compiles and then quietly stops
-matching what the server sends. The `it` spec asserts on `IXSCAN`/`COLLSCAN` for the same reason.
+Its result stays a `BsonDocument`, and that was checked against a real server rather than assumed. Three findings
+decided it:
+
+- **The top level is a union chosen by the server, not by the caller.** `aggregate(...).explain()` on
+  `$match + $limit` came back with a top-level `queryPlanner` and `optimizedPipeline: true`, because MongoDB
+  collapsed the pipeline into a plain query; the same call on a `$group` came back with a top-level `stages` array
+  whose first element wraps an entire `queryPlanner` under `$cursor`. One method, two structures, and which one you
+  get depends on an optimisation decision you cannot see from the call site.
+- **The plan is a recursive tree over an open set of stages**, each with its own fields — `COLLSCAN` carries
+  `direction`, `IXSCAN` carries `keyPattern`/`indexBounds`/`multiKeyPaths`, `LIMIT` carries `limitAmount`,
+  `PROJECTION_SIMPLE` carries `transformBy` — and a sharded cluster adds a layer per shard.
+- **The server versions it.** Every response carries `explainVersion: "1"`, which is the server saying it intends to
+  change the format.
+
+A case class mirroring that would compile today and quietly stop matching later. So the raw document is the API.
+
+What *is* stable is the handful of questions a plan gets asked, and `ExplainSummary` types those: which indexes were
+used, which stages appeared, whether a `COLLSCAN` or a blocking `SORT` is in there, and the four execution counters.
+It derives them by walking the document for field names rather than by following a path, which is why one summary
+type covers all three observed shapes — and why the array case is tested, since that is how both a staged pipeline
+and a sharded plan nest.
+
+This is deliberately the opposite call from `MongoError.DuplicateKey`, which refuses to name the index it violated.
+The difference is the source: there the only thing on offer is a human-readable sentence, and parsing prose is a
+guess. Here the input is structured, documented BSON with field names stable across every shape observed, and
+anything unrecognised produces an empty summary rather than a wrong one.
 
 ## Errors the server raises
 
