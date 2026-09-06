@@ -170,6 +170,11 @@ asterisk. `aggregateDirect[B]` takes a `WireCodec[B]` instead and registers it t
 registers the entity's, so the output is read straight off the wire. It carries the strictness with it — the same
 numeric-width rules apply to the pipeline's output as to a stored entity.
 
+The size of that asterisk is now measured rather than assumed: over ten thousand documents `aggregateDirect` is 1.6×
+the bridged path against a real server, and over ten it is a wash, because the round trip is the whole cost at that
+scale. Both halves are in [BENCHMARKS.md](BENCHMARKS.md); the second half is the reason `aggregate` was never
+deprecated in favour of it.
+
 `distinct` is left alone deliberately: it reads one `BsonValue` per result rather than a document, so there is no
 intermediate tree to skip and nothing to win.
 

@@ -97,6 +97,55 @@ all, not from how well it is built.
 In a typical CRUD workload the network round trip dwarfs all of this (see below); it matters for bulk paths — large
 cursor streams, ETL, aggregation over big result sets.
 
+Both tables above use an entity of `String`/`Int`/`Double`/`Boolean`/`List`/nested-object fields — every one of them
+written natively by every backend. That is the best case for `WireCodec`, and the next table is the one that is not.
+
+## Scalar fields — native vs bridged
+
+A type `bson-direct` has no `ScalarWireCodec` for falls back to its `BsonEncoder`/`BsonDecoder`, which materializes one
+`org.bson.BsonValue` per field — the very allocation the path exists to avoid.
+[`ScalarWireCodecBenchmark`](benchmarks/src/main/scala/mongo4s/benchmarks/ScalarWireCodecBenchmark.scala) measures what
+that costs, on an entity of seven fields where four are `ObjectId`, `UUID`, `Instant` and `BigDecimal`:
+
+```bash
+sbt "benchmarks/Jmh/run -f 2 -prof gc ScalarWireCodecBenchmark"
+```
+
+| Direction | Native `ScalarWireCodec` | Through the `BsonValue` bridge |
+| --- | ---: | ---: |
+| Encode | **~4.48M ops/s**, 1800 B/op | ~3.91M ops/s, 2064 B/op |
+| Decode | **~3.49M ops/s**, 1248 B/op | ~2.21M ops/s, 1736 B/op |
+
+Decode is where it shows: **1.57×** the throughput and **28%** less garbage, four fields out of seven. Encode gains
+much less (**1.14×**, 13% less garbage) because building a `BsonDateTime` or a `BsonObjectId` on the way out is cheap;
+reading one back means allocating it *and* walking the `BsonDecoder`'s type checks.
+
+Both columns write byte-identical BSON — the bridge is not a different format, only a slower way to the same bytes.
+
+## Aggregation through a cursor — real `MongoDB`
+
+The tables above measure a codec in isolation. [`AggregateBenchmark`](benchmarks/src/main/scala/mongo4s/benchmarks/AggregateBenchmark.scala)
+asks whether any of it survives a real server: the same `$match` pipeline, the same collection, decoded three ways —
+`aggregateDirect` (AST-free), `aggregate` through `DocumentCodecBridge` (the same `WireCodec`, forced to materialize a
+`BsonDocument`), and `aggregate` through `medeia`.
+
+```bash
+docker run -d --name mongo4s-bench -p 27018:27017 mongo:7
+sbt "benchmarks/Jmh/run -f 1 AggregateBenchmark"
+```
+
+| Documents returned | `aggregateDirect` | `aggregate` + bridge | `aggregate` + `medeia` |
+| ---: | ---: | ---: | ---: |
+| 10 | 5430 ops/s | 5384 ops/s | 5399 ops/s |
+| 10000 | **119 ops/s** | 75 ops/s | 94 ops/s |
+
+**Both rows are the point.** At ten documents the three are indistinguishable — the round trip is everything and the
+codec is noise, which is the honest answer for most CRUD. At ten thousand the decode dominates instead, and
+`aggregateDirect` is **1.6×** the bridged path and **1.3×** `medeia`, *including* the network round trip.
+
+So the AST-free claim for `aggregate` is worth what it says on bulk reads and nothing at all on small ones. Pick
+`aggregateDirect` for cursors that return a lot; below that it is a wash and either call is fine.
+
 ## Runtime overhead — real MongoDB, every backend
 
 [`RuntimeBenchmark`](benchmarks/src/main/scala/mongo4s/benchmarks/RuntimeBenchmark.scala) runs the same

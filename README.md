@@ -705,6 +705,10 @@ produced, exactly as they do for an entity read through `getDirectCollection`. `
 On a collection opened with `getCollection` the same call still works — the `WireCodec` is bridged to a document
 codec — so the method is about the codec you have, not about which constructor you used.
 
+It is worth reaching for when the pipeline returns *a lot*. Measured against a real MongoDB it is **1.6×** the
+bridged path over ten thousand documents and indistinguishable from it over ten, where the round trip is all there is
+— see [BENCHMARKS.md](BENCHMARKS.md#aggregation-through-a-cursor--real-mongodb).
+
 ### Indexes
 
 `Index[E]` is built from the same field selectors, and carries the options MongoDB attaches to an index:
