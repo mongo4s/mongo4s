@@ -105,7 +105,9 @@ object Index:
 
   def ascending[E, A](field: Field[E, A]): Index[E]   = empty[E].ascending(field)
   def descending[E, A](field: Field[E, A]): Index[E]  = empty[E].descending(field)
+  def text[E, A](field: Field[E, A]): Index[E]        = empty[E].text(field)
   def hashed[E, A](field: Field[E, A]): Index[E]      = empty[E].hashed(field)
+  def geo2d[E, A](field: Field[E, A]): Index[E]       = empty[E].geo2d(field)
   def geo2dsphere[E, A](field: Field[E, A]): Index[E] = empty[E].geo2dsphere(field)
   def unique[E, A](field: Field[E, A]): Index[E]      = empty[E].ascending(field).withUnique
 

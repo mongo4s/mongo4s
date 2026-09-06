@@ -178,6 +178,24 @@ deprecated in favour of it.
 `distinct` is left alone deliberately: it reads one `BsonValue` per result rather than a document, so there is no
 intermediate tree to skip and nothing to win.
 
+## `$slice` and `$meta` are shapes the AST was missing
+
+`Sort` used to be a list of `(FieldPath, Boolean)`, which can say ascending or descending and nothing else. `$text`
+had been supported as a filter since 2.0 while the thing you almost always do with it — rank by relevance — had no
+representation at all, so the feature was half a feature. `SortOrder` replaces the boolean; `TextScore` renders
+`{"$meta": "textScore"}` and takes an output field name rather than a model field, because that name is invented by
+the query and must not go through `FieldNaming`.
+
+`$slice` is the other shape that did not fit: it is neither an inclusion nor an exclusion, which is exactly why the
+two-type split could not express it. Rather than add a fourth projection type, all three carry a list of slices, so
+`slice` chains onto any of them without committing the projection either way — which matches what the server
+accepts. The fake simulates it, because taking the first or last N of an array has one right answer; the parity spec
+checks that answer against a real server for all three forms.
+
+Sorting by text score is the opposite case and the fake refuses it: a score only exists where a text index does.
+That check runs when the sort is applied rather than inside the comparator, because a comparator is never called for
+a single-document result and the refusal would have depended on how much data a test happened to insert.
+
 ## `explain` returns a document, not a type
 
 The point of a `Filter` AST is that the query is a value you can build and pass around; the question that follows is

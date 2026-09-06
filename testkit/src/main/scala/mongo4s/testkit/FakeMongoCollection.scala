@@ -315,21 +315,39 @@ final class FakeMongoCollection[F[*], S[*], E](
     codec.decodeDocument(applyProjection(document, projection)).toOption
 
   private def applyProjection(document: BsonDocument, projection: Projection[E]): BsonDocument =
-    projection match
-      case Projection.Everything() => document
+    val projected = projection match
+      case Projection.Everything(_) => document
 
-      case Projection.Exclude(fields) =>
+      case Projection.Exclude(fields, _) =>
         fields.foldLeft(document)((acc, path) => unsetAt(acc, storedSegments(path)))
 
-      case Projection.Include(fields, withId) =>
-        val kept = fields.foldLeft(BsonDocument()) { (acc, path) =>
+      case Projection.Include(fields, withId, slices) =>
+        val kept = (fields ++ slices.map(_._1)).foldLeft(BsonDocument()) { (acc, path) =>
           at(document, path).fold(acc)(value => setAt(acc, storedSegments(path), value))
         }
 
         if withId
         then Option(document.get("_id")).fold(kept)(id => kept.append("_id", id))
         else kept
+
+    projection.slices.foldLeft(projected) { (acc, entry) =>
+      at(acc, entry._1) match
+        case Some(array) if array.isArray =>
+          setAt(acc, storedSegments(entry._1), sliced(array.asArray, entry._2))
+        case _                            => acc
+    }
   end applyProjection
+
+  private def sliced(array: BsonArray, slice: Slice): BsonArray =
+    val values = array.getValues.asScala.toList
+
+    val taken = slice.skip match
+      case Some(from)              => values.drop(from).take(slice.count)
+      case None if slice.count < 0 => values.takeRight(-slice.count)
+      case None                    => values.take(slice.count)
+
+    BsonArray(taken.asJava)
+  end sliced
 
   private def copyOf(document: BsonDocument): BsonDocument =
     document.entrySet.asScala.foldLeft(BsonDocument()) { (acc, e) =>
@@ -353,15 +371,24 @@ final class FakeMongoCollection[F[*], S[*], E](
           case None         => document
           case Some(nested) => copyOf(document).append(seg, unsetAt(nested, rest))
 
-  private def orderedBy(sort: Sort[E])(left: BsonDocument, right: BsonDocument): Boolean =
-    sort.fields.view.map { (path, ascending) =>
-      val comparison = (at(left, path), at(right, path)) match
-        case (Some(l), Some(r)) => BsonOrdering.compare(l, r)
-        case (None, Some(_))    => -1
-        case (Some(_), None)    => 1
-        case (None, None)       => 0
-      if ascending then comparison else -comparison
-    }.find(_ != 0).exists(_ < 0)
+  private def orderedBy(sort: Sort[E]): (BsonDocument, BsonDocument) => Boolean =
+    if sort.fields.exists(_._2 == SortOrder.TextScore)
+    then
+      throw UnsupportedOperationException(
+        "FakeMongoCollection: sorting by $meta textScore needs a real text index, so it is not simulated"
+      )
+
+    (left, right) =>
+      sort.fields.view.map { (path, order) =>
+        val comparison = (at(left, path), at(right, path)) match
+          case (Some(l), Some(r)) => BsonOrdering.compare(l, r)
+          case (None, Some(_))    => -1
+          case (Some(_), None)    => 1
+          case (None, None)       => 0
+
+        if order == SortOrder.Ascending then comparison else -comparison
+      }.find(_ != 0).exists(_ < 0)
+  end orderedBy
 
   private def runPipeline(stages: List[Stage[E]]): List[BsonDocument] =
     stages.foldLeft(storage.toList)(runStage)

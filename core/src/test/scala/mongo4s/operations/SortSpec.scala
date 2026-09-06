@@ -30,3 +30,19 @@ final class SortSpec extends AnyWordSpec, Matchers:
       json(Sort.asc(nameField).asc(ageField).desc(nameField)) shouldBe """{"age": 1, "firstName": -1}"""
     }
   }
+
+  "$meta textScore" should {
+    "render the meta sort the server expects" in {
+      json(Sort.byTextScore()) shouldBe """{"score": {"$meta": "textScore"}}"""
+    }
+
+    "take the output field name it is asked for, unrenamed" in {
+      Sort.byTextScore[User]("relevance").toBson(FieldNaming.snakeCase).toJson shouldBe
+        """{"relevance": {"$meta": "textScore"}}"""
+    }
+
+    "combine with ordinary sort keys, in declaration order" in {
+      json(Sort.byTextScore().asc(nameField)) shouldBe
+        """{"score": {"$meta": "textScore"}, "firstName": 1}"""
+    }
+  }

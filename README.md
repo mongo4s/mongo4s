@@ -394,6 +394,27 @@ types — `Projection.empty` starts neutral and the first `include` or `exclude`
 an inclusion projection does not compile at all, rather than silently returning more fields than you asked for. `_id`
 is the exception: `withoutId` drops it from an inclusion projection, giving `{"field": 1, "_id": 0}`.
 
+`slice` cuts an array field down server-side, so a document with ten thousand comments does not travel to fetch the
+last five. It is neither an inclusion nor an exclusion, so it chains onto any of the three without committing the
+projection either way:
+
+```scala
+Projection.empty[Post].slice(commentsField, -5)                    // the last five
+Projection.empty[Post].sliceFrom(commentsField, skip = 20, count = 10)
+Projection.empty[Post].include(titleField).slice(commentsField, 5) // and still an inclusion
+```
+
+The field has to be an array — `slice` on a scalar does not compile. The document still decodes through the entity's
+own codec, because the field is present and merely shorter.
+
+Sorting by `$text` relevance is `Sort.byTextScore()`, which renders `{"score": {"$meta": "textScore"}}` and takes
+the output field's name if you want a different one. It is what makes `Filter.text` useful — an unranked text search
+returns matches in whatever order the server finds them:
+
+```scala
+collection.find(Filter.text("mongodb")).sort(Sort.byTextScore()).all
+```
+
 `explain` answers the question a typed filter otherwise leaves open — did it use an index?
 
 ```scala
@@ -768,7 +789,7 @@ collection.createIndex(Index.ascending(nameField).descending(ageField).named("na
 collection.createIndex(Index.unique(idField))
 collection.createIndex(Index.ascending(createdAtField).expiringAfter(30.days)) // TTL
 collection.createIndex(Index.ascending(ageField).where(ageField.gte(18))) // partial
-collection.createIndex(Index.empty[User].text(bioField).withSparse)
+collection.createIndex(Index.text(bioField).withSparse)
 collection.createIndex(Index.hashed(idField)) // sharding
 collection.createIndex(Index.geo2dsphere(Field.stored[User, Any]("location"))) // also geo2d
 collection.createIndex(Index.ascending(ageField).withHidden) // built, but ignored by the planner

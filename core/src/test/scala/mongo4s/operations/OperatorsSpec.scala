@@ -113,3 +113,39 @@ final class OperatorsSpec extends AnyWordSpec, Matchers:
       projection.toBson(FieldNaming.identity).toJson shouldBe """{"total": 1, "_id": 0}"""
     }
   }
+
+  "$slice" should {
+    "take the first elements of an array on its own" in {
+      Projection.empty[Order].slice(itemsField, 3).toBson(FieldNaming.identity).toJson shouldBe
+        """{"items": {"$slice": 3}}"""
+    }
+
+    "take the last elements when the count is negative" in {
+      Projection.empty[Order].slice(itemsField, -3).toBson(FieldNaming.identity).toJson shouldBe
+        """{"items": {"$slice": -3}}"""
+    }
+
+    "render a skip and a count as the pair the server expects" in {
+      Projection.empty[Order].sliceFrom(itemsField, skip = 10, count = 5).toBson(FieldNaming.identity).toJson shouldBe
+        """{"items": {"$slice": [10, 5]}}"""
+    }
+
+    "combine with an inclusion without leaving either chain" in {
+      Projection.empty[Order].include(totalField).slice(itemsField, 2).withoutId.toBson(FieldNaming.identity).toJson shouldBe
+        """{"total": 1, "_id": 0, "items": {"$slice": 2}}"""
+    }
+
+    "combine with an exclusion too" in {
+      Projection.empty[Order].exclude(totalField).slice(itemsField, 2).toBson(FieldNaming.identity).toJson shouldBe
+        """{"total": 0, "items": {"$slice": 2}}"""
+    }
+
+    "refuse to compile against a field that is not an array" in {
+      typeChecks("Projection.empty[Order].slice(totalField, 3)") shouldBe false
+      typeChecks("Projection.empty[Order].slice(labelsField, 3)") shouldBe true
+    }
+
+    "reject a negative count taken from an offset, which the server would not accept" in {
+      an[IllegalArgumentException] should be thrownBy Projection.empty[Order].sliceFrom(itemsField, 10, -5)
+    }
+  }

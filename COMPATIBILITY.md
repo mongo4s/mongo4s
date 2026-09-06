@@ -90,6 +90,21 @@ The reason is the one `Index` and `WireCodecConfig` already carry: a `case class
 breaking `apply`/`copy` in every release, and change-stream options keep arriving. `withExpandedEvents` is the first
 one that had to, so the treatment happened now rather than being restated as a hazard.
 
+### `Sort` carries a `SortOrder`, and `Projection` carries slices
+
+`Sort[E].fields` is `List[(FieldPath, SortOrder)]` rather than `List[(FieldPath, Boolean)]`, so a third direction —
+`$meta textScore` — is expressible. `Sort.asc`/`Sort.desc` are unchanged; only code that read or built `fields` by
+hand has to follow.
+
+The three `Projection` cases each gained a `slices` list, so a pattern match on them needs the extra binder:
+
+```scala
+case Projection.Include(fields, withId)         => ...  // 2.x
+case Projection.Include(fields, withId, slices) => ...  // 3.0
+```
+
+Constructing them is unchanged — the new parameter is defaulted.
+
 ### `FindQuery` and `AggregateQuery` gained `explain`
 
 Both are public traits, so anything implementing one outside this library has to add the method. Calling code is

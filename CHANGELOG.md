@@ -12,6 +12,11 @@ part of `2.0.0` below.
 
 ### Added
 
+- `Sort.byTextScore` — `{"$meta": "textScore"}`, so a `$text` search can be ranked by relevance. `Sort` now carries a
+  `SortOrder` per field instead of a `Boolean`.
+- `Projection.slice` and `Projection.sliceFrom` — `$slice`, chainable onto a neutral, inclusive or exclusive
+  projection, and refused at compile time on a field that is not an array. Simulated by the fake.
+- `Index.text` and `Index.geo2d` on the companion, which had shortcuts for every other direction but these two.
 - `explain` on `FindQuery` and `AggregateQuery`, taking an optional `ExplainVerbosity` and returning the server's
   plan as a `BsonDocument`. It explains the query the builder already produced, and the whole pipeline rather than
   the `$limit`-ed form `first` sends. The fake refuses it by name.

@@ -364,6 +364,19 @@ object ReadmeSnippets:
 
   // --- Update results as a decision ---
 
+  object slicing:
+    final case class Post(title: String, comments: List[String])
+
+    val titleField: Field[Post, String]          = Field.of[Post, String](_.title)
+    val commentsField: Field[Post, List[String]] = Field.of[Post, List[String]](_.comments)
+
+    val lastFive: Projection[Post]  = Projection.empty[Post].slice(commentsField, -5)
+    val aWindow: Projection[Post]   = Projection.empty[Post].sliceFrom(commentsField, skip = 20, count = 10)
+    val withTitle: Projection[Post] = Projection.empty[Post].include(titleField).slice(commentsField, 5)
+
+  def ranked(collection: MongoCollection[IO, S, User]): IO[List[User]] =
+    collection.find(Filter.text("mongodb")).sort(Sort.byTextScore()).all
+
   def queryPlan(collection: MongoCollection[IO, S, User], adults: Filter[User], nameField: Field[User, String]): IO[BsonDocument] =
     collection.find(adults).sort(Sort.asc(nameField)).explain()
 
