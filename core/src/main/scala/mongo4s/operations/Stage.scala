@@ -2,7 +2,7 @@ package mongo4s.operations
 
 import org.bson.*
 
-import mongo4s.bson.FieldNaming
+import mongo4s.bson.{BsonEncoder, FieldNaming}
 import mongo4s.{Field, FieldPath}
 
 import scala.jdk.CollectionConverters.given
@@ -32,6 +32,10 @@ enum Stage[E]:
   case Sample(size: Int)
   case UnionWith(collection: String)
   case Facet(facets: List[(String, List[Stage[E]])])
+  case Bucket(groupBy: FieldPath, boundaries: List[BsonValue], default: Option[BsonValue], output: List[(String, Accumulator[E])])
+  case Densify(path: FieldPath, partitionBy: List[FieldPath], range: DensifyRange)
+  case SetWindowFields(partitionBy: Option[FieldPath], sortBy: Sort[E], output: List[(String, WindowOutput[E])])
+
   case Out(collection: String, options: OutOptions)
   case Merge(collection: String, options: MergeOptions)
 
@@ -105,6 +109,49 @@ enum Stage[E]:
       }
       BsonDocument("$facet", document)
 
+    case Stage.Bucket(groupBy, boundaries, default, output) =>
+      val bucket = BsonDocument("groupBy", BsonString("$" + groupBy.render(naming)))
+        .append("boundaries", BsonArray(boundaries.asJava))
+
+      default.foreach(value => bucket.append("default", value))
+
+      if output.nonEmpty
+      then
+        val fields = BsonDocument()
+        output.foreach((name, accumulator) => fields.append(name, accumulator.toBson(naming)))
+        bucket.append("output", fields)
+
+      BsonDocument("$bucket", bucket)
+
+    case Stage.Densify(path, partitionBy, range) =>
+      val densify = BsonDocument("field", BsonString(path.render(naming)))
+
+      if partitionBy.nonEmpty
+      then densify.append("partitionByFields", BsonArray(partitionBy.map(p => BsonString(p.render(naming)): BsonValue).asJava))
+
+      densify.append("range", range.toBson)
+
+      BsonDocument("$densify", densify)
+
+    case Stage.SetWindowFields(partitionBy, sortBy, output) =>
+      val windowFields = BsonDocument()
+
+      partitionBy.foreach(path => windowFields.append("partitionBy", BsonString("$" + path.render(naming))))
+
+      if !sortBy.isEmpty
+      then windowFields.append("sortBy", sortBy.toBson(naming))
+
+      val fields = BsonDocument()
+      output.foreach { (name, windowed) =>
+        val field = windowed.accumulator.toBson(naming)
+        windowed.window.foreach(window => field.append("window", window.toBson))
+        fields.append(name, field)
+      }
+
+      windowFields.append("output", fields)
+
+      BsonDocument("$setWindowFields", windowFields)
+
     case Stage.Out(collection, options)   => BsonDocument("$out", Stage.outTarget(collection, options))
     case Stage.Merge(collection, options) => BsonDocument("$merge", Stage.mergeTarget(collection, options))
     case Stage.Raw(document)              => document
@@ -154,6 +201,37 @@ object Stage:
   def unionWith[E](collection: String): Stage[E] = UnionWith(collection)
 
   def facet[E](facets: (String, List[Stage[E]])*): Stage[E] = Facet(facets.toList)
+
+  /** `$bucket`: the boundaries are values of the field being grouped, so they are typed as such rather than as raw BSON. `default` names the bucket for everything
+    * outside them; without it the server rejects such a document.
+    */
+  def bucketBy[E, A](field: Field[E, A], boundaries: Seq[A], default: Option[BsonValue] = None)(
+      output: (String, Accumulator[E])*
+  )(using encoder: BsonEncoder[A]): Stage[E] =
+    require(boundaries.size >= 2, s"$$bucket needs at least two boundaries to make one bucket, got ${boundaries.size}")
+
+    Bucket(field.path, boundaries.toList.map(encoder.encode), default, output.toList)
+  end bucketBy
+
+  /** `$densify`: fills the gaps in a series so every step is present, whether or not a document was written for it.
+    *
+    * The partition fields are `FieldPath`s rather than `Field`s because they are a heterogeneous list — write `Seq(sensorField.path)` at the call site.
+    */
+  def densify[E, A](field: Field[E, A], range: DensifyRange, partitionBy: Seq[FieldPath] = Seq.empty): Stage[E] =
+    Densify(field.path, partitionBy.toList, range)
+
+  /** `$setWindowFields`: a running total, a moving average, a rank — an accumulator computed over a span around each document rather than over the whole group.
+    *
+    * `sortBy` is what gives the window a direction, so it is required rather than optional; `partitionBy` is a `FieldPath` because it is one field of an unknown type —
+    * write `sensorField.path`.
+    */
+  def setWindowFields[E](sortBy: Sort[E], partitionBy: Option[FieldPath] = None)(
+      output: (String, WindowOutput[E])*
+  ): Stage[E] =
+    require(output.nonEmpty, "$setWindowFields with no output field computes nothing")
+
+    SetWindowFields(partitionBy, sortBy, output.toList)
+  end setWindowFields
 
   def out[E](collection: String, options: OutOptions = OutOptions.default): Stage[E] = Out(collection, options)
 

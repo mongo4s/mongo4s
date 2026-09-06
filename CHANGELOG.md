@@ -14,6 +14,9 @@ part of `2.0.0` below.
 
 - `TransactionOptions`, carrying a transaction's `readConcern`, `writeConcern`, `readPreference` and
   `maxCommitTime` — and the retry window below. Both `withTransaction` methods take one.
+- `Stage.bucketBy`, `Stage.densify` and `Stage.setWindowFields` — `$bucket`, `$densify` and `$setWindowFields`,
+  with `DensifyRange`/`DensifyBounds`/`DateUnit` and `Window`/`WindowBound`/`WindowOutput` for the vocabulary they
+  need. `$bucket`'s boundaries are values of the field being grouped rather than raw BSON.
 - `CreateCollectionOptions`, taken by `MongoDatabase.createCollection`: capped size and document cap, a validator
   with its level and action, time-series and clustered collections, `expireAfter`, collation and storage engine.
   Combinations the server accepts and then ignores — a document cap without `capped`, a validation level without a

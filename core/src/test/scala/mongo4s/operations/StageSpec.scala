@@ -3,7 +3,7 @@ package mongo4s.operations
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
-import org.bson.{BsonDocument, BsonString}
+import org.bson.{BsonDocument, BsonInt32, BsonString}
 
 import mongo4s.Field
 import mongo4s.bson.FieldNaming
@@ -127,6 +127,69 @@ final class StageSpec extends AnyWordSpec, Matchers:
 
       Stage.merge[Order]("archive", options).toBson(FieldNaming.identity).toJson shouldBe
         """{"$merge": {"into": {"db": "cold", "coll": "archive"}, "whenMatched": "keepExisting", "whenNotMatched": "discard"}}"""
+    }
+
+    "render $bucket with typed boundaries and its output accumulators" in {
+      val stage = Stage.bucketBy(Field.of[Order, Int](_.itemCount), Seq(0, 10, 100), default = Some(BsonString("more")))(
+        "count" -> Accumulator.count[Order]
+      )
+
+      stage.toBson(FieldNaming.snakeCase).toJson shouldBe
+        """{"$bucket": {"groupBy": "$item_count", "boundaries": [0, 10, 100], "default": "more", "output": {"count": {"$sum": 1}}}}"""
+    }
+
+    "refuse a $bucket that cannot make a single bucket" in {
+      an[IllegalArgumentException] should be thrownBy
+        Stage.bucketBy(Field.of[Order, Int](_.itemCount), Seq(0))()
+    }
+
+    "render $densify over a numeric field" in {
+      val stage = Stage.densify(
+        Field.of[Order, Int](_.itemCount),
+        DensifyRange.by(5).within(DensifyBounds.Between(BsonInt32(0), BsonInt32(50))),
+      )
+
+      stage.toBson(FieldNaming.snakeCase).toJson shouldBe
+        """{"$densify": {"field": "item_count", "range": {"step": 5, "bounds": [0, 50]}}}"""
+    }
+
+    "render $densify over a date field, partitioned" in {
+      val stage = Stage.densify(
+        Field.of[Order, Int](_.itemCount),
+        DensifyRange.every(1, DateUnit.Hour).within(DensifyBounds.Partition),
+        partitionBy = Seq(Field.of[Order, String](_.userId).path),
+      )
+
+      stage.toBson(FieldNaming.snakeCase).toJson shouldBe
+        """{"$densify": {"field": "item_count", "partitionByFields": ["user_id"], "range": {"step": 1, "bounds": "partition", "unit": "hour"}}}"""
+    }
+
+    "render $setWindowFields with a partition, a sort and a window" in {
+      val stage = Stage.setWindowFields(
+        Sort.asc(Field.of[Order, Int](_.itemCount)),
+        partitionBy = Some(Field.of[Order, String](_.userId).path),
+      )(
+        "runningTotal" -> WindowOutput(Accumulator.sum(Field.of[Order, Int](_.itemCount)))
+          .over(Window.documents(WindowBound.Unbounded, WindowBound.Current))
+      )
+
+      stage.toBson(FieldNaming.snakeCase).toJson shouldBe
+        """{"$setWindowFields": {"partitionBy": "$user_id", "sortBy": {"item_count": 1}, """ +
+        """"output": {"runningTotal": {"$sum": "$item_count", "window": {"documents": ["unbounded", "current"]}}}}}"""
+    }
+
+    "let an accumulator with no window cover the whole partition" in {
+      val stage = Stage.setWindowFields(Sort.asc(Field.of[Order, Int](_.itemCount)))(
+        "total" -> WindowOutput(Accumulator.sum(Field.of[Order, Int](_.itemCount)))
+      )
+
+      stage.toBson(FieldNaming.snakeCase).toJson shouldBe
+        """{"$setWindowFields": {"sortBy": {"item_count": 1}, "output": {"total": {"$sum": "$item_count"}}}}"""
+    }
+
+    "refuse a $setWindowFields that computes nothing" in {
+      an[IllegalArgumentException] should be thrownBy
+        Stage.setWindowFields(Sort.asc(Field.of[Order, Int](_.itemCount)))()
     }
 
     "pass a Raw stage through untouched" in {

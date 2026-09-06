@@ -548,7 +548,7 @@ val byAge = Seq(
 ```
 
 `Stage` covers `$match`/`$project`/`$sort`/`$limit`/`$skip`/`$count`/`$unwind`/`$lookup`/`$group`/`$addFields`/
-`$replaceRoot`/`$facet`/`$sample`/`$unionWith`/`$out`/`$merge`,
+`$replaceRoot`/`$facet`/`$sample`/`$unionWith`/`$bucket`/`$densify`/`$setWindowFields`/`$out`/`$merge`,
 with `Stage.raw(document)` as the escape hatch for anything else.
 
 `$lookup` has two forms. `Stage.lookup` is the equality join on `localField`/`foreignField`; `Stage.lookupWith` takes
@@ -592,6 +592,36 @@ Stage.merge[Order](
     .whenNotMatched(MergeOptions.WhenNotMatched.Insert),
 )
 ```
+
+#### Bucketing, filling gaps and windows
+
+`$bucket` takes its boundaries as values of the field being grouped, so they are typed rather than raw BSON, and
+`default` names the bucket for everything outside them — without it the server rejects such a document:
+
+```scala
+Stage.bucketBy(ageField, Seq(0, 20, 40), default = Some(BsonString("other")))("count" -> Accumulator.count[Person])
+```
+
+`$densify` fills the gaps in a series, so every step is present whether or not a document was written for it —
+useful before a window function that would otherwise skip the missing rows:
+
+```scala
+Stage.densify(ageField, DensifyRange.by(10).within(DensifyBounds.Between(BsonInt32(0), BsonInt32(40))))
+Stage.densify(recordedAt, DensifyRange.every(1, DateUnit.Hour).within(DensifyBounds.Partition), Seq(sensorField.path))
+```
+
+`$setWindowFields` computes an accumulator over a span around each document rather than over the whole group. The
+sort is what gives a window its direction, so it is required rather than optional; an output with no `window` covers
+the whole partition:
+
+```scala
+Stage.setWindowFields(Sort.asc(ageField), partitionBy = Some(sensorField.path))(
+  "runningTotal" -> WindowOutput(Accumulator.sum(ageField)).over(Window.documents(WindowBound.Unbounded, WindowBound.Current))
+)
+```
+
+`Window.documents` counts in rows, `Window.range` in the sort field's own values — rows sharing a value fall in the
+same window — and `Window.rangeOver` does the same for a date field measured in a `DateUnit`.
 
 `on` names fields of the **target** collection, so it is a list of stored names rather than `Field` values — the
 target's shape is not `A`. A single field renders as a string and several as an array, which is what the server

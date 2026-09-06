@@ -15,7 +15,7 @@ full API applies.
 | --- | --- | --- |
 | **GridFS** | A module of its own, with its own streaming story on four runtimes. Nobody has asked for it. | The driver's `GridFSBuckets` over `client.underlying`. |
 | **Geospatial operators** | `$near`, `$geoWithin` and `$geoIntersects` need a small geometry vocabulary to be typed honestly. The index types (`2dsphere`, `2d`) already exist. | `Filter.Raw`. |
-| **Aggregation stages** | `$bucket`, `$setWindowFields`, `$densify`, Atlas `$search`. | `Stage.raw`. |
+| **Atlas `$search`** | A large, fast-moving surface that only runs on Atlas, so nothing here could exercise it. Typing it from the outside would be guesswork with no way to check the guess. | `Stage.raw`. |
 | **Client-level `bulkWrite`** | Driver 5.3+ can write across collections in one command. | Per-collection `bulkWrite`. |
 
 ## How these land
