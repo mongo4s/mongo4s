@@ -12,6 +12,9 @@ part of `2.0.0` below.
 
 ### Added
 
+- Native `WireCodec` instances for `BigDecimal`, `Instant`, `UUID` and `ObjectId`. Before this, the AST-free path
+  had them only through the `BsonEncoder`/`BsonDecoder` bridge — one `BsonValue` per field, on types almost every
+  entity carries. The BSON written is unchanged, so existing collections read and write exactly as before.
 - `TransactionOptions`, carrying a transaction's `readConcern`, `writeConcern`, `readPreference` and
   `maxCommitTime` — and the retry window below. Both `withTransaction` methods take one.
 - `Repository.findPage(limit, after, filter)`: keyset paging over the primary key. The repository builds the sort

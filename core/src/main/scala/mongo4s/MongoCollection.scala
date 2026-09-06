@@ -1,5 +1,6 @@
 package mongo4s
 
+import scala.annotation.unused
 import scala.reflect.ClassTag
 
 import org.bson.BsonDocument
@@ -78,10 +79,10 @@ trait MongoCollection[F[*], S[*], A]:
   def aggregateDirect[B](pipeline: Seq[Stage[A]])(using
       session: Option[ClientSession] = None
   )(using
-      WireCodec[B],
-      ClassTag[B],
+      codec: WireCodec[B],
+      @unused tag: ClassTag[B],
   ): AggregateQuery[F, S, B] =
-    aggregate[B](pipeline)(using session)(using DocumentCodecBridge.toDocumentCodec[B])
+    aggregate[B](pipeline)(using session)(using DocumentCodecBridge.toDocumentCodec[B](using codec))
 
   def distinct[B](field: Field[A, B], filter: Filter[A] = Filter.all)(using
       session: Option[ClientSession] = None

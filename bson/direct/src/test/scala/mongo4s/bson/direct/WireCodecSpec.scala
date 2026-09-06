@@ -12,8 +12,6 @@ import org.bson.codecs.{BsonDocumentCodec as DriverBsonDocumentCodec, DecoderCon
 
 import mongo4s.bson.{BsonError, FieldNaming}
 
-import mongo4s.bson.BsonInstances.given
-
 object WireCodecSpec:
 
   object SnakeCaseFields:

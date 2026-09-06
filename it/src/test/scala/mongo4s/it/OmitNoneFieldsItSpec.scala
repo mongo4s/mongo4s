@@ -13,7 +13,6 @@ import mongo4s.cats.CatsStream
 import mongo4s.{MongoClient, RsBridge}
 import mongo4s.bson.direct.{WireCodec, WireCodecConfig}
 
-import mongo4s.bson.BsonInstances.given
 import mongo4s.cats.CatsInstances.given
 
 object OmitNoneFieldsItSpec:

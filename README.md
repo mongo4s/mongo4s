@@ -894,9 +894,13 @@ object Shape:
 
 Products, `Option`, `Either`, nested case classes, sealed traits/enums (via a `_type` discriminator field, written
 first), and self-/mutually-recursive types all derive directly — recursive derivation is deferred behind a `lazy val`
-internally so a type's own `given` never forces itself mid-construction. Anything with an existing `BsonEncoder`/
-`BsonDecoder` (`ObjectId`, `Instant`, `UUID`, …) bridges automatically, at the cost of one `BsonValue` per field
-instead of zero.
+internally so a type's own `given` never forces itself mid-construction.
+
+`String`, `Int`, `Long`, `Double`, `Boolean`, `BigDecimal`, `Instant`, `UUID` and `ObjectId` are read and written
+natively, in the same BSON representation the `BsonEncoder`/`BsonDecoder` path uses — `Decimal128` for `BigDecimal`,
+`Date` for `Instant`, `ObjectId` for `ObjectId` — so the server indexes and range-compares them exactly as it would
+on a collection opened with `getCollection`. Any *other* type with an existing `BsonEncoder`/`BsonDecoder` bridges
+automatically, at the cost of one `BsonValue` per field instead of zero.
 
 `List`/`Vector`/`Seq`/`Set`/`Array` write a real BSON array, and `Map[String, A]` a real `BSON` document keyed by its
 own keys — `String` being the key type isn't a limitation of the general mechanism, it's just what BSON's own field

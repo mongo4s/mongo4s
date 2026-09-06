@@ -138,6 +138,18 @@ That is where the performance comes from — see [BENCHMARKS.md](BENCHMARKS.md) 
 codec is dependency footprint: it lives in `mongo4s` itself, so the default path pulls in no third-party codec
 library.
 
+**Which scalars are native is a correctness question, not only a speed one.** A type with no `ScalarWireCodec` falls
+back to the `BsonEncoder`/`BsonDecoder` bridge, which builds exactly the one `BsonValue` per field this path exists
+to avoid — and `Instant`, `ObjectId`, `UUID` and `BigDecimal` sit in almost every real entity, so the fallback was
+the common case rather than the exception. Each native instance writes and accepts exactly what the `BsonValue` path
+writes and accepts, leniency included: `Instant` also reads a `Timestamp`, `BigDecimal` also reads
+`Int32`/`Int64`/`Double`. That symmetry is what lets the same collection be opened either way.
+
+It also makes losing one invisible to behavioural tests: the fallback produces byte-identical documents, so dropping
+a native instance would cost allocations and nothing else — every round-trip and format test would still pass. The
+spec therefore asserts the *structure*, that the summoned `WireCodec` really is a `ScalarWireCodec`, because nothing
+observable distinguishes the two.
+
 **It is strict by construction, and that is a trade, not an oversight.** Derivation requires every modelled field to
 be present unless its decoder supplies a default (`Option` does). So a projection that drops a modelled field cannot
 be read back through the entity's own codec. Strictness catches the far more common bug, which is a document that
