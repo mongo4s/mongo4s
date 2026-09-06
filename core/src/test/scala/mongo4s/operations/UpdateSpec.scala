@@ -1,5 +1,7 @@
 package mongo4s.operations
 
+import scala.compiletime.testing.typeChecks
+
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -158,5 +160,26 @@ final class UpdateSpec extends AnyWordSpec, Matchers:
     "apply to derived field names" in {
       Update.set(nameField, "bob").toBson(FieldNaming.snakeCase).toJson shouldBe """{"$set": {"name": "bob"}}"""
       Update.inc(ageField, 1).toBson(FieldNaming.snakeCase).toJson shouldBe """{"$inc": {"age": 1}}"""
+    }
+  }
+
+  "a numeric update over an Int field" should {
+
+    "write the width the field's own encoder writes" in {
+      json(Update.set(ageField, 31)) shouldBe """{"$set": {"age": 31}}"""
+      json(Update.inc(ageField, 1)) shouldBe """{"$inc": {"age": 1}}"""
+      json(Update.mul(ageField, 2)) shouldBe """{"$mul": {"age": 2}}"""
+    }
+
+    "refuse an amount of another numeric type, which would change the stored width" in {
+      typeChecks("Update.inc(Field.of[UpdateSpec.Person, Int](_.age), 1)") shouldBe true
+      typeChecks("Update.inc(Field.of[UpdateSpec.Person, Int](_.age), 1L)") shouldBe false
+      typeChecks("Update.inc(Field.of[UpdateSpec.Person, Int](_.age), 1.5)") shouldBe false
+      typeChecks("Update.mul(Field.of[UpdateSpec.Person, Int](_.age), 1.5)") shouldBe false
+      typeChecks("Update.set(Field.of[UpdateSpec.Person, Int](_.age), 1L)") shouldBe false
+    }
+
+    "refuse a numeric operator on a field that is not numeric" in {
+      typeChecks("Update.inc(Field.of[UpdateSpec.Person, String](_.name), 1)") shouldBe false
     }
   }

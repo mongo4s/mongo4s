@@ -256,6 +256,12 @@ Numeric operators only apply to numeric fields, so `Update.inc(nameField, 1)` do
 field takes the unwrapped value — `scoreField.inc(5L)` on a `Field[User, Option[Long]]` — because `None` has no
 numeric encoding, and the obvious stand-in, `$inc` by zero, is a write that quietly does nothing.
 
+A numeric operator takes the field's own type, so on a `Field[User, Int]` only an `Int` compiles — `inc(1L)` and
+`mul(1.5)` do not. That keeps *mongo4s* from being the one that changes the stored width. The **server** can still
+change it: an `$inc` that overflows an `Int32` is stored as an `Int64`, silently, and a value that then no longer
+fits the modelled `Int` is a decode error naming the value — `2147483711 is out of range for Int`. Model a counter
+that can grow as `Long`, and read a field whose stored width you do not control as the widest type it can reach.
+
 `Update.combine`/`and` merge operators of the same name into one sub-document, so setting two fields produces one
 `$set`. `Update.Raw` carries operators the `AST` does not model and merges the same way:
 
