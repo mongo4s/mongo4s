@@ -16,7 +16,7 @@ full API applies.
 | **GridFS** | A module of its own, with its own streaming story on four runtimes. Nobody has asked for it. | The driver's `GridFSBuckets` over `client.underlying`. |
 | **Geospatial operators** | `$near`, `$geoWithin` and `$geoIntersects` need a small geometry vocabulary to be typed honestly. The index types (`2dsphere`, `2d`) already exist. | `Filter.Raw`. |
 | **Atlas `$search`** | A large, fast-moving surface that only runs on Atlas, so nothing here could exercise it. Typing it from the outside would be guesswork with no way to check the guess. | `Stage.raw`. |
-| **Client-level `bulkWrite`** | Driver 5.3+ can write across collections in one command. | Per-collection `bulkWrite`. |
+| **Client-level `bulkWrite`** | MongoDB 8.0 can write across collections and databases in one command, but the write is addressed by namespace, and this library is built on typed collections and repositories — there is no obvious shape that keeps both. It is also not a transaction, so it buys a round trip rather than atomicity. Waiting for a real feature request to say what the shape should be. | Per-collection `bulkWrite`, or a transaction where the writes must land together. |
 
 ## How these land
 
