@@ -8,9 +8,10 @@ run its tests, and where to make changes for common kinds of contributions.
 Tested against JDK 25 (LTS) — that's what CI uses. `Scala 3.9` itself needs only JDK 17, but anything
 touching `kyo` needs 25, so 25 is the one to reach for.
 
-Publishing credentials, when you need them, go in `.env/` at the repository root — the whole directory is ignored,
-so nothing under it can be committed. The build reads them from there, falling back to `~/.sbt` if the directory is
-absent, so a checkout without credentials builds and tests exactly the same.
+Publishing credentials, when you need them, live in `~/.sbt/sonatype_credentials`, outside the repository — where
+`git clean -xfd` cannot reach them and no ignore rule has to be right. A project-local `.env/` is read first if you
+prefer to keep them with the checkout; that directory is ignored whole, so nothing under it can be committed. A
+checkout without credentials builds and tests exactly the same.
 
 The project is built with [sbt](https://www.scala-sbt.org/). Every module targets the same Scala
 version, `3.9 LTS` — set once as `Versions.scala3` in `project/Dependencies.scala`. Until `3.0.0` the
