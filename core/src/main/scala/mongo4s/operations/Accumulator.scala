@@ -5,28 +5,32 @@ import org.bson.{BsonDocument, BsonInt32, BsonString, BsonValue}
 import mongo4s.bson.FieldNaming
 import mongo4s.{Field, FieldPath}
 
-enum Accumulator[E]:
-  case Sum(expression: Accumulator.Expression[E])
-  case Avg(expression: Accumulator.Expression[E])
-  case Min(expression: Accumulator.Expression[E])
-  case Max(expression: Accumulator.Expression[E])
-  case First(expression: Accumulator.Expression[E])
-  case Last(expression: Accumulator.Expression[E])
-  case Push(expression: Accumulator.Expression[E])
-  case AddToSet(expression: Accumulator.Expression[E])
-  case Count()
-  case Raw(document: BsonDocument)
+enum Accumulator[E](val key: String):
+  case Sum(expression: Accumulator.Expression[E])      extends Accumulator[E]("$sum")
+  case Avg(expression: Accumulator.Expression[E])      extends Accumulator[E]("$avg")
+  case Min(expression: Accumulator.Expression[E])      extends Accumulator[E]("$min")
+  case Max(expression: Accumulator.Expression[E])      extends Accumulator[E]("$max")
+  case First(expression: Accumulator.Expression[E])    extends Accumulator[E]("$first")
+  case Last(expression: Accumulator.Expression[E])     extends Accumulator[E]("$last")
+  case Push(expression: Accumulator.Expression[E])     extends Accumulator[E]("$push")
+  case AddToSet(expression: Accumulator.Expression[E]) extends Accumulator[E]("$addToSet")
+  case Count()                                         extends Accumulator[E]("$sum")
+  case Raw(document: BsonDocument)                     extends Accumulator[E]("")
 
   def toBson(naming: FieldNaming): BsonDocument = this match
-    case Sum(expression)      => BsonDocument("$sum", expression.toBson(naming))
-    case Avg(expression)      => BsonDocument("$avg", expression.toBson(naming))
-    case Min(expression)      => BsonDocument("$min", expression.toBson(naming))
-    case Max(expression)      => BsonDocument("$max", expression.toBson(naming))
-    case First(expression)    => BsonDocument("$first", expression.toBson(naming))
-    case Last(expression)     => BsonDocument("$last", expression.toBson(naming))
-    case Push(expression)     => BsonDocument("$push", expression.toBson(naming))
-    case AddToSet(expression) => BsonDocument("$addToSet", expression.toBson(naming))
-    case Count()              => BsonDocument("$sum", BsonInt32(1))
+    case Raw(document) => document
+    case operator      => BsonDocument(key, operator.payload(naming))
+
+  private def payload(naming: FieldNaming): BsonValue = this match
+    case Sum(expression)      => expression.toBson(naming)
+    case Avg(expression)      => expression.toBson(naming)
+    case Min(expression)      => expression.toBson(naming)
+    case Max(expression)      => expression.toBson(naming)
+    case First(expression)    => expression.toBson(naming)
+    case Last(expression)     => expression.toBson(naming)
+    case Push(expression)     => expression.toBson(naming)
+    case AddToSet(expression) => expression.toBson(naming)
+    case Count()              => BsonInt32(1)
     case Raw(document)        => document
 
 object Accumulator:

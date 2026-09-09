@@ -402,7 +402,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Stage.Count(fieldName)        => List(BsonDocument(fieldName, BsonInt32(documents.size)))
     case Stage.Group(by, accumulators) => grouped(documents, by, accumulators)
     case other                         =>
-      throw UnsupportedOperationException(s"FakeMongoCollection: ${other.toBson(naming).getFirstKey} is not simulated")
+      throw UnsupportedOperationException(s"FakeMongoCollection: ${other.key} is not simulated")
 
   private def grouped(
       documents: List[BsonDocument],

@@ -7,28 +7,28 @@ import mongo4s.bson.{BsonEncoder, FieldNaming}
 
 import scala.jdk.CollectionConverters.given
 
-enum Stage[E]:
-  case MatchStage(filter: Filter[E])
-  case ProjectStage(projection: Projection[E])
-  case SortStage(sort: Sort[E])
-  case Limit(n: Int)
-  case Skip(n: Int)
-  case Count(fieldName: String)
-  case Unwind(path: FieldPath, preserveNullAndEmptyArrays: Boolean)
+enum Stage[E](val key: String):
+  case MatchStage(filter: Filter[E])                                extends Stage[E]("$match")
+  case ProjectStage(projection: Projection[E])                      extends Stage[E]("$project")
+  case SortStage(sort: Sort[E])                                     extends Stage[E]("$sort")
+  case Limit(n: Int)                                                extends Stage[E]("$limit")
+  case Skip(n: Int)                                                 extends Stage[E]("$skip")
+  case Count(fieldName: String)                                     extends Stage[E]("$count")
+  case Unwind(path: FieldPath, preserveNullAndEmptyArrays: Boolean) extends Stage[E]("$unwind")
 
   case Lookup(
       from: String,
       localField: FieldPath,
       foreignField: FieldPath,
       as: String,
-  )
+  ) extends Stage[E]("$lookup")
 
   case LookupPipeline[T, B](
       from: String,
       let: Option[BsonDocument],
       pipeline: List[Stage[B]],
       as: String,
-  ) extends Stage[T]
+  ) extends Stage[T]("$lookup")
 
   case GraphLookup[T, B](
       from: String,
@@ -37,55 +37,55 @@ enum Stage[E]:
       connectTo: FieldPath,
       as: String,
       options: GraphLookupOptions[B],
-  ) extends Stage[T]
+  ) extends Stage[T]("$graphLookup")
 
-  case Group(by: Option[FieldPath], accumulators: List[(String, Accumulator[E])])
-  case AddFields(fields: List[(String, BsonValue)])
-  case ReplaceRoot(path: FieldPath)
-  case Sample(size: Int)
-  case UnionWith(collection: String)
-  case Facet(facets: List[(String, List[Stage[E]])])
+  case Group(by: Option[FieldPath], accumulators: List[(String, Accumulator[E])]) extends Stage[E]("$group")
+  case AddFields(fields: List[(String, BsonValue)])                               extends Stage[E]("$addFields")
+  case ReplaceRoot(path: FieldPath)                                               extends Stage[E]("$replaceRoot")
+  case Sample(size: Int)                                                          extends Stage[E]("$sample")
+  case UnionWith(collection: String)                                              extends Stage[E]("$unionWith")
+  case Facet(facets: List[(String, List[Stage[E]])])                              extends Stage[E]("$facet")
 
   case Bucket(
       groupBy: FieldPath,
       boundaries: List[BsonValue],
       default: Option[BsonValue],
       output: List[(String, Accumulator[E])],
-  )
+  ) extends Stage[E]("$bucket")
 
   case Densify(
       path: FieldPath,
       partitionBy: List[FieldPath],
       range: DensifyRange,
-  )
+  ) extends Stage[E]("$densify")
 
   case SetWindowFields(
       partitionBy: Option[FieldPath],
       sortBy: Sort[E],
       output: List[(String, WindowOutput[E])],
-  )
+  ) extends Stage[E]("$setWindowFields")
 
-  case Out(collection: String, options: OutOptions)
-  case Merge(collection: String, options: MergeOptions)
+  case Out(collection: String, options: OutOptions)     extends Stage[E]("$out")
+  case Merge(collection: String, options: MergeOptions) extends Stage[E]("$merge")
 
-  case Raw(document: BsonDocument)
+  case Raw(document: BsonDocument) extends Stage[E]("")
 
   def toBson(naming: FieldNaming): BsonDocument = this match
-    case Stage.MatchStage(filter)                         => BsonDocument("$match", filter.toBson(naming))
-    case Stage.ProjectStage(projection)                   => BsonDocument("$project", projection.toBson(naming))
-    case Stage.SortStage(sort)                            => BsonDocument("$sort", sort.toBson(naming))
-    case Stage.Limit(n)                                   => BsonDocument("$limit", BsonInt32(n))
-    case Stage.Skip(n)                                    => BsonDocument("$skip", BsonInt32(n))
-    case Stage.Count(fieldName)                           => BsonDocument("$count", BsonString(fieldName))
+    case Stage.MatchStage(filter)                         => BsonDocument(key, filter.toBson(naming))
+    case Stage.ProjectStage(projection)                   => BsonDocument(key, projection.toBson(naming))
+    case Stage.SortStage(sort)                            => BsonDocument(key, sort.toBson(naming))
+    case Stage.Limit(n)                                   => BsonDocument(key, BsonInt32(n))
+    case Stage.Skip(n)                                    => BsonDocument(key, BsonInt32(n))
+    case Stage.Count(fieldName)                           => BsonDocument(key, BsonString(fieldName))
     case Stage.Unwind(path, preserveNullAndEmptyArrays)   =>
       BsonDocument(
-        "$unwind",
+        key,
         BsonDocument("path", BsonString("$" + path.render(naming)))
           .append("preserveNullAndEmptyArrays", BsonBoolean(preserveNullAndEmptyArrays)),
       )
     case Stage.Lookup(from, localField, foreignField, as) =>
       BsonDocument(
-        "$lookup",
+        key,
         BsonDocument("from", BsonString(from))
           .append("localField", BsonString(localField.render(naming)))
           .append("foreignField", BsonString(foreignField.render(naming)))
@@ -98,7 +98,7 @@ enum Stage[E]:
       lookup.append("pipeline", BsonArray(pipeline.map(_.toBson(naming)).asJava)): Unit
       lookup.append("as", BsonString(as)): Unit
 
-      BsonDocument("$lookup", lookup)
+      BsonDocument(key, lookup)
 
     case Stage.GraphLookup(from, startWith, connectFrom, connectTo, as, options) =>
       val graph = BsonDocument("from", BsonString(from))
@@ -111,7 +111,7 @@ enum Stage[E]:
       options.depthField.foreach(value => graph.append("depthField", BsonString(value)): Unit)
       options.restrictSearch.foreach(filter => graph.append("restrictSearchWithMatch", filter.toBson(naming)): Unit)
 
-      BsonDocument("$graphLookup", graph)
+      BsonDocument(key, graph)
 
     case Stage.Group(by, accumulators) =>
       val group = BsonDocument(
@@ -119,24 +119,24 @@ enum Stage[E]:
         by.fold(BsonNull.VALUE: BsonValue)(path => BsonString("$" + path.render(naming)))
       )
       accumulators.foreach((name, accumulator) => group.append(name, accumulator.toBson(naming)))
-      BsonDocument("$group", group)
+      BsonDocument(key, group)
 
     case Stage.AddFields(fields) =>
       BsonDocument(
-        "$addFields",
+        key,
         fields.foldLeft(BsonDocument())((acc, entry) => acc.append(entry._1, entry._2))
       )
 
-    case Stage.ReplaceRoot(path)     => BsonDocument("$replaceRoot", BsonDocument("newRoot", BsonString("$" + path.render(naming))))
-    case Stage.Sample(size)          => BsonDocument("$sample", BsonDocument("size", BsonInt32(size)))
-    case Stage.UnionWith(collection) => BsonDocument("$unionWith", BsonString(collection))
+    case Stage.ReplaceRoot(path)     => BsonDocument(key, BsonDocument("newRoot", BsonString("$" + path.render(naming))))
+    case Stage.Sample(size)          => BsonDocument(key, BsonDocument("size", BsonInt32(size)))
+    case Stage.UnionWith(collection) => BsonDocument(key, BsonString(collection))
 
     case Stage.Facet(facets) =>
       val document = BsonDocument()
       facets.foreach { (name, stages) =>
         document.append(name, BsonArray(stages.map(_.toBson(naming)).asJava))
       }
-      BsonDocument("$facet", document)
+      BsonDocument(key, document)
 
     case Stage.Bucket(groupBy, boundaries, default, output) =>
       val bucket = BsonDocument("groupBy", BsonString("$" + groupBy.render(naming)))
@@ -150,7 +150,7 @@ enum Stage[E]:
         output.foreach((name, accumulator) => fields.append(name, accumulator.toBson(naming)))
         bucket.append("output", fields): Unit
 
-      BsonDocument("$bucket", bucket)
+      BsonDocument(key, bucket)
 
     case Stage.Densify(path, partitionBy, range) =>
       val densify = BsonDocument("field", BsonString(path.render(naming)))
@@ -160,7 +160,7 @@ enum Stage[E]:
 
       densify.append("range", range.toBson)
 
-      BsonDocument("$densify", densify)
+      BsonDocument(key, densify)
 
     case Stage.SetWindowFields(partitionBy, sortBy, output) =>
       val windowFields = BsonDocument()
@@ -179,10 +179,10 @@ enum Stage[E]:
 
       windowFields.append("output", fields)
 
-      BsonDocument("$setWindowFields", windowFields)
+      BsonDocument(key, windowFields)
 
-    case Stage.Out(collection, options)   => BsonDocument("$out", Stage.outTarget(collection, options))
-    case Stage.Merge(collection, options) => BsonDocument("$merge", Stage.mergeTarget(collection, options))
+    case Stage.Out(collection, options)   => BsonDocument(key, Stage.outTarget(collection, options))
+    case Stage.Merge(collection, options) => BsonDocument(key, Stage.mergeTarget(collection, options))
     case Stage.Raw(document)              => document
 
 object Stage:
