@@ -59,11 +59,7 @@ lazy val commonSettings = Seq(
     // sites already draw "Missing symbol position ... This is a compiler bug" under the plain flags, so the fault is
     // upstream rather than here. Not `-Wnonunit-statement` either — every non-final ScalaTest assertion trips it.
   ),
-  credentials ++= {
-    val local = (LocalRootProject / baseDirectory).value / ".env" / "sonatype_credentials"
-    val home  = Path.userHome / ".sbt" / "sonatype_credentials"
-    Seq(local, home).find(_.isFile).map(Credentials(_)).toSeq
-  },
+  credentials ++= Seq(Path.userHome / ".sbt" / "sonatype_credentials").filter(_.isFile).map(Credentials(_)),
   mimaPreviousArtifacts  := binaryCompatibleWith.map(organization.value %% moduleName.value % _),
 )
 
