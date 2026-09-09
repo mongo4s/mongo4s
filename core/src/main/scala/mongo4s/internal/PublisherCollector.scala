@@ -1,7 +1,7 @@
 package mongo4s.internal
 
-import java.util.concurrent.{CompletableFuture, CompletionException}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
+import java.util.concurrent.{CompletableFuture, CompletionException}
 
 import scala.collection.mutable.ListBuffer
 

@@ -3,7 +3,8 @@ package mongo4s
 import scala.annotation.targetName
 
 import mongo4s.bson.{BsonEncoder, BsonTypeName}
-import mongo4s.operations.{Filter, GeoShape, Geometry, PushOptions, Sort, Update}
+import mongo4s.operations.geometry.{GeoShape, Geometry}
+import mongo4s.operations.{Filter, PushOptions, Sort, Update}
 
 opaque type Field[E, A] = FieldPath
 

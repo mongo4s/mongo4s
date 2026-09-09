@@ -1,8 +1,8 @@
 package mongo4s.testkit
 
-import mongo4s.bson.BsonDocumentCodec
-import mongo4s.operations.Projection
 import mongo4s.{Effect, PrimaryKey}
+import mongo4s.operations.Projection
+import mongo4s.bson.BsonDocumentCodec
 import mongo4s.repositories.BaseMongoRepository
 
 final class FakeRepository[F[*], S[*], E, K](
@@ -19,4 +19,8 @@ object FakeRepository:
       batchSize: Int = BaseMongoRepository.DefaultBatchSize,
       projection: Projection[E] = Projection.empty[E],
   )(using F: Effect[F], codec: BsonDocumentCodec[E], pk: PrimaryKey[E, K]): FakeRepository[F, S, E, K] =
-    new FakeRepository(FakeMongoCollection[F, S, E](codec, emit), batchSize, projection)
+    new FakeRepository(
+      fake = FakeMongoCollection[F, S, E](codec, emit),
+      batchSize = batchSize,
+      projection = projection,
+    )

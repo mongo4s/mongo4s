@@ -1,35 +1,42 @@
 package mongo4s.operations
 
 import scala.annotation.targetName
-
 import org.bson.*
-
 import mongo4s.FieldPath
 import mongo4s.bson.{BsonTypeName, FieldNaming}
+import mongo4s.operations.geometry.{GeoShape, Geometry}
 
 import scala.jdk.CollectionConverters.given
 
 enum Filter[E]:
-  case Eq[T](path: FieldPath, value: BsonValue)                                                                                   extends Filter[T]
-  case Ne[T](path: FieldPath, value: BsonValue)                                                                                   extends Filter[T]
-  case Gt[T](path: FieldPath, value: BsonValue)                                                                                   extends Filter[T]
-  case Gte[T](path: FieldPath, value: BsonValue)                                                                                  extends Filter[T]
-  case Lt[T](path: FieldPath, value: BsonValue)                                                                                   extends Filter[T]
-  case Lte[T](path: FieldPath, value: BsonValue)                                                                                  extends Filter[T]
-  case In[T](path: FieldPath, values: List[BsonValue])                                                                            extends Filter[T]
-  case Nin[T](path: FieldPath, values: List[BsonValue])                                                                           extends Filter[T]
-  case Exists[T](path: FieldPath, exists: Boolean)                                                                                extends Filter[T]
-  case Regex[T](path: FieldPath, pattern: String, options: String)                                                                extends Filter[T]
-  case ElemMatch[T, U](path: FieldPath, filter: Filter[U])                                                                        extends Filter[T]
-  case All[T](path: FieldPath, values: List[BsonValue])                                                                           extends Filter[T]
-  case Size[T](path: FieldPath, size: Int)                                                                                        extends Filter[T]
-  case Type[T](path: FieldPath, bsonType: BsonTypeName)                                                                           extends Filter[T]
-  case Mod[T](path: FieldPath, divisor: Long, remainder: Long)                                                                    extends Filter[T]
-  case Text[T](search: String, language: Option[String])                                                                          extends Filter[T]
-  case Near[T](path: FieldPath, geometry: Geometry, minDistance: Option[Double], maxDistance: Option[Double], spherical: Boolean) extends Filter[T]
-  case GeoWithin[T](path: FieldPath, shape: GeoShape)                                                                             extends Filter[T]
-  case GeoIntersects[T](path: FieldPath, geometry: Geometry)                                                                      extends Filter[T]
-  case Expr[T](expression: BsonDocument)                                                                                          extends Filter[T]
+  case Eq[T](path: FieldPath, value: BsonValue)                    extends Filter[T]
+  case Ne[T](path: FieldPath, value: BsonValue)                    extends Filter[T]
+  case Gt[T](path: FieldPath, value: BsonValue)                    extends Filter[T]
+  case Gte[T](path: FieldPath, value: BsonValue)                   extends Filter[T]
+  case Lt[T](path: FieldPath, value: BsonValue)                    extends Filter[T]
+  case Lte[T](path: FieldPath, value: BsonValue)                   extends Filter[T]
+  case In[T](path: FieldPath, values: List[BsonValue])             extends Filter[T]
+  case Nin[T](path: FieldPath, values: List[BsonValue])            extends Filter[T]
+  case Exists[T](path: FieldPath, exists: Boolean)                 extends Filter[T]
+  case Regex[T](path: FieldPath, pattern: String, options: String) extends Filter[T]
+  case ElemMatch[T, U](path: FieldPath, filter: Filter[U])         extends Filter[T]
+  case All[T](path: FieldPath, values: List[BsonValue])            extends Filter[T]
+  case Size[T](path: FieldPath, size: Int)                         extends Filter[T]
+  case Type[T](path: FieldPath, bsonType: BsonTypeName)            extends Filter[T]
+  case Mod[T](path: FieldPath, divisor: Long, remainder: Long)     extends Filter[T]
+  case Text[T](search: String, language: Option[String])           extends Filter[T]
+
+  case Near[T](
+      path: FieldPath,
+      geometry: Geometry,
+      minDistance: Option[Double],
+      maxDistance: Option[Double],
+      spherical: Boolean,
+  ) extends Filter[T]
+
+  case GeoWithin[T](path: FieldPath, shape: GeoShape)        extends Filter[T]
+  case GeoIntersects[T](path: FieldPath, geometry: Geometry) extends Filter[T]
+  case Expr[T](expression: BsonDocument)                     extends Filter[T]
 
   case And[T](filters: List[Filter[T]]) extends Filter[T]
   case Or[T](filters: List[Filter[T]])  extends Filter[T]

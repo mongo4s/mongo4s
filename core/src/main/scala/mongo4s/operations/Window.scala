@@ -14,7 +14,12 @@ enum WindowBound:
     case Current    => BsonString("current")
     case At(offset) => BsonInt32(offset)
 
-final class Window private (val kind: String, val lower: WindowBound, val upper: WindowBound, val unit: Option[DateUnit]):
+final class Window private (
+    val kind: String,
+    val lower: WindowBound,
+    val upper: WindowBound,
+    val unit: Option[DateUnit],
+):
   def toBson: BsonDocument =
     val document = BsonDocument(kind, BsonArray(List(lower.toBson, upper.toBson).asJava))
 

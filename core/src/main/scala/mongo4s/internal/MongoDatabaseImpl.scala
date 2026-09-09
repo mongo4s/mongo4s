@@ -7,8 +7,8 @@ import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
 import com.mongodb.reactivestreams.client.{ChangeStreamPublisher, ClientSession, MongoDatabase as RSMongoDatabase}
 
 import mongo4s.bson.direct.WireCodec
-import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.operations.CreateCollectionOptions
+import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.{Effect, MongoCollection, MongoDatabase, RsBridge, Streamable}
 import mongo4s.bson.{BsonDocumentCodec, BsonDocumentDecoder, DecodeResult, FieldNaming}
 

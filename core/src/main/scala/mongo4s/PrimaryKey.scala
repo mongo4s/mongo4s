@@ -3,8 +3,8 @@ package mongo4s
 import scala.NamedTuple.NamedTuple
 import scala.compiletime.{constValueTuple, summonAll}
 
-import mongo4s.bson.{BsonEncoder, FieldNaming}
 import mongo4s.operations.Filter
+import mongo4s.bson.{BsonEncoder, FieldNaming}
 
 trait PrimaryKey[E, K] extends KeyRef[E, K]:
   def key(entity: E): K

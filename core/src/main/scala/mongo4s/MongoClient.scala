@@ -5,9 +5,9 @@ import com.mongodb.MongoClientSettings
 import com.mongodb.reactivestreams.client.{ClientSession, MongoClient as RSMongoClient, MongoClients}
 
 import mongo4s.internal.MongoClientImpl
+import mongo4s.operations.TransactionOptions
 import mongo4s.bson.{BsonDocumentDecoder, DecodeResult}
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
-import mongo4s.operations.TransactionOptions
 
 trait MongoClient[F[*], S[*]]:
   def getDatabase(name: String): F[MongoDatabase[F, S]]

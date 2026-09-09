@@ -161,7 +161,7 @@ final class IndexItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndA
         for
           people   <- collection("index_types")
           _        <- people.createIndex(Index.hashed(nameField).named("by_hash"))
-          _        <- people.createIndex(Index.geo2dsphere(Field.stored[Person, Any]("location")).named("by_area"))
+          _        <- people.createIndex(Index.geo2DSphere(Field.stored[Person, Any]("location")).named("by_area"))
           _        <- people.createIndex(Index.ascending(Field.stored[Person, Any]("$**")).named("by_anything"))
           _        <- people.createIndex(Index.ascending(ageField).named("by_age").withHidden)
           existing <- people.listIndexes

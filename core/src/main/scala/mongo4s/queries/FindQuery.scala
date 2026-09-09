@@ -1,15 +1,15 @@
 package mongo4s.queries
 
+import scala.quoted.*
 import scala.NamedTuple.AnyNamedTuple
 import scala.concurrent.duration.FiniteDuration
-import scala.quoted.*
 
 import org.bson.BsonDocument
 import com.mongodb.ExplainVerbosity
 
-import mongo4s.bson.{BsonDocumentDecoder, FieldNaming}
-import mongo4s.operations.{Filter, Projection, Sort}
 import mongo4s.{SelectMacro, Streamable}
+import mongo4s.operations.{Filter, Projection, Sort}
+import mongo4s.bson.{BsonDocumentDecoder, FieldNaming}
 
 trait FindQuery[F[*], S[*], A]:
   def filter(filter: Filter[A]): FindQuery[F, S, A]

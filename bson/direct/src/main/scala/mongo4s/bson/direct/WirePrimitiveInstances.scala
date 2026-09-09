@@ -16,37 +16,58 @@ trait WirePrimitiveInstances extends WireFallbackInstances:
 
   given ScalarWireCodec[String] = ScalarWireCodec.instance(
     (w, v) => w.writeString(v),
-    r => if r.getCurrentBsonType == BsonType.STRING then r.readString() else relaxed(r, stringDecoder),
+    r =>
+      if r.getCurrentBsonType == BsonType.STRING
+      then r.readString()
+      else relaxed(r, stringDecoder),
   )
 
   given ScalarWireCodec[Int] = ScalarWireCodec.instance(
     (w, v) => w.writeInt32(v),
-    r => if r.getCurrentBsonType == BsonType.INT32 then r.readInt32() else relaxed(r, intDecoder),
+    r =>
+      if r.getCurrentBsonType == BsonType.INT32
+      then r.readInt32()
+      else relaxed(r, intDecoder),
   )
 
   given ScalarWireCodec[Long] = ScalarWireCodec.instance(
     (w, v) => w.writeInt64(v),
-    r => if r.getCurrentBsonType == BsonType.INT64 then r.readInt64() else relaxed(r, longDecoder),
+    r =>
+      if r.getCurrentBsonType == BsonType.INT64
+      then r.readInt64()
+      else relaxed(r, longDecoder),
   )
 
   given ScalarWireCodec[Double] = ScalarWireCodec.instance(
     (w, v) => w.writeDouble(v),
-    r => if r.getCurrentBsonType == BsonType.DOUBLE then r.readDouble() else relaxed(r, doubleDecoder),
+    r =>
+      if r.getCurrentBsonType == BsonType.DOUBLE
+      then r.readDouble()
+      else relaxed(r, doubleDecoder),
   )
 
   given ScalarWireCodec[Boolean] = ScalarWireCodec.instance(
     (w, v) => w.writeBoolean(v),
-    r => if r.getCurrentBsonType == BsonType.BOOLEAN then r.readBoolean() else relaxed(r, booleanDecoder),
+    r =>
+      if r.getCurrentBsonType == BsonType.BOOLEAN
+      then r.readBoolean()
+      else relaxed(r, booleanDecoder),
   )
 
   given ScalarWireCodec[Instant] = ScalarWireCodec.instance(
     (w, v) => w.writeDateTime(v.toEpochMilli),
-    r => if r.getCurrentBsonType == BsonType.DATE_TIME then Instant.ofEpochMilli(r.readDateTime()) else relaxed(r, instantDecoder),
+    r =>
+      if r.getCurrentBsonType == BsonType.DATE_TIME
+      then Instant.ofEpochMilli(r.readDateTime())
+      else relaxed(r, instantDecoder),
   )
 
   given ScalarWireCodec[ObjectId] = ScalarWireCodec.instance(
     (w, v) => w.writeObjectId(v),
-    r => if r.getCurrentBsonType == BsonType.OBJECT_ID then r.readObjectId() else relaxed(r, objectIdDecoder),
+    r =>
+      if r.getCurrentBsonType == BsonType.OBJECT_ID
+      then r.readObjectId()
+      else relaxed(r, objectIdDecoder),
   )
 
   given ScalarWireCodec[BigDecimal] = ScalarWireCodec.instance(

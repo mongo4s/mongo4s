@@ -6,22 +6,22 @@ import scala.reflect.ClassTag
 
 import org.bson.BsonDocument
 import org.bson.codecs.configuration.CodecRegistries
+import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
-import com.mongodb.client.model.{BulkWriteOptions, DeleteManyModel, DeleteOneModel, IndexOptions, InsertOneModel}
+import com.mongodb.client.model.{ReplaceOneModel, UpdateManyModel, UpdateOneModel, WriteModel}
 import com.mongodb.client.model.{CountOptions as DriverCountOptions, DeleteOptions as DriverDeleteOptions}
 import com.mongodb.client.model.{FindOneAndDeleteOptions as DriverFindOneAndDeleteOptions, ReturnDocument}
-import com.mongodb.client.model.{FindOneAndReplaceOptions as DriverFindOneAndReplaceOptions, FindOneAndUpdateOptions as DriverFindOneAndUpdateOptions}
-import com.mongodb.client.model.{ReplaceOneModel, UpdateManyModel, UpdateOneModel, WriteModel}
 import com.mongodb.client.model.{ReplaceOptions as DriverReplaceOptions, UpdateOptions as DriverUpdateOptions}
-import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
+import com.mongodb.client.model.{BulkWriteOptions, DeleteManyModel, DeleteOneModel, IndexOptions, InsertOneModel}
+import com.mongodb.client.model.{FindOneAndReplaceOptions as DriverFindOneAndReplaceOptions, FindOneAndUpdateOptions as DriverFindOneAndUpdateOptions}
 
+import mongo4s.results.*
 import mongo4s.operations.*
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.queries.{AggregateQuery, DistinctQuery, FindQuery}
 import mongo4s.{Effect, Field, MongoCollection, RsBridge, Streamable}
 import mongo4s.bson.direct.{DocumentCodecBridge, DriverCodecBridge, WireCodec}
 import mongo4s.bson.{BsonDecoder, BsonDocumentCodec, DecodeResult, FieldNaming}
-import mongo4s.results.{BulkWriteResult, DeleteResult, InsertManyResult, InsertOneResult, UpdateResult}
 
 import scala.jdk.CollectionConverters.given
 

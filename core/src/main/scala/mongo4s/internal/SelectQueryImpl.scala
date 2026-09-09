@@ -1,13 +1,12 @@
 package mongo4s.internal
 
+import org.bson.BsonDocument
 import org.reactivestreams.Publisher
 import com.mongodb.reactivestreams.client.FindPublisher
 
-import org.bson.BsonDocument
-
 import mongo4s.{RsBridge, Streamable}
-import mongo4s.bson.{BsonDocumentDecoder, DecodeResult}
 import mongo4s.queries.{DecodeAttempts, SelectQuery}
+import mongo4s.bson.{BsonDocumentDecoder, DecodeResult}
 
 private[mongo4s] object SelectQueryImpl:
 

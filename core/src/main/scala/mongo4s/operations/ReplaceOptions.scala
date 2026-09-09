@@ -1,6 +1,7 @@
 package mongo4s.operations
 
 import org.bson.BsonDocument
+
 import com.mongodb.client.model.Collation
 
 final class ReplaceOptions private (

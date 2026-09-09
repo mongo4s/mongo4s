@@ -8,24 +8,29 @@ import mongo4s.bson.{BsonEncoder, FieldNaming}
 import mongo4s.{ElementOf, Field, FieldPath, NumericOf}
 
 enum Update[E]:
-  case Set[T](path: FieldPath, value: BsonValue)                                extends Update[T]
-  case SetOnInsert[T](path: FieldPath, value: BsonValue)                        extends Update[T]
-  case Unset[T](path: FieldPath)                                                extends Update[T]
-  case Rename[T](path: FieldPath, to: FieldPath)                                extends Update[T]
-  case Inc[T](path: FieldPath, amount: BsonValue)                               extends Update[T]
-  case Mul[T](path: FieldPath, factor: BsonValue)                               extends Update[T]
-  case Min[T](path: FieldPath, value: BsonValue)                                extends Update[T]
-  case Max[T](path: FieldPath, value: BsonValue)                                extends Update[T]
-  case CurrentDate[T](path: FieldPath)                                          extends Update[T]
-  case Push[T](path: FieldPath, value: BsonValue)                               extends Update[T]
-  case PushEach[T](path: FieldPath, values: BsonArray, options: PushOptions[?]) extends Update[T]
-  case Pull[T](path: FieldPath, value: BsonValue)                               extends Update[T]
-  case PullAll[T](path: FieldPath, values: BsonArray)                           extends Update[T]
-  case Pop[T](path: FieldPath, first: Boolean)                                  extends Update[T]
-  case AddToSet[T](path: FieldPath, value: BsonValue)                           extends Update[T]
-  case AddToSetEach[T](path: FieldPath, values: BsonArray)                      extends Update[T]
-  case Combine[T](updates: List[Update[T]])                                     extends Update[T]
-  case Raw[T](document: BsonDocument)                                           extends Update[T]
+  case Set[T](path: FieldPath, value: BsonValue)           extends Update[T]
+  case SetOnInsert[T](path: FieldPath, value: BsonValue)   extends Update[T]
+  case Unset[T](path: FieldPath)                           extends Update[T]
+  case Rename[T](path: FieldPath, to: FieldPath)           extends Update[T]
+  case Inc[T](path: FieldPath, amount: BsonValue)          extends Update[T]
+  case Mul[T](path: FieldPath, factor: BsonValue)          extends Update[T]
+  case Min[T](path: FieldPath, value: BsonValue)           extends Update[T]
+  case Max[T](path: FieldPath, value: BsonValue)           extends Update[T]
+  case CurrentDate[T](path: FieldPath)                     extends Update[T]
+  case Push[T](path: FieldPath, value: BsonValue)          extends Update[T]
+  case Pull[T](path: FieldPath, value: BsonValue)          extends Update[T]
+  case PullAll[T](path: FieldPath, values: BsonArray)      extends Update[T]
+  case Pop[T](path: FieldPath, first: Boolean)             extends Update[T]
+  case AddToSet[T](path: FieldPath, value: BsonValue)      extends Update[T]
+  case AddToSetEach[T](path: FieldPath, values: BsonArray) extends Update[T]
+  case Combine[T](updates: List[Update[T]])                extends Update[T]
+  case Raw[T](document: BsonDocument)                      extends Update[T]
+
+  case PushEach[T](
+      path: FieldPath,
+      values: BsonArray,
+      options: PushOptions[?],
+  ) extends Update[T]
 
   def and(other: Update[E]): Update[E] = (this, other) match
     case (Combine(left), Combine(right)) => Combine(left ++ right)
@@ -46,49 +51,77 @@ enum Update[E]:
 
 object Update:
 
-  def set[E, A](field: Field[E, A], value: A)(using encoder: BsonEncoder[A]): Update[E] =
+  def set[E, A](field: Field[E, A], value: A)(using
+      encoder: BsonEncoder[A],
+  ): Update[E] =
     Set(field.path, encoder.encode(value))
 
-  def setOnInsert[E, A](field: Field[E, A], value: A)(using encoder: BsonEncoder[A]): Update[E] =
+  def setOnInsert[E, A](field: Field[E, A], value: A)(using
+      encoder: BsonEncoder[A],
+  ): Update[E] =
     SetOnInsert(field.path, encoder.encode(value))
 
   def unset[E, A](field: Field[E, A]): Update[E] = Unset(field.path)
 
   def rename[E, A](field: Field[E, A], to: Field[E, A]): Update[E] = Rename(field.path, to.path)
 
-  def inc[E, C, A](field: Field[E, C], amount: A)(using numeric: NumericOf[C, A]): Update[E] =
+  def inc[E, C, A](field: Field[E, C], amount: A)(using
+      numeric: NumericOf[C, A],
+  ): Update[E] =
     Inc(field.path, numeric.encode(amount))
 
-  def mul[E, C, A](field: Field[E, C], factor: A)(using numeric: NumericOf[C, A]): Update[E] =
+  def mul[E, C, A](field: Field[E, C], factor: A)(using
+      numeric: NumericOf[C, A],
+  ): Update[E] =
     Mul(field.path, numeric.encode(factor))
 
-  def min[E, C, A](field: Field[E, C], value: A)(using numeric: NumericOf[C, A]): Update[E] =
+  def min[E, C, A](field: Field[E, C], value: A)(using
+      numeric: NumericOf[C, A],
+  ): Update[E] =
     Min(field.path, numeric.encode(value))
 
-  def max[E, C, A](field: Field[E, C], value: A)(using numeric: NumericOf[C, A]): Update[E] =
+  def max[E, C, A](field: Field[E, C], value: A)(using
+      numeric: NumericOf[C, A],
+  ): Update[E] =
     Max(field.path, numeric.encode(value))
 
   def currentDate[E](field: Field[E, Instant]): Update[E] = CurrentDate(field.path)
 
-  def push[E, C, A](field: Field[E, C], value: A)(using ElementOf[C, A], BsonEncoder[A]): Update[E] =
+  def push[E, C, A](field: Field[E, C], value: A)(using
+      ElementOf[C, A],
+      BsonEncoder[A],
+  ): Update[E] =
     Push(field.path, summon[BsonEncoder[A]].encode(value))
 
-  def pushAll[E, C, A](field: Field[E, C], values: Seq[A], options: PushOptions[A] = PushOptions.default[A])(using
+  def pushAll[E, C, A](
+      field: Field[E, C],
+      values: Seq[A],
+      options: PushOptions[A] = PushOptions.default[A],
+  )(using
       ElementOf[C, A],
       BsonEncoder[A],
   ): Update[E] =
     PushEach(field.path, bsonArray(values), options)
 
-  def pull[E, C, A](field: Field[E, C], value: A)(using ElementOf[C, A], BsonEncoder[A]): Update[E] =
+  def pull[E, C, A](field: Field[E, C], value: A)(using
+      ElementOf[C, A],
+      BsonEncoder[A],
+  ): Update[E] =
     Pull(field.path, summon[BsonEncoder[A]].encode(value))
 
   def pullAll[E, C, A](field: Field[E, C], values: Seq[A])(using ElementOf[C, A], BsonEncoder[A]): Update[E] =
     PullAll(field.path, bsonArray(values))
 
-  def addToSet[E, C, A](field: Field[E, C], value: A)(using ElementOf[C, A], BsonEncoder[A]): Update[E] =
+  def addToSet[E, C, A](field: Field[E, C], value: A)(using
+      ElementOf[C, A],
+      BsonEncoder[A],
+  ): Update[E] =
     AddToSet(field.path, summon[BsonEncoder[A]].encode(value))
 
-  def addAllToSet[E, C, A](field: Field[E, C], values: Seq[A])(using ElementOf[C, A], BsonEncoder[A]): Update[E] =
+  def addAllToSet[E, C, A](field: Field[E, C], values: Seq[A])(using
+      ElementOf[C, A],
+      BsonEncoder[A],
+  ): Update[E] =
     AddToSetEach(field.path, bsonArray(values))
 
   def popFirst[E, C](field: Field[E, C]): Update[E] = Pop(field.path, first = true)

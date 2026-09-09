@@ -10,7 +10,7 @@ private[bson] object WireDiscriminator:
   val ValueField: String = "value"
 
   def read(reader: BsonReader): String =
-    val start = reader.getMark()
+    val start = reader.getMark
     reader.readStartDocument()
 
     val firstName = if reader.readBsonType() == BsonType.END_OF_DOCUMENT then null else reader.readName()

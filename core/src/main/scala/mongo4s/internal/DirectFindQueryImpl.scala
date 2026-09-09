@@ -9,8 +9,8 @@ import com.mongodb.client.model.Collation
 import com.mongodb.reactivestreams.client.{ClientSession, FindPublisher, MongoCollection as RSMongoCollection}
 
 import mongo4s.{RsBridge, Streamable}
-import mongo4s.queries.{DecodeAttempts, FindQuery, SelectQuery}
 import mongo4s.operations.{Filter, Projection, Sort}
+import mongo4s.queries.{DecodeAttempts, FindQuery, SelectQuery}
 import mongo4s.bson.{BsonDocumentCodec, BsonDocumentDecoder, DecodeResult, FieldNaming}
 
 private[mongo4s] final class DirectFindQueryImpl[F[*], S[*], A](

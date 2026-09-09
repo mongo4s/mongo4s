@@ -9,11 +9,23 @@ enum WriteCommand[E]:
   case DeleteMany[T](filter: Filter[T])                                            extends WriteCommand[T]
 
 object WriteCommand:
-  def replaceOne[E](filter: Filter[E], replacement: E, options: ReplaceOptions = ReplaceOptions.default): WriteCommand[E] =
+  def replaceOne[E](
+      filter: Filter[E],
+      replacement: E,
+      options: ReplaceOptions = ReplaceOptions.default,
+  ): WriteCommand[E] =
     ReplaceOne(filter, replacement, options)
 
-  def updateOne[E](filter: Filter[E], update: Update[E], options: UpdateOptions = UpdateOptions.default): WriteCommand[E] =
+  def updateOne[E](
+      filter: Filter[E],
+      update: Update[E],
+      options: UpdateOptions = UpdateOptions.default,
+  ): WriteCommand[E] =
     UpdateOne(filter, update, options)
 
-  def updateMany[E](filter: Filter[E], update: Update[E], options: UpdateOptions = UpdateOptions.default): WriteCommand[E] =
+  def updateMany[E](
+      filter: Filter[E],
+      update: Update[E],
+      options: UpdateOptions = UpdateOptions.default,
+  ): WriteCommand[E] =
     UpdateMany(filter, update, options)

@@ -1,7 +1,7 @@
 package mongo4s.bson.direct
 
-import scala.annotation.publicInBinary
 import scala.deriving.Mirror
+import scala.annotation.publicInBinary
 import scala.compiletime.{constValueTuple, summonAll}
 
 import org.bson.{BsonReader, BsonType, BsonWriter}

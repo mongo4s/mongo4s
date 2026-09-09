@@ -1,7 +1,7 @@
 package mongo4s
 
-import scala.annotation.publicInBinary
 import scala.quoted.*
+import scala.annotation.publicInBinary
 
 @publicInBinary private[mongo4s] object FieldMacro:
 

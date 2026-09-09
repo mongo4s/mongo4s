@@ -1,26 +1,24 @@
 package mongo4s.operations
 
-import org.bson.{BsonArray, BsonDocument, BsonInt32, BsonValue}
+import org.bson.{BsonDocument, BsonInt32}
 
 import mongo4s.bson.FieldNaming
 import mongo4s.{ElementOf, Field, FieldPath}
 
-import scala.jdk.CollectionConverters.given
-
-final case class Slice(count: Int, skip: Option[Int]):
-  require(
-    skip.isEmpty || count > 0,
-    s"A slice that skips must take a positive count, got $count",
-  )
-
-  def toBson: BsonValue = skip match
-    case None       => BsonInt32(count)
-    case Some(from) => BsonArray(List[BsonValue](BsonInt32(from), BsonInt32(count)).asJava)
-
 enum Projection[E]:
-  case Everything[T](slices: List[(FieldPath, Slice)] = Nil)                                        extends Projection[T]
-  case Include[T](fields: List[FieldPath], withId: Boolean, slices: List[(FieldPath, Slice)] = Nil) extends Projection[T]
-  case Exclude[T](fields: List[FieldPath], slices: List[(FieldPath, Slice)] = Nil)                  extends Projection[T]
+
+  case Everything[T](slices: List[(FieldPath, Slice)] = Nil) extends Projection[T]
+
+  case Include[T](
+      fields: List[FieldPath],
+      withId: Boolean,
+      slices: List[(FieldPath, Slice)] = Nil,
+  ) extends Projection[T]
+
+  case Exclude[T](
+      fields: List[FieldPath],
+      slices: List[(FieldPath, Slice)] = Nil
+  ) extends Projection[T]
 
   def slices: List[(FieldPath, Slice)]
 
@@ -53,6 +51,7 @@ enum Projection[E]:
   end toBson
 
 object Projection:
+
   private val IdPath: FieldPath = FieldPath.literal("_id")
 
   def empty[E]: Everything[E]  = Everything()

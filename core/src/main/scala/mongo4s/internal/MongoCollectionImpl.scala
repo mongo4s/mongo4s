@@ -12,12 +12,12 @@ import com.mongodb.client.model.{ReplaceOneModel, UpdateManyModel, UpdateOneMode
 import com.mongodb.client.model.{ReplaceOptions as DriverReplaceOptions, UpdateOptions as DriverUpdateOptions}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
+import mongo4s.results.*
+import mongo4s.operations.*
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.queries.{AggregateQuery, DistinctQuery, FindQuery}
 import mongo4s.{Effect, Field, MongoCollection, RsBridge, Streamable}
 import mongo4s.bson.{BsonDecoder, BsonDocumentCodec, DecodeResult, FieldNaming}
-import mongo4s.operations.*
-import mongo4s.results.{BulkWriteResult, DeleteResult, InsertManyResult, InsertOneResult, UpdateResult}
 
 import scala.jdk.CollectionConverters.given
 

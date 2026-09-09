@@ -2,9 +2,9 @@ package mongo4s.operations
 
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
-
 import mongo4s.Field
 import mongo4s.bson.FieldNaming
+import mongo4s.operations.geometry.{GeoShape, Geometry}
 
 object GeoSpec:
   final case class Place(name: String, lastSeen: Geometry.Point, serviceArea: Geometry.Polygon)

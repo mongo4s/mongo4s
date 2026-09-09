@@ -1,12 +1,12 @@
 package mongo4s
 
+import org.bson.BsonDocument
 import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoDatabase as RSMongoDatabase}
-import org.bson.BsonDocument
 
 import mongo4s.bson.direct.WireCodec
-import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.operations.CreateCollectionOptions
+import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.bson.{BsonDocumentCodec, BsonDocumentDecoder, DecodeResult, FieldNaming}
 
 import scala.reflect.ClassTag

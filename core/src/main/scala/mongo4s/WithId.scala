@@ -17,9 +17,9 @@ object WithId:
 
   given [E] => PrimaryKey[WithId[ObjectId, E], ObjectId] =
     PrimaryKey.make(
-      _.id,
-      List(IdField),
-      id => KeyFields.one(IdField, BsonObjectId(id)),
+      keyOf = _.id,
+      names = List(IdField),
+      fieldsOf = id => KeyFields.one(IdField, BsonObjectId(id)),
     )
 
   given [Id, E] => (idEncoder: BsonEncoder[Id], idDecoder: BsonDecoder[Id], codec: BsonDocumentCodec[E]) => BsonDocumentCodec[WithId[Id, E]] =

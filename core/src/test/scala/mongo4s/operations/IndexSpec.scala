@@ -38,8 +38,8 @@ final class IndexSpec extends AnyWordSpec, Matchers:
 
     "render hashed and geospatial indexes as their own markers" in {
       Index.hashed(nameField).keysToBson(FieldNaming.identity).toJson shouldBe """{"firstName": "hashed"}"""
-      Index.geo2dsphere(nameField).keysToBson(FieldNaming.identity).toJson shouldBe """{"firstName": "2dsphere"}"""
-      Index.empty[User].geo2d(nameField).keysToBson(FieldNaming.identity).toJson shouldBe """{"firstName": "2d"}"""
+      Index.geo2DSphere(nameField).keysToBson(FieldNaming.identity).toJson shouldBe """{"firstName": "2dsphere"}"""
+      Index.empty[User].geo2D(nameField).keysToBson(FieldNaming.identity).toJson shouldBe """{"firstName": "2d"}"""
     }
 
     "index a wildcard path, which needs no direction of its own" in {

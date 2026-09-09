@@ -23,8 +23,8 @@ final class Index[E] private (
   def descending[A](field: Field[E, A]): Index[E]  = copy(keys = keys :+ (field.path, Index.Direction.Descending))
   def text[A](field: Field[E, A]): Index[E]        = copy(keys = keys :+ (field.path, Index.Direction.Text))
   def hashed[A](field: Field[E, A]): Index[E]      = copy(keys = keys :+ (field.path, Index.Direction.Hashed))
-  def geo2dsphere[A](field: Field[E, A]): Index[E] = copy(keys = keys :+ (field.path, Index.Direction.Geo2dsphere))
-  def geo2d[A](field: Field[E, A]): Index[E]       = copy(keys = keys :+ (field.path, Index.Direction.Geo2d))
+  def geo2DSphere[A](field: Field[E, A]): Index[E] = copy(keys = keys :+ (field.path, Index.Direction.Geo2DSphere))
+  def geo2D[A](field: Field[E, A]): Index[E]       = copy(keys = keys :+ (field.path, Index.Direction.Geo2D))
 
   def withUnique: Index[E] = copy(unique = true)
   def withSparse: Index[E] = copy(sparse = true)
@@ -79,7 +79,7 @@ final class Index[E] private (
 object Index:
 
   enum Direction:
-    case Ascending, Descending, Text, Hashed, Geo2dsphere, Geo2d
+    case Ascending, Descending, Text, Hashed, Geo2DSphere, Geo2D
 
     def toBson: BsonValue =
       this match
@@ -87,8 +87,8 @@ object Index:
         case Descending  => BsonInt32(-1)
         case Text        => BsonString("text")
         case Hashed      => BsonString("hashed")
-        case Geo2dsphere => BsonString("2dsphere")
-        case Geo2d       => BsonString("2d")
+        case Geo2DSphere => BsonString("2dsphere")
+        case Geo2D       => BsonString("2d")
 
   def empty[E]: Index[E] =
     new Index(
@@ -107,8 +107,8 @@ object Index:
   def descending[E, A](field: Field[E, A]): Index[E]  = empty[E].descending(field)
   def text[E, A](field: Field[E, A]): Index[E]        = empty[E].text(field)
   def hashed[E, A](field: Field[E, A]): Index[E]      = empty[E].hashed(field)
-  def geo2d[E, A](field: Field[E, A]): Index[E]       = empty[E].geo2d(field)
-  def geo2dsphere[E, A](field: Field[E, A]): Index[E] = empty[E].geo2dsphere(field)
+  def geo2D[E, A](field: Field[E, A]): Index[E]       = empty[E].geo2D(field)
+  def geo2DSphere[E, A](field: Field[E, A]): Index[E] = empty[E].geo2DSphere(field)
   def unique[E, A](field: Field[E, A]): Index[E]      = empty[E].ascending(field).withUnique
 
   def forKeyFields[E](names: List[String]): Index[E] =

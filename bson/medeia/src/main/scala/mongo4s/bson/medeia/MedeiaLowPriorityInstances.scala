@@ -2,9 +2,7 @@ package mongo4s.bson.medeia
 
 import medeia.decoder.BsonDecoderError
 
-import mongo4s.bson.{BsonDocumentCodec, BsonError}
-
-private[medeia] def medeiaError(error: BsonDecoderError): BsonError = BsonError.fromMessage(error.toString)
+import mongo4s.bson.BsonDocumentCodec
 
 trait MedeiaLowPriorityInstances:
 

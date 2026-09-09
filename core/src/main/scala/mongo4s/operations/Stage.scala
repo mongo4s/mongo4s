@@ -2,8 +2,8 @@ package mongo4s.operations
 
 import org.bson.*
 
-import mongo4s.bson.{BsonEncoder, FieldNaming}
 import mongo4s.{Field, FieldPath}
+import mongo4s.bson.{BsonEncoder, FieldNaming}
 
 import scala.jdk.CollectionConverters.given
 
@@ -15,8 +15,20 @@ enum Stage[E]:
   case Skip(n: Int)
   case Count(fieldName: String)
   case Unwind(path: FieldPath, preserveNullAndEmptyArrays: Boolean)
-  case Lookup(from: String, localField: FieldPath, foreignField: FieldPath, as: String)
-  case LookupPipeline[T, B](from: String, let: Option[BsonDocument], pipeline: List[Stage[B]], as: String) extends Stage[T]
+
+  case Lookup(
+      from: String,
+      localField: FieldPath,
+      foreignField: FieldPath,
+      as: String,
+  )
+
+  case LookupPipeline[T, B](
+      from: String,
+      let: Option[BsonDocument],
+      pipeline: List[Stage[B]],
+      as: String,
+  ) extends Stage[T]
 
   case GraphLookup[T, B](
       from: String,
@@ -26,15 +38,32 @@ enum Stage[E]:
       as: String,
       options: GraphLookupOptions[B],
   ) extends Stage[T]
+
   case Group(by: Option[FieldPath], accumulators: List[(String, Accumulator[E])])
   case AddFields(fields: List[(String, BsonValue)])
   case ReplaceRoot(path: FieldPath)
   case Sample(size: Int)
   case UnionWith(collection: String)
   case Facet(facets: List[(String, List[Stage[E]])])
-  case Bucket(groupBy: FieldPath, boundaries: List[BsonValue], default: Option[BsonValue], output: List[(String, Accumulator[E])])
-  case Densify(path: FieldPath, partitionBy: List[FieldPath], range: DensifyRange)
-  case SetWindowFields(partitionBy: Option[FieldPath], sortBy: Sort[E], output: List[(String, WindowOutput[E])])
+
+  case Bucket(
+      groupBy: FieldPath,
+      boundaries: List[BsonValue],
+      default: Option[BsonValue],
+      output: List[(String, Accumulator[E])],
+  )
+
+  case Densify(
+      path: FieldPath,
+      partitionBy: List[FieldPath],
+      range: DensifyRange,
+  )
+
+  case SetWindowFields(
+      partitionBy: Option[FieldPath],
+      sortBy: Sort[E],
+      output: List[(String, WindowOutput[E])],
+  )
 
   case Out(collection: String, options: OutOptions)
   case Merge(collection: String, options: MergeOptions)

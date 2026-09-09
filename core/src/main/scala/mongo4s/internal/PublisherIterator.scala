@@ -7,7 +7,10 @@ import scala.util.{Failure, Success, Try}
 
 import org.reactivestreams.{Publisher, Subscriber, Subscription}
 
-private[mongo4s] final class PublisherIterator[A](publisher: Publisher[A], bufferSize: Int) extends Iterator[A]:
+private[mongo4s] final class PublisherIterator[A](
+    publisher: Publisher[A],
+    bufferSize: Int,
+) extends Iterator[A]:
 
   private val capacity = math.max(1, bufferSize)
 

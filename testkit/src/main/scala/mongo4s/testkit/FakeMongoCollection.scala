@@ -6,11 +6,11 @@ import org.bson.{BsonArray, BsonDocument, BsonDouble, BsonInt32, BsonInt64, Bson
 import com.mongodb.{ExplainVerbosity, ReadConcern, ReadPreference, WriteConcern}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
+import mongo4s.operations.*
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.{Effect, Field, MongoCollection, Streamable}
 import mongo4s.bson.{BsonDocumentCodec, BsonDocumentDecoder, DecodeResult, FieldNaming}
 import mongo4s.queries.{AggregateQuery, DecodeAttempts, DistinctQuery, FindQuery, SelectQuery}
-import mongo4s.operations.*
 import mongo4s.results.{BulkWriteResult, DeleteResult, InsertManyResult, InsertOneResult, UpdateResult}
 
 import scala.jdk.CollectionConverters.given
@@ -342,7 +342,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     val values = array.getValues.asScala.toList
 
     val taken = slice.skip match
-      case Some(from)              => values.drop(from).take(slice.count)
+      case Some(from)              => values.slice(from, from + slice.count)
       case None if slice.count < 0 => values.takeRight(-slice.count)
       case None                    => values.take(slice.count)
 

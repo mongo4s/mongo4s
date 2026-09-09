@@ -10,11 +10,12 @@ import cats.effect.IO
 import org.bson.{BsonDocument, BsonString}
 
 import mongo4s.cats.CatsStream
-import mongo4s.operations.{GeoShape, Geometry, Index}
+import mongo4s.operations.Index
 import mongo4s.{Field, MongoClient, MongoCollection}
 
 import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
+import mongo4s.operations.geometry.{GeoShape, Geometry}
 
 final class GeoItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAfterAll:
 
@@ -37,7 +38,7 @@ final class GeoItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAft
       client     <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
       database   <- client.getDatabase("geo_it")
       collection <- database.getCollection[BsonDocument](name)
-      _          <- collection.createIndex(Index.geo2dsphere(location))
+      _          <- collection.createIndex(Index.geo2DSphere(location))
       _          <- collection.insertMany(List(place("nearby", 13.4230, 52.5200), place("faraway", 13.9000, 52.5200)))
     yield collection
 

@@ -6,14 +6,14 @@ import scala.concurrent.duration.FiniteDuration
 
 import org.bson.BsonDocument
 import com.mongodb.client.model.{
-  ClusteredIndexOptions as DriverClusteredIndexOptions,
   Collation,
-  CreateCollectionOptions as DriverCreateCollectionOptions,
+  ValidationLevel,
+  ValidationAction,
+  ValidationOptions,
   TimeSeriesGranularity,
   TimeSeriesOptions as DriverTimeSeriesOptions,
-  ValidationAction,
-  ValidationLevel,
-  ValidationOptions,
+  ClusteredIndexOptions as DriverClusteredIndexOptions,
+  CreateCollectionOptions as DriverCreateCollectionOptions,
 }
 
 final class TimeSeries private (
