@@ -96,10 +96,10 @@ object Field:
 
   extension [E, A](field: Field[E, A])
     def near(point: Geometry.Point, maxDistance: Option[Double] = None, minDistance: Option[Double] = None): Filter[E] =
-      Filter.Near(field.path, point, minDistance, maxDistance, spherical = false)
+      Filter.Near(field.path, point, minDistance, maxDistance)
 
     def nearSphere(point: Geometry.Point, maxDistance: Option[Double] = None, minDistance: Option[Double] = None): Filter[E] =
-      Filter.Near(field.path, point, minDistance, maxDistance, spherical = true)
+      Filter.NearSphere(field.path, point, minDistance, maxDistance)
 
     def within(shape: GeoShape): Filter[E] = Filter.GeoWithin(field.path, shape)
 

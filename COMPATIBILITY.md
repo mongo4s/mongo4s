@@ -90,6 +90,20 @@ The reason is the one `Index` and `WireCodecConfig` already carry: a `case class
 breaking `apply`/`copy` in every release, and change-stream options keep arriving. `withExpandedEvents` is the first
 one that had to, so the treatment happened now rather than being restated as a hazard.
 
+### `Filter.Near` lost its `spherical` flag to a second case
+
+`Filter.Near(path, geometry, min, max, spherical)` is now two cases — `Near` and `NearSphere` — each with the same
+four fields and no flag. `field.near(...)` and `field.nearSphere(...)` are unchanged, so only code that pattern
+matched on the AST has to follow:
+
+```scala
+case Filter.Near(path, geometry, min, max, spherical) => ...              // 2.x
+case Filter.Near(path, geometry, min, max)            => ...              // 3.0
+case Filter.NearSphere(path, geometry, min, max)      => ...
+```
+
+The four AST enums also gained a `key` member naming the operator each case renders as. It is additive.
+
 ### `Sort` carries a `SortOrder`, and `Projection` carries slices
 
 `Sort[E].fields` is `List[(FieldPath, SortOrder)]` rather than `List[(FieldPath, Boolean)]`, so a third direction —

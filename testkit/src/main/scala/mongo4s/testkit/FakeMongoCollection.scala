@@ -274,8 +274,10 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Filter.Expr(_) =>
       throw UnsupportedOperationException("FakeMongoCollection: $expr is not simulated")
 
-    case Filter.Near(_, _, _, _, _) =>
-      throw UnsupportedOperationException("FakeMongoCollection: $near needs a geospatial index and a real distance, so it is not simulated")
+    case near @ (Filter.Near(_, _, _, _) | Filter.NearSphere(_, _, _, _)) =>
+      throw UnsupportedOperationException(
+        s"FakeMongoCollection: ${near.key} needs a geospatial index and a real distance, so it is not simulated"
+      )
 
     case Filter.GeoWithin(_, _) =>
       throw UnsupportedOperationException("FakeMongoCollection: $geoWithin is not simulated")

@@ -291,6 +291,38 @@ to throw. `BsonError.fromThrowable` was giving those back re-wrapped as `Thrown`
 `ScalarWireCodecParitySpec` runs both paths over every numeric width and asserts they agree — value for value and
 message for message — which is the guard that keeps them from separating again.
 
+## An operator is declared with the case that renders it
+
+`Filter`, `Update`, `Stage` and `Accumulator` each carry `val key` — the MongoDB operator the case renders as —
+declared on the case itself rather than repeated in `toBson`:
+
+```scala
+enum Stage[E](val key: String):
+  case MatchStage(filter: Filter[E]) extends Stage[E]("$match")
+  case Limit(n: Int)                 extends Stage[E]("$limit")
+```
+
+The rendering then reads `BsonDocument(key, ...)` and cannot name a different operator than the case it is matching
+on. Sixty-nine operators live on declarations this way; the dozen strings left in the rendering code are modifiers
+*inside* a payload — `$each` and its friends under `$push`, `$geometry`/`$minDistance` under `$near` — which belong
+to no case and are correctly still written where they are used.
+
+The honest limit of this: the exact-JSON specs already caught a mismatched operator, so what changed is locality,
+not safety. What it buys is that the enum now reads as a table of our AST against MongoDB's vocabulary, and that
+things previously buried in `toBson` are visible at a glance — `Accumulator.Count` renders as `$sum`, `Lookup` and
+`LookupPipeline` share `$lookup`. The fake also names a refused stage with `stage.key` instead of rendering the
+whole stage just to read its first field.
+
+Four cases carry an empty key, and that is the shape rather than an oversight: `Stage.Raw`, `Update.Raw`,
+`Filter.Raw` and `Filter.MatchAll` render no operator of their own — `Raw` carries whatever the caller wrote, and
+`MatchAll` is the empty document. `Filter.Eq` and `Filter.Regex` are the same: MongoDB spells them `{path: value}`
+with no operator at all.
+
+**`Near` was split into `Near` and `NearSphere` to make this hold.** It used to be one case with a `spherical:
+Boolean`, which meant its operator was chosen at render time — the one place a declared key would have been a lie.
+A boolean discriminator inside a case of an ADT is the modelling smell that an enum exists to remove, so the flag
+became the case. `field.near`/`field.nearSphere` are unchanged.
+
 ## The query AST
 
 `Filter` and `Update` are real `enum` ADTs that `mongo4s` interprets itself, not thin wrappers over the driver's

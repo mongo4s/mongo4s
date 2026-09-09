@@ -12,6 +12,8 @@ part of `2.0.0` below.
 
 ### Added
 
+- `Filter`, `Update`, `Stage` and `Accumulator` expose `key`, the MongoDB operator each case renders as, declared on
+  the case instead of repeated in `toBson`.
 - `Sort.byTextScore` — `{"$meta": "textScore"}`, so a `$text` search can be ranked by relevance. `Sort` now carries a
   `SortOrder` per field instead of a `Boolean`.
 - `Projection.slice` and `Projection.sliceFrom` — `$slice`, chainable onto a neutral, inclusive or exclusive
