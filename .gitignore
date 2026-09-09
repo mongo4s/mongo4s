@@ -32,3 +32,6 @@ tests.iml
 docs/src/main/tut/contributing.md
 docs/src/main/tut/index.md
 .bsp/
+
+# local secrets — the whole directory, so no filename is exposed here either
+.env/
