@@ -7,30 +7,30 @@ import org.bson.{BsonArray, BsonBoolean, BsonDocument, BsonInt32, BsonString, Bs
 import mongo4s.bson.{BsonEncoder, FieldNaming}
 import mongo4s.{ElementOf, Field, FieldPath, NumericOf}
 
-enum Update[E]:
-  case Set[T](path: FieldPath, value: BsonValue)           extends Update[T]
-  case SetOnInsert[T](path: FieldPath, value: BsonValue)   extends Update[T]
-  case Unset[T](path: FieldPath)                           extends Update[T]
-  case Rename[T](path: FieldPath, to: FieldPath)           extends Update[T]
-  case Inc[T](path: FieldPath, amount: BsonValue)          extends Update[T]
-  case Mul[T](path: FieldPath, factor: BsonValue)          extends Update[T]
-  case Min[T](path: FieldPath, value: BsonValue)           extends Update[T]
-  case Max[T](path: FieldPath, value: BsonValue)           extends Update[T]
-  case CurrentDate[T](path: FieldPath)                     extends Update[T]
-  case Push[T](path: FieldPath, value: BsonValue)          extends Update[T]
-  case Pull[T](path: FieldPath, value: BsonValue)          extends Update[T]
-  case PullAll[T](path: FieldPath, values: BsonArray)      extends Update[T]
-  case Pop[T](path: FieldPath, first: Boolean)             extends Update[T]
-  case AddToSet[T](path: FieldPath, value: BsonValue)      extends Update[T]
-  case AddToSetEach[T](path: FieldPath, values: BsonArray) extends Update[T]
-  case Combine[T](updates: List[Update[T]])                extends Update[T]
-  case Raw[T](document: BsonDocument)                      extends Update[T]
+enum Update[E](val key: String):
+  case Set[T](path: FieldPath, value: BsonValue)           extends Update[T]("$set")
+  case SetOnInsert[T](path: FieldPath, value: BsonValue)   extends Update[T]("$setOnInsert")
+  case Unset[T](path: FieldPath)                           extends Update[T]("$unset")
+  case Rename[T](path: FieldPath, to: FieldPath)           extends Update[T]("$rename")
+  case Inc[T](path: FieldPath, amount: BsonValue)          extends Update[T]("$inc")
+  case Mul[T](path: FieldPath, factor: BsonValue)          extends Update[T]("$mul")
+  case Min[T](path: FieldPath, value: BsonValue)           extends Update[T]("$min")
+  case Max[T](path: FieldPath, value: BsonValue)           extends Update[T]("$max")
+  case CurrentDate[T](path: FieldPath)                     extends Update[T]("$currentDate")
+  case Push[T](path: FieldPath, value: BsonValue)          extends Update[T]("$push")
+  case Pull[T](path: FieldPath, value: BsonValue)          extends Update[T]("$pull")
+  case PullAll[T](path: FieldPath, values: BsonArray)      extends Update[T]("$pullAll")
+  case Pop[T](path: FieldPath, first: Boolean)             extends Update[T]("$pop")
+  case AddToSet[T](path: FieldPath, value: BsonValue)      extends Update[T]("$addToSet")
+  case AddToSetEach[T](path: FieldPath, values: BsonArray) extends Update[T]("$addToSet")
+  case Combine[T](updates: List[Update[T]])                extends Update[T]("")
+  case Raw[T](document: BsonDocument)                      extends Update[T]("")
 
   case PushEach[T](
       path: FieldPath,
       values: BsonArray,
       options: PushOptions[?],
-  ) extends Update[T]
+  ) extends Update[T]("$push")
 
   def and(other: Update[E]): Update[E] = (this, other) match
     case (Combine(left), Combine(right)) => Combine(left ++ right)
@@ -138,22 +138,22 @@ object Update:
   end bsonArray
 
   private def write[E](update: Update[E], naming: FieldNaming, target: BsonDocument): Unit = update match
-    case Set(path, value)                => operator(target, "$set", path.render(naming), value)
-    case SetOnInsert(path, value)        => operator(target, "$setOnInsert", path.render(naming), value)
-    case Unset(path)                     => operator(target, "$unset", path.render(naming), BsonString(""))
-    case Rename(path, to)                => operator(target, "$rename", path.render(naming), BsonString(to.render(naming)))
-    case Inc(path, amount)               => operator(target, "$inc", path.render(naming), amount)
-    case Mul(path, factor)               => operator(target, "$mul", path.render(naming), factor)
-    case Min(path, value)                => operator(target, "$min", path.render(naming), value)
-    case Max(path, value)                => operator(target, "$max", path.render(naming), value)
-    case CurrentDate(path)               => operator(target, "$currentDate", path.render(naming), BsonBoolean(true))
-    case Push(path, value)               => operator(target, "$push", path.render(naming), value)
-    case PushEach(path, values, options) => operator(target, "$push", path.render(naming), each(values, options, naming))
-    case Pull(path, value)               => operator(target, "$pull", path.render(naming), value)
-    case PullAll(path, values)           => operator(target, "$pullAll", path.render(naming), values)
-    case Pop(path, first)                => operator(target, "$pop", path.render(naming), BsonInt32(if first then -1 else 1))
-    case AddToSet(path, value)           => operator(target, "$addToSet", path.render(naming), value)
-    case AddToSetEach(path, vs)          => operator(target, "$addToSet", path.render(naming), each(vs))
+    case Set(path, value)                => operator(target, update.key, path.render(naming), value)
+    case SetOnInsert(path, value)        => operator(target, update.key, path.render(naming), value)
+    case Unset(path)                     => operator(target, update.key, path.render(naming), BsonString(""))
+    case Rename(path, to)                => operator(target, update.key, path.render(naming), BsonString(to.render(naming)))
+    case Inc(path, amount)               => operator(target, update.key, path.render(naming), amount)
+    case Mul(path, factor)               => operator(target, update.key, path.render(naming), factor)
+    case Min(path, value)                => operator(target, update.key, path.render(naming), value)
+    case Max(path, value)                => operator(target, update.key, path.render(naming), value)
+    case CurrentDate(path)               => operator(target, update.key, path.render(naming), BsonBoolean(true))
+    case Push(path, value)               => operator(target, update.key, path.render(naming), value)
+    case PushEach(path, values, options) => operator(target, update.key, path.render(naming), each(values, options, naming))
+    case Pull(path, value)               => operator(target, update.key, path.render(naming), value)
+    case PullAll(path, values)           => operator(target, update.key, path.render(naming), values)
+    case Pop(path, first)                => operator(target, update.key, path.render(naming), BsonInt32(if first then -1 else 1))
+    case AddToSet(path, value)           => operator(target, update.key, path.render(naming), value)
+    case AddToSetEach(path, vs)          => operator(target, update.key, path.render(naming), each(vs))
     case Combine(updates)                => updates.foreach(write(_, naming, target))
     case Raw(document)                   => document.forEach((name, value) => mergeOperator(target, name, value))
 
