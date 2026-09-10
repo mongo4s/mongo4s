@@ -129,30 +129,24 @@ the collection wrote a shape nobody had asked for and no error was raised. Also 
 
 ## The codec decides how field names are spelled
 
-`WireCodecConfig` renames fields on the way out; `Filter`/`Update`/`Sort` render them through the collection's
-`FieldNaming`. Those were two separate settings with separate defaults, so a `SnakeCase` codec on a collection
-opened with the default `identity` wrote `first_name` and then queried `firstName` — every query matching nothing,
-silently, which is the exact failure this library says it exists to remove.
+`WireCodecConfig` renames fields on the way out; `Filter`/`Update`/`Sort` render them through a `FieldNaming`. Those
+were two separate settings with separate defaults, so a `SnakeCase` codec on a collection opened with the default
+`identity` wrote `first_name` and then queried `firstName` — every query matching nothing, silently, which is the
+exact failure this library says it exists to remove.
 
-A derived codec now reports the naming it was configured with, and `getDirectCollection` uses it as the default for
-its `naming` parameter. That takes clause interleaving — the using-clause comes first so the default can name the
-codec.
+The first fix defaulted the collection's `naming` to the codec's. That was not enough: a caller passing `identity`
+explicitly to a `snake_case` codec brought the silent empty result straight back, and guarding against it meant
+asking the codec to police a parameter that only existed to contradict it.
 
-Defaulting alone would only move the trap: passing `identity` explicitly to a `snake_case` codec brings the silent
-empty result straight back. So the codec is also asked whether a candidate naming spells the names it actually
-writes, and a contradiction is refused when the collection is opened rather than discovered as an empty result set
-later. The check is behavioural, not an equality test on `FieldNaming` — a derived product keeps both the labels it
-started from and the names it wrote, and compares `declared.map(candidate)` against them, so two differently
-constructed but equivalent namings agree and `FieldNaming.overrides` is not second-guessed by reference identity.
+So `getDirectCollection` has no `naming` parameter. On a direct collection the spelling is not a second decision:
+`Filter`, `Update`, `Sort`, `Index` and `Projection` all render the entity's own field names, and the codec is what
+wrote them. A derived codec reports the naming it was configured with; a hand-written one declares its own by
+overriding `fieldNaming`, which is where a hand-written codec's spelling is decided anyway. There is one source of
+truth and no way to contradict it.
 
-A hand-written codec answers `true` unconditionally, because it never claimed a naming: only a derivation knows how
-it spelled things, and refusing on behalf of a codec that made no claim would break the case where the caller is
-the only one who knows.
-
-`getCollection` cannot be given the same treatment, and that asymmetry is deliberate rather than unfinished: a
-`BsonDocumentCodec` comes from `medeia`, `calypso` or `zio-bson`, each with its own naming configuration that
-mongo4s has no way to read. There the parameter still has to be kept in step by hand, and saying so is better than
-defaulting it to something that would be wrong just as often.
+`getCollection` keeps its parameter, and that asymmetry is deliberate rather than unfinished: a `BsonDocumentCodec`
+comes from `medeia`, `calypso` or `zio-bson`, each with its own naming configuration that mongo4s has no way to
+read. There the caller is the only one who knows, so the caller is asked.
 
 ## Nothing derives without being asked
 

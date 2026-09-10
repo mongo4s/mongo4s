@@ -19,13 +19,7 @@ trait MongoDatabase[F[*], S[*]]:
       naming: FieldNaming = FieldNaming.identity,
   )(using BsonDocumentCodec[A]): F[MongoCollection[F, S, A]]
 
-  def getDirectCollection[A](using
-      codec: WireCodec[A],
-      tag: ClassTag[A]
-  )(
-      collectionName: String,
-      naming: FieldNaming = codec.fieldNaming,
-  ): F[MongoCollection[F, S, A]]
+  def getDirectCollection[A](collectionName: String)(using WireCodec[A], ClassTag[A]): F[MongoCollection[F, S, A]]
 
   def listCollectionNames(using session: Option[ClientSession] = None)(using Streamable[S, String]): S[String]
   def listCollections(using session: Option[ClientSession] = None)(using Streamable[S, BsonDocument]): S[BsonDocument]

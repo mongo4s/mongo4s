@@ -50,7 +50,7 @@ final class KeysetPageItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befor
     for
       client     <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
       database   <- client.getDatabase("keyset_it")
-      collection <- database.getDirectCollection[Reading](name, FieldNaming.identity)
+      collection <- database.getDirectCollection[Reading](name)
       repo        = BaseMongoRepository[IO, S, Reading, Key](collection)
       _          <- repo.ensureKeyIndex
       _          <- repo.insertMany(scala.util.Random.shuffle(readings))

@@ -133,10 +133,9 @@ part of `2.0.0` below.
 - `aggregate[B]` asked for a `BsonDocumentCodec[B]` while only ever decoding, so a read model had to carry an
   encoder that nothing called. It takes a `BsonDocumentDecoder[B]` now, like `watchAs` beside it.
 - A `snake_case` (or otherwise renamed) `WireCodec` and the queries against its collection could disagree about
-  field names, and every query then matched nothing. A derived codec now carries its `fieldNaming`, and
-  `getDirectCollection` defaults to it. A `naming` that contradicts the codec is refused when the collection is
-  opened — the codec is asked whether the candidate spells the names it writes — so the two cannot part company
-  silently in either direction.
+  field names, and every query then matched nothing. `getDirectCollection` no longer takes a `naming` at all: a
+  derived codec reports the `WireCodecConfig` it was built with, a hand-written one declares its own by overriding
+  `fieldNaming`, and the queries follow whichever it is.
 - `selectAs` reported `MissingField` for an `Option` label whose field the document did not carry, while reading the
   whole entity gave `None` for the very same document. The absent value now goes to the decoder, which is what makes
   the two agree; a field the entity requires is still reported as missing.

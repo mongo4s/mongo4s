@@ -110,6 +110,31 @@ Same signature, honest name: the function returns `F[List[B]]` and the results a
 existing calls compile unchanged; a read model that only decodes no longer needs an encoder written for it. Only an
 implementation of `MongoCollection` outside this library has to follow.
 
+### `getDirectCollection` no longer takes a `FieldNaming`
+
+```scala
+database.getDirectCollection[Person]("people", FieldNaming.snakeCase)   // 2.x
+database.getDirectCollection[Person]("people")                          // 3.0
+```
+
+The codec decides the spelling, because the codec is what wrote it. A derived `WireCodec` reports the
+`WireCodecConfig` it was built with. A hand-written codec that spells fields differently from its Scala labels says
+so by overriding `fieldNaming`:
+
+```scala
+given WireCodec[Legacy] = new WireCodec[Legacy]:
+  override def fieldNaming: FieldNaming = FieldNaming.kebabCase
+  ...
+```
+
+`getCollection` is unchanged and still takes the parameter.
+
+### `aggregate` takes a decoder
+
+`aggregate[B]` now requires `BsonDocumentDecoder[B]` instead of `BsonDocumentCodec[B]`. Every codec is a decoder, so
+existing calls compile unchanged; a read model that only decodes no longer needs an encoder written for it. Only an
+implementation of `MongoCollection` outside this library has to follow.
+
 ### `getDirectCollection` takes its codec before its name
 
 The clauses were swapped so the `naming` parameter can default to the codec's own:
