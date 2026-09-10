@@ -49,12 +49,18 @@ private[mongo4s] final class MongoDatabaseImpl[F[*], S[*]](
       collectionName: String,
       naming: FieldNaming,
   ): F[MongoCollection[F, S, A]] =
-    F.delay(
+    F.delay {
+      require(
+        codec.spellsAs(naming),
+        s"The WireCodec for '$collectionName' does not write the field names this FieldNaming renders — a query " +
+          "built from a Field would not match what the codec stored. Leave the naming out to take the codec's own.",
+      )
+
       DirectMongoCollectionImpl(
         underlying.getCollection(collectionName, classOf[BsonDocument]),
         naming,
       )
-    )
+    }
 
   def listCollectionNames(using session: Option[ClientSession])(using Streamable[S, String]): S[String] =
     val publisher = session match

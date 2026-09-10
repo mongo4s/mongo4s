@@ -1125,7 +1125,8 @@ given WireCodecConfig = WireCodecConfig.SnakeCase.withDiscriminatorNaming(FieldN
 
 A derived `WireCodec` remembers the naming it was configured with, and `getDirectCollection` takes that as its
 default — so a `snake_case` codec and the `Filter`/`Update`/`Field` queries against it spell the same names without
-being told twice. Pass `naming` explicitly only to override it. `getCollection` cannot do the same, because a
+being told twice. Passing a `naming` that contradicts the codec is refused when the collection is opened, with a
+message saying so, rather than leaving every query to match nothing. `getCollection` cannot do the same, because a
 `BsonDocumentCodec` from `medeia`, `calypso` or `zio-bson` carries its own naming configuration that mongo4s cannot
 read; there the parameter still has to match the codec.
 

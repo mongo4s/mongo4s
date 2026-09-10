@@ -10,6 +10,8 @@ import org.bson.{BsonReader, BsonWriter}
 trait WireCodec[A] extends WireEncoder[A] with WireDecoder[A]:
   def fieldNaming: mongo4s.bson.FieldNaming = mongo4s.bson.FieldNaming.identity
 
+  def spellsAs(naming: mongo4s.bson.FieldNaming): Boolean = true
+
   def imap[B](f: A => B)(g: B => A): WireCodec[B] =
     WireCodec.from(contramap(g), map(f))
 

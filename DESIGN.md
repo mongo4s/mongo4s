@@ -136,7 +136,18 @@ silently, which is the exact failure this library says it exists to remove.
 
 A derived codec now reports the naming it was configured with, and `getDirectCollection` uses it as the default for
 its `naming` parameter. That takes clause interleaving — the using-clause comes first so the default can name the
-codec — and leaves the explicit parameter available for the case where the two genuinely differ.
+codec.
+
+Defaulting alone would only move the trap: passing `identity` explicitly to a `snake_case` codec brings the silent
+empty result straight back. So the codec is also asked whether a candidate naming spells the names it actually
+writes, and a contradiction is refused when the collection is opened rather than discovered as an empty result set
+later. The check is behavioural, not an equality test on `FieldNaming` — a derived product keeps both the labels it
+started from and the names it wrote, and compares `declared.map(candidate)` against them, so two differently
+constructed but equivalent namings agree and `FieldNaming.overrides` is not second-guessed by reference identity.
+
+A hand-written codec answers `true` unconditionally, because it never claimed a naming: only a derivation knows how
+it spelled things, and refusing on behalf of a codec that made no claim would break the case where the caller is
+the only one who knows.
 
 `getCollection` cannot be given the same treatment, and that asymmetry is deliberate rather than unfinished: a
 `BsonDocumentCodec` comes from `medeia`, `calypso` or `zio-bson`, each with its own naming configuration that

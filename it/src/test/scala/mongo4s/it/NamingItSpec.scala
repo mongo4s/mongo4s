@@ -63,15 +63,41 @@ final class NamingItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAnd
       program.timeout(30.seconds).asserting(_ shouldBe Some(List("first_name", "age")))
     }
 
-    "still take an explicit naming when the caller has a reason to override it" in {
+    "refuse a naming that does not spell the names its codec writes, instead of answering nothing" in {
+      val program =
+        for
+          client   <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database <- client.getDatabase("naming_it")
+          refused  <- database.getDirectCollection[Person]("mismatch", mongo4s.bson.FieldNaming.identity).attempt
+        yield refused
+
+      program.timeout(30.seconds).asserting {
+        case Left(error)  => error.getMessage should include("does not write the field names")
+        case Right(value) => fail(s"expected the mismatch to be refused, got $value")
+      }
+    }
+
+    "still take an explicit naming that agrees with the codec" in {
       val program =
         for
           client     <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
           database   <- client.getDatabase("naming_it")
-          collection <- database.getDirectCollection[Person]("override", mongo4s.bson.FieldNaming.identity)
+          collection <- database.getDirectCollection[Person]("explicit", mongo4s.bson.FieldNaming.snakeCase)
+          _          <- collection.insertOne(Person("bob", 30))
           found      <- collection.find(firstName.equalTo("bob")).all
         yield found
 
-      program.timeout(30.seconds).asserting(_ shouldBe Nil)
+      program.timeout(30.seconds).asserting(_ shouldBe List(Person("bob", 30)))
+    }
+
+    "leave a hand-written codec alone, since it makes no claim about spelling" in {
+      val program =
+        for
+          client   <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database <- client.getDatabase("naming_it")
+          opened   <- database.getCollection[BsonDocument]("handwritten", mongo4s.bson.FieldNaming.kebabCase).attempt
+        yield opened
+
+      program.timeout(30.seconds).asserting(_.isRight shouldBe true)
     }
   }

@@ -11,7 +11,8 @@ import mongo4s.bson.BsonError
 object WireProductDerivation:
 
   inline def derived[A](using m: Mirror.ProductOf[A], config: WireCodecConfig): WireCodec[A] =
-    val labels: Array[String] = constValueTuple[m.MirroredElemLabels].toList.map(label => config.fieldNaming(label.asInstanceOf[String])).toArray
+    val declared: Array[String] = constValueTuple[m.MirroredElemLabels].toList.map(_.asInstanceOf[String]).toArray
+    val labels: Array[String]   = declared.map(config.fieldNaming.apply)
 
     require(
       labels.distinct.length == labels.length,
@@ -21,6 +22,7 @@ object WireProductDerivation:
     make[A](
       mirror = m,
       labels = labels,
+      declared = declared,
       naming = config.fieldNaming,
       omitAbsentFields = config.omitNoneFields,
       codecsThunk = () => summonAll[Tuple.Map[m.MirroredElemTypes, WireCodec]].toList.asInstanceOf[List[WireCodec[Any]]].toArray
@@ -30,6 +32,7 @@ object WireProductDerivation:
   @publicInBinary private[direct] def make[A](
       mirror: Mirror.ProductOf[A],
       labels: Array[String],
+      declared: Array[String],
       naming: mongo4s.bson.FieldNaming,
       omitAbsentFields: Boolean,
       codecsThunk: () => Array[WireCodec[Any]],
@@ -39,8 +42,11 @@ object WireProductDerivation:
 
     new FieldCodec[A]:
       override def fieldNaming: mongo4s.bson.FieldNaming = naming
-      override def fieldNames: Array[String]             = labels
-      override def isEmpty: Boolean                      = labels.isEmpty
+
+      override def spellsAs(candidate: mongo4s.bson.FieldNaming): Boolean =
+        declared.map(candidate.apply).sameElements(labels)
+      override def fieldNames: Array[String]                              = labels
+      override def isEmpty: Boolean                                       = labels.isEmpty
 
       override def readEmpty: A =
         if labels.isEmpty
