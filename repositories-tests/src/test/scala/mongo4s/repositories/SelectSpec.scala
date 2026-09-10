@@ -17,6 +17,22 @@ import mongo4s.cats.CatsInstances.given
 object SelectSpec:
   final case class Person(id: String, name: String, age: Int)
 
+  final case class Contact(id: String, nick: Option[String])
+
+  object Contact:
+    given BsonDocumentCodec[Contact] = BsonDocumentCodec.make(
+      contact =>
+        val document = BsonDocument().append("id", BsonString(contact.id))
+        contact.nick.foreach(value => document.append("nick", BsonString(value)))
+        document
+      ,
+      document =>
+        Option(document.get("id"))
+          .toRight(BsonError.MissingField("id"))
+          .flatMap(BsonDecoder[String].decode)
+          .map(id => Contact(id, Option(document.get("nick")).flatMap(BsonDecoder[String].decode(_).toOption))),
+    )
+
   object Person:
     given BsonDocumentCodec[Person] = BsonDocumentCodec.make(
       person =>
@@ -92,5 +108,32 @@ final class SelectSpec extends AnyWordSpec, Matchers:
 
     "refuse a field asked for at the wrong type" in {
       "seeded.selectAs[(age: String)]" shouldNot typeCheck
+    }
+  }
+
+  "selectAs over an optional field" should {
+
+    def contacts: FakeMongoCollection[IO, S, SelectSpec.Contact] =
+      import SelectSpec.Contact.given
+      val collection = FakeMongoCollection[IO, S, SelectSpec.Contact](summon[BsonDocumentCodec[SelectSpec.Contact]], _ => fs2.Stream.empty)
+      collection.insertMany(List(SelectSpec.Contact("1", None), SelectSpec.Contact("2", Some("bo")))).unsafeRunSync()
+      collection
+
+    "read an omitted field as None, the same answer find gives for the same document" in {
+      import SelectSpec.Contact.given
+      val whole    = contacts.find().all.unsafeRunSync().map(_.nick)
+      val selected = contacts.find().selectAs[(id: String, nick: Option[String])].all.unsafeRunSync().map(_.nick)
+
+      whole shouldBe List(None, Some("bo"))
+      selected shouldBe whole
+    }
+
+    "still report a field the entity requires but the document does not carry" in {
+      val collection = collectionOf
+      collection.insertRaw(BsonDocument().append("id", BsonString("3")).append("name", BsonString("eve")))
+
+      val failures = collection.find().selectAs[(name: String, age: Int)].attempting.all.unsafeRunSync()
+
+      failures.last.left.map(_.message) shouldBe Left("Missing field: age")
     }
   }

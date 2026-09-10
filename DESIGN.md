@@ -187,6 +187,12 @@ and the labels are gone by the time the caller sees it. The bare tuple still *co
 that same lower bound, which makes the failure look like success until a field is read by name. Naming the shape in
 the signature keeps the type where the compiler cannot approximate it away.
 
+Absence is decided by the decoder rather than by the presence of the key. A projection cannot distinguish a field
+the server omitted from one that was never stored, so `selectAs` offers the absent value to the field's own
+`BsonDecoder` first: `Option` reads it as `None`, everything else reports the field as missing. Checking the key
+before asking the decoder is what made a projected `Option` disagree with reading the whole entity — the same
+document, two answers.
+
 `aggregate` and `distinct` take their output type from the call site rather than from the collection, so neither
 could use the collection's own `WireCodec`. For `aggregate` that mattered: a pipeline reading a large collection is
 exactly the hot path `bson-direct` exists for, and stopping at a `BsonDocument` there gave the AST-free claim an

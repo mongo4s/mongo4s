@@ -120,6 +120,9 @@ part of `2.0.0` below.
 
 ### Fixed
 
+- `selectAs` reported `MissingField` for an `Option` label whose field the document did not carry, while reading the
+  whole entity gave `None` for the very same document. The absent value now goes to the decoder, which is what makes
+  the two agree; a field the entity requires is still reported as missing.
 - **`FakeMongoCollection` answered several queries differently from the server.** A filter over an array field
   compared the whole array to the value, so `contains` never matched and `$ne` always did; a dotted path through an
   array of documents resolved to nothing; `$regex` anchored the whole string and dropped its options; `$inc`

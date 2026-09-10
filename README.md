@@ -484,6 +484,11 @@ entity's `WireCodec` demands every modelled field, so before this a partial read
 Labels are *derived* names, spelled through the collection's `FieldNaming` exactly as `Field.of` is, so a
 `(fullName: String)` on a `snakeCase` collection projects and reads `full_name`.
 
+An `Option` label reads a field the document does not carry as `None`, which is the answer reading the whole entity
+gives for the same document — a projected shape and a full read never disagree about the same absence. A field the
+entity declares as required but the document is missing is still a decode error naming it, reported per document by
+`attempting`.
+
 One field per label: `selectAs[(city: String)]` cannot reach `address.city`, because a nested projection comes back
 as a nested document that a flat result cannot represent. Project the outer field, or read the shape through
 `getCollection` with a codec of your own.

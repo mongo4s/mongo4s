@@ -2,7 +2,7 @@ package mongo4s
 
 import scala.annotation.publicInBinary
 
-import org.bson.BsonDocument
+import org.bson.{BsonDocument, BsonNull}
 
 import mongo4s.bson.{BsonDecoder, BsonError}
 
@@ -11,7 +11,7 @@ import mongo4s.bson.{BsonDecoder, BsonError}
   def decodeField[A](document: BsonDocument, name: String, decoder: BsonDecoder[A]): Either[BsonError, Any] =
     Option(document.get(name)) match
       case Some(value) => decoder.decode(value)
-      case None        => Left(BsonError.MissingField(name))
+      case None        => decoder.decode(BsonNull.VALUE).left.map(_ => BsonError.MissingField(name))
 
   def sequence(results: List[Either[BsonError, Any]]): Either[BsonError, Array[Any]] =
     val values = new Array[Any](results.size)

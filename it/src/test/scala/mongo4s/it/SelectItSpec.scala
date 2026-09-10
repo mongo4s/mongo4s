@@ -21,6 +21,8 @@ object SelectItSpec:
 
   final case class Person(id: String, fullName: String, age: Int, secret: String) derives WireCodec
 
+  final case class Contact(id: String, nick: Option[String]) derives WireCodec
+
 final class SelectItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAfterAll:
   import SelectItSpec.Person
 
@@ -92,5 +94,25 @@ final class SelectItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAnd
         yield outcome
 
       program.timeout(30.seconds).asserting(_.isLeft shouldBe true)
+    }
+  }
+
+  "selectAs over an optional field" should {
+
+    "give the same answer as reading the whole entity, when the field was never written" in {
+      val program =
+        for
+          client     <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database   <- client.getDatabase("select_it")
+          collection <- database.getDirectCollection[SelectItSpec.Contact]("contacts")
+          _          <- collection.insertMany(List(SelectItSpec.Contact("1", None), SelectItSpec.Contact("2", Some("bo"))))
+          whole      <- collection.find().all.map(_.map(_.nick))
+          selected   <- collection.find().selectAs[(id: String, nick: Option[String])].all.map(_.map(_.nick))
+        yield (whole, selected)
+
+      program.timeout(30.seconds).asserting { (whole, selected) =>
+        whole shouldBe List(None, Some("bo"))
+        selected shouldBe whole
+      }
     }
   }
