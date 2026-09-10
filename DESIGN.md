@@ -370,6 +370,23 @@ Boolean`, which meant its operator was chosen at render time — the one place a
 A boolean discriminator inside a case of an ADT is the modelling smell that an enum exists to remove, so the flag
 became the case. `field.near`/`field.nearSphere` are unchanged.
 
+## A transaction reaches as far as the session is in scope
+
+Every operation takes `(using session: Option[ClientSession] = None)`, and `withTransaction` supplies it through a
+context function. That gives the good case for free — everything written inside the body joins the transaction with
+no ceremony — and it hands you one sharp edge: a helper compiled somewhere else took the default, so its writes
+commit outside the transaction and survive a rollback.
+
+This is not a defect that can be closed by a better default. Implicit propagation is lexical: a method compiled
+against no session cannot later be told about one, whatever the parameter's type or default. The alternatives are
+to remove the default and make every non-transactional call pass `None`, or to thread a session-bound collection
+through every helper — each buys the edge case at a cost paid on every ordinary call.
+
+So the contract is written down instead, and pinned: `SessionScopeItSpec` runs both shapes of helper inside a real
+transaction that then rolls back, and asserts that the one taking `(using Option[ClientSession])` loses its write
+while the one without it keeps it. Documenting a trap without a test that reproduces it is how the documentation
+drifts away from what the code does.
+
 ## The query AST
 
 `Filter` and `Update` are real `enum` ADTs that `mongo4s` interprets itself, not thin wrappers over the driver's

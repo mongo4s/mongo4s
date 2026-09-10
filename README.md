@@ -620,6 +620,22 @@ client.withTransaction {
 The session is given implicitly to everything inside the body, so a collection or repository call joins the
 transaction without being told to — no `(using Some(session))` at each call site.
 
+**A helper defined elsewhere has to ask for it.** The session reaches calls that are written inside the body;
+a method compiled somewhere else was compiled against the default — no session — and its writes commit on their own,
+outside the transaction, which a rollback then does not undo. Give any helper the parameter and it joins:
+
+```scala
+def register(users: MongoCollection[F, S, User], user: User)(using Option[ClientSession]): F[Unit] =
+  users.insertOne(user).void          // joins the caller's transaction
+
+def register(users: MongoCollection[F, S, User], user: User): F[Unit] =
+  users.insertOne(user).void          // commits outside it, silently
+```
+
+The two shapes differ by one `using` clause and by whether a rollback takes the write with it; there is no warning,
+because a missing implicit is exactly what the default is there to supply. If you prefer passing a value, open the
+session yourself with `client.startSession` and use `session.withTransaction`.
+
 It commits on success and rolls back on failure **and on cancellation**: `Effect[F]` carries a `guaranteeCase` that
 sees how the action ended, so an interrupted transaction does not linger on the server until it is reaped. A
 rollback that itself fails is attached as a suppressed exception rather than replacing the error that caused it.
