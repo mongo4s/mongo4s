@@ -46,9 +46,10 @@ part of `2.0.0` below.
   aggregates is unit-testable without Docker. Anything outside that subset still throws by name, `$addToSet`
   included — MongoDB leaves the order of its result undefined. A parity spec checks the subset against a real server,
   BSON types and all.
-- `ScalarWireCodecBenchmark` and `AggregateBenchmark`, and the numbers they produced, in
-  [BENCHMARKS.md](BENCHMARKS.md): what a bridged scalar costs, and what `aggregateDirect` is worth against a real
-  server at ten documents and at ten thousand.
+- `ScalarWireCodecBenchmark`, `AggregateBenchmark` and `ErrorTranslationBenchmark`, and the numbers they produced,
+  in [BENCHMARKS.md](BENCHMARKS.md): what a bridged scalar costs, what `aggregateDirect` is worth against a real
+  server at ten documents and at ten thousand, and what the `MongoError` wrapper costs on a publisher that never
+  fails — nothing measurable, at one element and at ten thousand alike.
 - Native `WireCodec` instances for `BigDecimal`, `Instant`, `UUID` and `ObjectId`. Before this, the AST-free path
   had them only through the `BsonEncoder`/`BsonDecoder` bridge — one `BsonValue` per field, on types almost every
   entity carries. The BSON written is unchanged, so existing collections read and write exactly as before.

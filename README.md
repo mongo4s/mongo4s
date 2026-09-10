@@ -1592,11 +1592,15 @@ What changed in each release: **[CHANGELOG.md](CHANGELOG.md)**. What is not cove
 
 ## Benchmarks
 
-Three JMH harnesses in [`benchmarks/`](benchmarks), against `mongo4cats` as a reference point. The short version:
-`bson-direct`'s `WireCodec` writes and reads real BSON bytes **3.2–3.8×** faster than either `mongo4cats` codec and
+Six JMH harnesses in [`benchmarks/`](benchmarks), against `mongo4cats` as a reference point. The short version:
+`bson-direct`'s `WireCodec` writes and reads real BSON bytes **2.7–3.2×** faster than either `mongo4cats` codec and
 allocates up to **6.9×** less; against a real `MongoDB` every single-document operation lands inside run-to-run
-error for all six stacks, while bulk reads pull ahead — `mongo4cats` allocates **2.6–15×** more on
-`findAll`/`findStream`, and its `find(...).stream` runs at **397 ops/s** against `mongo4s`'s **1465**.
+error for all six stacks, while bulk reads pull ahead — `mongo4cats` allocates **2.0–13×** more on
+`findAll`/`findStream`, and its `find(...).stream` runs at **14 ops/s** against `mongo4s`'s **193**.
+
+Those server-backed rates are latency-bound on the machine they were measured on — `MongoDB` in Docker on macOS,
+where a bare `ping` inside the container already costs 2.4 ms. They compare stacks honestly; read them as ratios
+rather than as throughput a server can deliver.
 
 Every table, the methodology and the commands to reproduce them: **[BENCHMARKS.md](BENCHMARKS.md)**.
 
