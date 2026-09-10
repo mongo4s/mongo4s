@@ -2,7 +2,7 @@ package mongo4s.testkit
 
 import scala.collection.mutable
 
-import org.bson.{BsonArray, BsonDocument, BsonDouble, BsonInt32, BsonInt64, BsonNull, BsonObjectId, BsonString, BsonValue}
+import org.bson.{BsonArray, BsonDateTime, BsonDocument, BsonDouble, BsonInt32, BsonInt64, BsonNull, BsonObjectId, BsonString, BsonValue}
 import com.mongodb.{ExplainVerbosity, MongoWriteException, ReadConcern, ReadPreference, ServerAddress, WriteConcern, WriteError}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
@@ -353,12 +353,98 @@ final class FakeMongoCollection[F[*], S[*], E](
   end at
 
   private def applyUpdate(document: BsonDocument, update: Update[E]): BsonDocument = update match
-    case Update.Set(path, value)  => setAt(document, storedSegments(path), value)
-    case Update.Unset(path)       => unsetAt(document, storedSegments(path))
+    case Update.Set(path, value) => setAt(document, storedSegments(path), value)
+    case Update.Unset(path)      => unsetAt(document, storedSegments(path))
+    case Update.Combine(updates) => updates.foldLeft(document)(applyUpdate)
+
+    case Update.SetOnInsert(_, _) => document
+
     case Update.Inc(path, amount) =>
       setAt(document, storedSegments(path), BsonOrdering.increment(at(document, path), amount))
-    case Update.Combine(updates)  => updates.foldLeft(document)(applyUpdate)
-    case other                    => throw UnsupportedOperationException(s"FakeMongoCollection: $other is not simulated")
+
+    case Update.Mul(path, factor) =>
+      setAt(document, storedSegments(path), BsonOrdering.multiply(at(document, path), factor))
+
+    case Update.Min(path, value) => keepExtreme(document, path, value, _ < 0)
+    case Update.Max(path, value) => keepExtreme(document, path, value, _ > 0)
+
+    case Update.CurrentDate(path) =>
+      setAt(document, storedSegments(path), BsonDateTime(System.currentTimeMillis()))
+
+    case Update.Rename(path, to) =>
+      at(document, path) match
+        case None        => document
+        case Some(value) => setAt(unsetAt(document, storedSegments(path)), storedSegments(to), value)
+
+    case Update.Push(path, value) => withArray(document, path)(_ :+ value)
+    case Update.Pull(path, value) => withArray(document, path)(_.filterNot(_ == value))
+    case Update.Pop(path, first)  =>
+      withArray(document, path)(elements => if elements.isEmpty then elements else if first then elements.tail else elements.init)
+
+    case Update.PullAll(path, values) =>
+      val removed = values.getValues.asScala.toList
+      withArray(document, path)(_.filterNot(removed.contains))
+
+    case Update.AddToSet(path, value) =>
+      withArray(document, path)(elements => if elements.contains(value) then elements else elements :+ value)
+
+    case Update.AddToSetEach(path, values) =>
+      withArray(document, path) { elements =>
+        values.getValues.asScala.foldLeft(elements)((acc, value) => if acc.contains(value) then acc else acc :+ value)
+      }
+
+    case Update.PushEach(path, values, options) =>
+      withArray(document, path)(elements => pushed(elements, values.getValues.asScala.toList, options))
+
+    case raw: Update.Raw[?] =>
+      throw UnsupportedOperationException(s"FakeMongoCollection: the raw update ${raw.document.toJson} is not simulated")
+
+  private def withArray(document: BsonDocument, path: mongo4s.FieldPath)(f: List[BsonValue] => List[BsonValue]): BsonDocument =
+    val current = at(document, path) match
+      case Some(array) if array.isArray => array.asArray.getValues.asScala.toList
+      case Some(other)                  =>
+        throw UnsupportedOperationException(s"FakeMongoCollection: an array operator was applied to $other")
+      case None                         => Nil
+
+    setAt(document, storedSegments(path), BsonArray(f(current).asJava))
+  end withArray
+
+  private def keepExtreme(document: BsonDocument, path: mongo4s.FieldPath, value: BsonValue, keep: Int => Boolean): BsonDocument =
+    at(document, path) match
+      case Some(current) if !keep(BsonOrdering.compare(value, current)) => document
+      case _                                                            => setAt(document, storedSegments(path), value)
+
+  private def pushed(elements: List[BsonValue], added: List[BsonValue], options: PushOptions[?]): List[BsonValue] =
+    val placed = options.position match
+      case Some(at) => elements.take(at) ++ added ++ elements.drop(at)
+      case None     => elements ++ added
+
+    val ordered = options.sortScalars match
+      case Some(ascending) => placed.sortWith((a, b) => if ascending then BsonOrdering.compare(a, b) < 0 else BsonOrdering.compare(a, b) > 0)
+      case None            =>
+        options.sort.fold(placed) { sort =>
+          placed.sortWith { (left, right) =>
+            sort.fields.view.map { (field, order) =>
+              val comparison = (documentAt(left, field), documentAt(right, field)) match
+                case (Some(l), Some(r)) => BsonOrdering.compare(l, r)
+                case (None, Some(_))    => -1
+                case (Some(_), None)    => 1
+                case (None, None)       => 0
+              if order == SortOrder.Ascending then comparison else -comparison
+            }.find(_ != 0).exists(_ < 0)
+          }
+        }
+
+    options.slice match
+      case Some(n) if n >= 0 => ordered.take(n)
+      case Some(n)           => ordered.takeRight(-n)
+      case None              => ordered
+  end pushed
+
+  private def documentAt(value: BsonValue, path: mongo4s.FieldPath): Option[BsonValue] =
+    value match
+      case document: BsonDocument => at(document, path)
+      case _                      => None
 
   private def upsertedId(document: BsonDocument): BsonValue =
     Option(document.get("_id"))
@@ -686,6 +772,18 @@ private object BsonOrdering:
 
     java.util.regex.Pattern.compile(pattern, flags)
   end regex
+
+  def multiply(current: Option[BsonValue], factor: BsonValue): BsonValue =
+    val base = current.getOrElse(BsonInt32(0))
+
+    if base.isDecimal128 || factor.isDecimal128
+    then throw UnsupportedOperationException("FakeMongoCollection: $mul over a Decimal128 is not simulated")
+    else if base.isDouble || factor.isDouble
+    then BsonDouble(base.asNumber.doubleValue * factor.asNumber.doubleValue)
+    else
+      val total = base.asNumber.longValue * factor.asNumber.longValue
+      if base.isInt32 && factor.isInt32 && total.isValidInt then BsonInt32(total.toInt) else BsonInt64(total)
+  end multiply
 
   def increment(current: Option[BsonValue], amount: BsonValue): BsonValue =
     val base = current.getOrElse(BsonInt32(0))

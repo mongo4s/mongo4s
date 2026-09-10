@@ -1377,11 +1377,15 @@ dotted path descends through an array of documents — `$regex` searches rather 
 `$eq null` matches a missing field, `$inc` keeps the width the server keeps, and an insert stamps an `_id` and
 refuses a duplicate one.
 
+Every update operator is simulated — `$set`, `$unset`, `$inc`, `$mul`, `$min`, `$max`, `$rename`, `$currentDate`,
+`$push` with its `$each`/`$position`/`$slice`/`$sort` modifiers, `$pull`, `$pullAll`, `$pop` and `$addToSet` — and
+`$setOnInsert` correctly does nothing on an update that matches.
+
 Everything else throws `UnsupportedOperationException` naming what was asked for, rather than quietly answering
 wrong — a fake that lies is worse than no fake. That includes `watch`, `explain`, `$text` and ranking by
-`$meta textScore`, `$expr`, the geospatial operators, `Filter.Raw`, `Stage.Raw`, an update carrying `arrayFilters`,
-every aggregation stage outside the list above, and `$addToSet`, which is refused on purpose: MongoDB leaves the
-order of its result undefined, so no fake can be faithful to it. Replace-based upserts — what `upsert`/`upsertMany` go through — insert on a miss the way the
+`$meta textScore`, `$expr`, the geospatial operators, `Filter.Raw`, `Stage.Raw`, `Update.Raw`, an update carrying
+`arrayFilters`, every aggregation stage outside the list above, and the `$addToSet` *accumulator*, which is refused
+on purpose: MongoDB leaves the order of its result undefined, so no fake can be faithful to it. Replace-based upserts — what `upsert`/`upsertMany` go through — insert on a miss the way the
 server does; an `update`-based `UpdateOptions.upsert` that matches nothing throws instead of guessing what the
 operators would have built.
 
