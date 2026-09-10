@@ -69,5 +69,5 @@ object KeyRef:
 
   def objectId[E]: KeyRef[E, ObjectId] =
     new KeyRef[E, ObjectId]:
-      def fieldNames: List[String]         = List("_id")
-      def fields(key: ObjectId): KeyFields = KeyFields.one("_id", BsonObjectId(key))
+      def fieldNames: List[String]         = List(FieldPath.IdName)
+      def fields(key: ObjectId): KeyFields = KeyFields.one(FieldPath.IdName, BsonObjectId(key))

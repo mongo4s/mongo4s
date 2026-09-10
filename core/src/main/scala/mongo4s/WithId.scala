@@ -8,7 +8,7 @@ import mongo4s.bson.*
 final case class WithId[+Id, +E](id: Id, entity: E)
 
 object WithId:
-  private val IdField = "_id"
+  private val IdField = FieldPath.IdName
 
   type Oid[E] = WithId[ObjectId, E]
 

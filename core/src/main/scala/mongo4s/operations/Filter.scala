@@ -86,7 +86,7 @@ enum Filter[E](val key: String):
     case NearSphere(path, geometry, min, max) => Filter.operator(naming, path, key, Filter.proximity(geometry, min, max))
 
     case GeoWithin(path, shape)        => Filter.operator(naming, path, key, shape.toBson)
-    case GeoIntersects(path, geometry) => Filter.operator(naming, path, key, BsonDocument("$geometry", geometry.toBson))
+    case GeoIntersects(path, geometry) => Filter.operator(naming, path, key, BsonDocument(Geometry.key, geometry.toBson))
     case Expr(expression)              => BsonDocument(key, expression)
     case And(filters)                  => BsonDocument(key, BsonArray(filters.map(_.toBson(naming)).asJava))
     case Or(filters)                   => BsonDocument(key, BsonArray(filters.map(_.toBson(naming)).asJava))
@@ -97,11 +97,14 @@ enum Filter[E](val key: String):
 
 object Filter:
 
-  private def proximity(geometry: Geometry, min: Option[Double], max: Option[Double]): BsonDocument =
-    val near = BsonDocument("$geometry", geometry.toBson)
+  private val MinDistance = "$minDistance"
+  private val MaxDistance = "$maxDistance"
 
-    min.foreach(value => near.append("$minDistance", BsonDouble(value)))
-    max.foreach(value => near.append("$maxDistance", BsonDouble(value)))
+  private def proximity(geometry: Geometry, min: Option[Double], max: Option[Double]): BsonDocument =
+    val near = BsonDocument(Geometry.key, geometry.toBson)
+
+    min.foreach(value => near.append(MinDistance, BsonDouble(value)))
+    max.foreach(value => near.append(MaxDistance, BsonDouble(value)))
 
     near
   end proximity

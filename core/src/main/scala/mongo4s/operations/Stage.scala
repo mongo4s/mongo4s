@@ -115,7 +115,7 @@ enum Stage[E](val key: String):
 
     case Stage.Group(by, accumulators) =>
       val group = BsonDocument(
-        "_id",
+        FieldPath.IdName,
         by.fold(BsonNull.VALUE: BsonValue)(path => BsonString("$" + path.render(naming)))
       )
       accumulators.foreach((name, accumulator) => group.append(name, accumulator.toBson(naming)))

@@ -38,7 +38,7 @@ enum Projection[E]:
         }
         if withId
         then included
-        else included.append("_id", BsonInt32(0))
+        else included.append(Projection.IdPath.render(naming), BsonInt32(0))
 
       case Exclude(fields, _) =>
         fields.foldLeft(BsonDocument()) { (acc, path) =>
@@ -46,13 +46,13 @@ enum Projection[E]:
         }
 
     slices.foldLeft(document) { (acc, entry) =>
-      acc.append(entry._1.render(naming), BsonDocument("$slice", entry._2.toBson))
+      acc.append(entry._1.render(naming), BsonDocument(Slice.key, entry._2.toBson))
     }
   end toBson
 
 object Projection:
 
-  private val IdPath: FieldPath = FieldPath.literal("_id")
+  private[operations] val IdPath: FieldPath = FieldPath.Id
 
   def empty[E]: Everything[E]  = Everything()
   def excludeId[E]: Exclude[E] = Exclude(List(IdPath))

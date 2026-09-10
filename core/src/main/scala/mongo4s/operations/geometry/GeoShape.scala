@@ -11,7 +11,7 @@ enum GeoShape:
   case Box(bottomLeft: Geometry.Point, topRight: Geometry.Point)
 
   def toBson: BsonDocument = this match
-    case Within(geometry)             => BsonDocument("$geometry", geometry.toBson)
+    case Within(geometry)             => BsonDocument(Geometry.key, geometry.toBson)
     case CenterSphere(centre, radius) => BsonDocument("$centerSphere", GeoShape.circle(centre, radius))
     case Centre(centre, radius)       => BsonDocument("$center", GeoShape.circle(centre, radius))
     case Box(bottomLeft, topRight)    =>

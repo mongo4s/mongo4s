@@ -3,14 +3,15 @@ package mongo4s.internal
 import scala.concurrent.duration.FiniteDuration
 
 import org.bson.conversions.Bson
-import org.bson.{BsonDocument, BsonInt32}
+import org.bson.BsonDocument
 import org.reactivestreams.Publisher
 import com.mongodb.ExplainVerbosity
 import com.mongodb.client.model.Collation
 import com.mongodb.reactivestreams.client.{AggregatePublisher, ClientSession, MongoCollection as RSMongoCollection}
 
 import mongo4s.{RsBridge, Streamable}
-import mongo4s.bson.{BsonDocumentDecoder, DecodeResult}
+import mongo4s.bson.{BsonDocumentDecoder, DecodeResult, FieldNaming}
+import mongo4s.operations.Stage
 import mongo4s.queries.{AggregateQuery, DecodeAttempts}
 
 import scala.jdk.CollectionConverters.given
@@ -55,7 +56,7 @@ private[mongo4s] final class AggregateQueryImpl[F[*], S[*], A](
   private def documents(limited: Boolean): AggregatePublisher[BsonDocument] =
     val stages =
       if limited && !writesToCollection
-      then pipeline :+ BsonDocument("$limit", BsonInt32(1))
+      then pipeline :+ Stage.Limit[Any](1).toBson(FieldNaming.identity)
       else pipeline
 
     val base: AggregatePublisher[BsonDocument] =

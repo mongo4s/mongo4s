@@ -22,7 +22,7 @@ object PrimaryKey:
     single("id")(keyOf)
 
   def storedId[E, Id](keyOf: E => Id)(using encoder: BsonEncoder[Id]): PrimaryKey[E, Id] =
-    single("_id")(keyOf)
+    single(FieldPath.IdName)(keyOf)
 
   def single[E, F1](name: String)(keyOf: E => F1)(using encoder: BsonEncoder[F1]): PrimaryKey[E, F1] =
     make(keyOf, List(name), key => KeyFields.one(name, encoder.encode(key)))

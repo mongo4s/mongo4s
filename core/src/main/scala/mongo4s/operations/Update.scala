@@ -157,15 +157,22 @@ object Update:
     case Combine(updates)                => updates.foreach(write(_, naming, target))
     case Raw(document)                   => document.forEach((name, value) => mergeOperator(target, name, value))
 
-  private def each(values: BsonArray): BsonDocument = BsonDocument("$each", values)
+  // the modifiers `$each` accepts; `$slice` and `$sort` here are the push operators,
+  // which are not the projection or pipeline operators that share their names
+  private val Each      = "$each"
+  private val Position  = "$position"
+  private val PushSlice = "$slice"
+  private val PushSort  = "$sort"
+
+  private def each(values: BsonArray): BsonDocument = BsonDocument(Each, values)
 
   private def each(values: BsonArray, options: PushOptions[?], naming: FieldNaming): BsonDocument =
-    val document = BsonDocument("$each", values)
+    val document = each(values)
 
-    options.position.foreach(value => document.append("$position", BsonInt32(value)): Unit)
-    options.slice.foreach(value => document.append("$slice", BsonInt32(value)): Unit)
-    options.sort.foreach(value => document.append("$sort", value.toBson(naming)): Unit)
-    options.sortScalars.foreach(ascending => document.append("$sort", BsonInt32(if ascending then 1 else -1)): Unit)
+    options.position.foreach(value => document.append(Position, BsonInt32(value)): Unit)
+    options.slice.foreach(value => document.append(PushSlice, BsonInt32(value)): Unit)
+    options.sort.foreach(value => document.append(PushSort, value.toBson(naming)): Unit)
+    options.sortScalars.foreach(ascending => document.append(PushSort, BsonInt32(if ascending then 1 else -1)): Unit)
 
     document
   end each
