@@ -2,7 +2,7 @@ package mongo4s.bson.direct
 
 import scala.deriving.Mirror
 import scala.annotation.publicInBinary
-import scala.compiletime.{constValueTuple, summonAll}
+import scala.compiletime.{constValueTuple, erasedValue, summonFrom}
 
 import org.bson.{BsonReader, BsonType, BsonWriter}
 
@@ -23,9 +23,20 @@ object WireSumDerivation:
       mirror,
       discriminators,
       config.encodeEmptyCasesAsString,
-      () => summonAll[Tuple.Map[mirror.MirroredElemTypes, WireCodec]].toList.asInstanceOf[List[WireCodec[Any]]].toArray,
+      () => childCodecs[mirror.MirroredElemTypes].toArray,
     )
   end derived
+
+  private inline def childCodecs[T <: Tuple](using config: WireCodecConfig): List[WireCodec[Any]] =
+    inline erasedValue[T] match
+      case _: EmptyTuple     => Nil
+      case _: (head *: tail) => childCodec[head] :: childCodecs[tail]
+
+  private inline def childCodec[A](using config: WireCodecConfig): WireCodec[Any] =
+    summonFrom {
+      case codec: WireCodec[A]  => codec.asInstanceOf[WireCodec[Any]]
+      case mirror: Mirror.Of[A] => WireCodec.derived[A](using mirror, config).asInstanceOf[WireCodec[Any]]
+    }
 
   @publicInBinary private[direct] def make[A](
       mirror: Mirror.SumOf[A],

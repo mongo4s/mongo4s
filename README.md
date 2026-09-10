@@ -1000,6 +1000,26 @@ Products, `Option`, `Either`, nested case classes, sealed traits/enums (via a `_
 first), and self-/mutually-recursive types all derive directly — recursive derivation is deferred behind a `lazy val`
 internally so a type's own `given` never forces itself mid-construction.
 
+**Nothing derives without being asked.** A type gets a `WireCodec` from `derives WireCodec`, from a `given` you
+wrote, or from an existing `BsonEncoder`/`BsonDecoder` pair — never from merely being a case class. So a field whose
+type you forgot to model is a compile error naming that type, not a codec invented for it, and an `opaque type` keeps
+whatever representation you give it instead of borrowing the one underneath. The exception is the cases of an `enum`
+or the leaves of a sealed trait: they cannot carry `derives` themselves, so the sum derives them — the same line
+`circe` draws.
+
+```scala
+final case class Address(city: String) derives WireCodec
+final case class Person(name: String, address: Address) derives WireCodec  // Address must have one
+
+opaque type UserId = String
+object UserId:
+  given WireCodec[UserId] = ScalarWireCodec[String].imap(apply)(_.value)   // yours, not String's
+
+enum Shape derives WireCodec:   // Circle and Square derive with it
+  case Circle(radius: Double)
+  case Square(side: Double)
+```
+
 `String`, `Int`, `Long`, `Double`, `Boolean`, `BigDecimal`, `Instant`, `UUID` and `ObjectId` are read and written
 natively, in the same BSON representation the `BsonEncoder`/`BsonDecoder` path uses — `Decimal128` for `BigDecimal`,
 `Date` for `Instant`, `ObjectId` for `ObjectId` — so the server indexes and range-compares them exactly as it would
@@ -1124,8 +1144,9 @@ the latter. The AST bridges (`medeia`, `zio-bson`, `calypso`) follow their own l
 
 #### Hand-writing a codec: `contramap`/`map`/`emap`/`imap`
 
-Most types don't need `derives WireCodec` at all — `WireCodec[A]` is just `WireEncoder[A] with WireDecoder[A]`, and
-both halves compose the same way `BsonEncoder`/`BsonDecoder` already do elsewhere in mongo4s:
+A type that is not a case class, enum or sealed trait needs a codec written for it — `WireCodec[A]` is just
+`WireEncoder[A] with WireDecoder[A]`, and both halves compose the same way `BsonEncoder`/`BsonDecoder` already do
+elsewhere in mongo4s:
 
 ```scala
 import mongo4s.bson.direct.WireCodec

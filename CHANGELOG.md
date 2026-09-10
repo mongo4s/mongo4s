@@ -12,6 +12,11 @@ part of `2.0.0` below.
 
 ### Added
 
+- **`WireCodec` no longer derives itself for any case class it meets.** It comes from `derives WireCodec`, from a
+  `given` you wrote, or from an existing `BsonEncoder`/`BsonDecoder` pair. A field whose type has no codec is a
+  compile error naming the type, rather than a silently derived codec — and an `opaque type` keeps the
+  representation you give it. The cases of an `enum` and the leaves of a sealed trait still derive with their
+  parent, because the language gives them nowhere to write `derives`.
 - `Filter`, `Update`, `Stage` and `Accumulator` expose `key`, the MongoDB operator each case renders as, declared on
   the case instead of repeated in `toBson`.
 - `Sort.byTextScore` — `{"$meta": "textScore"}`, so a `$text` search can be ranked by relevance. `Sort` now carries a

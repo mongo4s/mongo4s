@@ -4,6 +4,10 @@ import org.bson.BsonReader
 
 import mongo4s.bson.BsonError
 
+@annotation.implicitNotFound(
+  "No WireDecoder[${A}]. A WireCodec[${A}] supplies one; otherwise give the type `derives WireCodec`, "
+    + "or write the decode side by hand."
+)
 trait WireDecoder[A]:
   def decode(reader: BsonReader): A
 

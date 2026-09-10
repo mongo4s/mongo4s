@@ -2,6 +2,11 @@ package mongo4s.bson.direct
 
 import org.bson.{BsonReader, BsonWriter}
 
+@annotation.implicitNotFound(
+  "No WireCodec[${A}]. Give the type `derives WireCodec` if it is your own case class, enum or sealed trait; " +
+    "an opaque type, or a type from elsewhere, needs a given written by hand — often " +
+    "ScalarWireCodec[Underlying].imap(wrap)(unwrap)"
+)
 trait WireCodec[A] extends WireEncoder[A] with WireDecoder[A]:
   def imap[B](f: A => B)(g: B => A): WireCodec[B] =
     WireCodec.from(contramap(g), map(f))

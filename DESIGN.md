@@ -127,6 +127,31 @@ CodecRegistries.fromRegistries(CodecRegistries.fromCodecs(derived), underlying.g
 The other order was tried and was wrong: a `Codec[A]` in the user's registry silently shadowed the derived codec, so
 the collection wrote a shape nobody had asked for and no error was raised. Also pinned by a spec.
 
+## Nothing derives without being asked
+
+`WireCodec`'s derivation used to be a `given`, which meant implicit scope produced one for any type with a `Mirror` —
+a nested case class nobody had modelled, an enum, a type inside a `List`. That reads as convenience and behaves as a
+hole: a field you forgot to think about gets a codec invented for it, silently, and the promise that a missing codec
+is a compile error naming the type held for the document path and not for this one.
+
+It is now a plain `inline def`, so `derives WireCodec` still works and implicit scope derives nothing. Verified
+against the ecosystem rather than assumed: `circe` and `zio-json` refuse a field whose type has no codec and refuse
+an `opaque type` for the same reason, and the same probe run against this codebase's three backend bridges — medeia,
+calypso, zio-bson — shows none of them re-opens the hole, because none of them derive automatically either.
+
+The one thing a sum must still derive is its own children. Scala gives the cases of an `enum` nowhere to write
+`derives`, so `WireSumDerivation` summons a child's codec if one exists and derives it otherwise. `circe` draws the
+line in exactly the same place, and for the same reason. A *field* of a product is the opposite case — there is
+somewhere to write `derives`, so it is required.
+
+`opaque type` falls out of this for free and is worth stating: derivation cannot see through one, so an opaque
+wrapper over `String` keeps whatever representation its owner gives it rather than borrowing `String`'s. That is the
+point of declaring one.
+
+What still resolves without `derives` is the `BsonEncoder`/`BsonDecoder` bridge — that converts a codec you already
+wrote rather than inventing one, and it is how a `medeia` or `zio-bson` model reaches the direct path at all. Its
+cost is the one `BsonValue` per field it has always cost.
+
 ## The AST-free path
 
 Every other Scala Mongo library encodes through an intermediate tree: case class → some JSON or BSON AST →

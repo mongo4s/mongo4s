@@ -2,6 +2,10 @@ package mongo4s.bson.direct
 
 import org.bson.BsonWriter
 
+@annotation.implicitNotFound(
+  "No WireEncoder[${A}]. A WireCodec[${A}] supplies one; otherwise give the type `derives WireCodec`, "
+    + "or write the encode side by hand."
+)
 trait WireEncoder[A]:
   def encode(writer: BsonWriter, value: A): Unit
 

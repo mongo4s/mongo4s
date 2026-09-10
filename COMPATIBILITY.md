@@ -90,6 +90,20 @@ The reason is the one `Index` and `WireCodecConfig` already carry: a `case class
 breaking `apply`/`copy` in every release, and change-stream options keep arriving. `withExpandedEvents` is the first
 one that had to, so the treatment happened now rather than being restated as a hazard.
 
+### `WireCodec` is no longer derived automatically
+
+A case class, enum or sealed trait used to get a `WireCodec` from implicit scope alone. Now it needs to be asked:
+
+```scala
+final case class Address(city: String)                                      // 2.x: derived on demand
+final case class Address(city: String) derives WireCodec                    // 3.0
+```
+
+The failure is a compile error naming the type, never a change in behaviour, so the compiler walks you through it.
+Types reached through a `BsonEncoder`/`BsonDecoder` pair — a `medeia`, `calypso` or `zio-bson` model — are
+unaffected; that bridge is unchanged. So are the cases of an `enum` and the leaves of a sealed trait, which derive
+with their parent.
+
 ### `Filter.Near` lost its `spherical` flag to a second case
 
 `Filter.Near(path, geometry, min, max, spherical)` is now two cases — `Near` and `NearSphere` — each with the same
