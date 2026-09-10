@@ -2,13 +2,13 @@ package mongo4s.testkit
 
 import scala.collection.mutable
 
-import org.bson.{BsonArray, BsonDocument, BsonDouble, BsonInt32, BsonInt64, BsonNull, BsonString, BsonValue}
-import com.mongodb.{ExplainVerbosity, ReadConcern, ReadPreference, WriteConcern}
+import org.bson.{BsonArray, BsonDocument, BsonDouble, BsonInt32, BsonInt64, BsonNull, BsonObjectId, BsonString, BsonValue}
+import com.mongodb.{ExplainVerbosity, MongoWriteException, ReadConcern, ReadPreference, ServerAddress, WriteConcern, WriteError}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
 import mongo4s.operations.*
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
-import mongo4s.{Effect, Field, MongoCollection, Streamable}
+import mongo4s.{Effect, Field, MongoCollection, MongoError, Streamable}
 import mongo4s.bson.{BsonDocumentCodec, BsonDocumentDecoder, DecodeResult, FieldNaming}
 import mongo4s.queries.{AggregateQuery, DecodeAttempts, DistinctQuery, FindQuery, SelectQuery}
 import mongo4s.results.{BulkWriteResult, DeleteResult, InsertManyResult, InsertOneResult, UpdateResult}
@@ -38,23 +38,45 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   def insertRaw(document: BsonDocument): Unit = storage += document
 
+  private def requireDefaultUpdateOptions(options: UpdateOptions, operation: String): Unit =
+    requireNoArrayFilters(options.arrayFilters, operation)
+
+    if options.upsert
+    then throw UnsupportedOperationException(s"FakeMongoCollection: $operation with upsert is not simulated")
+
   private def requireNoArrayFilters(arrayFilters: Seq[Filter[?]], operation: String): Unit =
     if arrayFilters.nonEmpty
     then throw UnsupportedOperationException(s"FakeMongoCollection: $operation with arrayFilters is not simulated")
 
   def insertOne(document: E)(using session: Option[ClientSession]): F[InsertOneResult] =
     F.delay {
-      val encoded = codec.encodeDocument(document)
+      val encoded = identified(codec.encodeDocument(document))
       storage += encoded
       InsertOneResult(Option(encoded.get("_id")))
     }
 
   def insertMany(documents: Seq[E])(using session: Option[ClientSession]): F[InsertManyResult] =
     F.delay {
-      val encoded = documents.map(codec.encodeDocument)
+      val encoded = documents.map(document => identified(codec.encodeDocument(document)))
       storage ++= encoded
       InsertManyResult(encoded.flatMap(d => Option(d.get("_id"))).toList)
     }
+
+  private def identified(document: BsonDocument): BsonDocument =
+    val stamped =
+      if document.containsKey("_id")
+      then document
+      else copyOf(document).append("_id", BsonObjectId(org.bson.types.ObjectId.get()))
+
+    val id = stamped.get("_id")
+
+    if storage.exists(existing => Option(existing.get("_id")).contains(id))
+    then
+      throw MongoError.DuplicateKey(
+        MongoWriteException(WriteError(11000, s"E11000 duplicate key error: _id $id", BsonDocument()), ServerAddress(), java.util.Collections.emptyList())
+      )
+    else stamped
+  end identified
 
   def find(filter: Filter[E])(using session: Option[ClientSession]): FindQuery[F, S, E] = FakeFindQuery(filter)
 
@@ -100,7 +122,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     F.delay {
       requireNoArrayFilters(options.arrayFilters, "findOneAndUpdate")
 
-      matching(filter).headOption match
+      firstMatching(filter, options.sort) match
         case None if options.upsert => throw UnsupportedOperationException("FakeMongoCollection: findOneAndUpdate with upsert is not simulated")
         case None                   => None
         case Some(existing)         =>
@@ -113,7 +135,7 @@ final class FakeMongoCollection[F[*], S[*], E](
       session: Option[ClientSession]
   ): F[Option[E]] =
     F.delay {
-      matching(filter).headOption match
+      firstMatching(filter, options.sort) match
         case None if options.upsert => throw UnsupportedOperationException("FakeMongoCollection: findOneAndReplace with upsert is not simulated")
         case None                   => None
         case Some(existing)         =>
@@ -124,7 +146,7 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   def findOneAndDelete(filter: Filter[E], options: FindOneAndDeleteOptions[E])(using session: Option[ClientSession]): F[Option[E]] =
     F.delay {
-      matching(filter).headOption.flatMap { existing =>
+      firstMatching(filter, options.sort).flatMap { existing =>
         storage -= existing
         decodeProjected(existing, options.projection)
       }
@@ -163,10 +185,10 @@ final class FakeMongoCollection[F[*], S[*], E](
       val upserted = mutable.Map.empty[Int, BsonValue]
 
       commands.zipWithIndex.foreach {
-        case (WriteCommand.InsertOne(document), _)                =>
+        case (WriteCommand.InsertOne(document), _)                 =>
           storage += codec.encodeDocument(document)
           inserted += 1
-        case (WriteCommand.ReplaceOne(filter, value, options), i) =>
+        case (WriteCommand.ReplaceOne(filter, value, options), i)  =>
           matching(filter).headOption match
             case Some(existing)         =>
               storage(storage.indexOf(existing)) = codec.encodeDocument(value)
@@ -177,21 +199,23 @@ final class FakeMongoCollection[F[*], S[*], E](
               storage += encoded
               upserted.update(i, upsertedId(encoded))
             case None                   => ()
-        case (WriteCommand.UpdateOne(filter, update, _), _)       =>
+        case (WriteCommand.UpdateOne(filter, update, options), _)  =>
+          requireDefaultUpdateOptions(options, "bulkWrite UpdateOne")
           matching(filter).headOption.foreach { doc =>
             storage(storage.indexOf(doc)) = applyUpdate(doc, update)
             matched += 1
             modified += 1
           }
-        case (WriteCommand.UpdateMany(filter, update, _), _)      =>
+        case (WriteCommand.UpdateMany(filter, update, options), _) =>
+          requireDefaultUpdateOptions(options, "bulkWrite UpdateMany")
           matching(filter).foreach { doc =>
             storage(storage.indexOf(doc)) = applyUpdate(doc, update)
             matched += 1
             modified += 1
           }
-        case (WriteCommand.DeleteOne(filter), _)                  =>
+        case (WriteCommand.DeleteOne(filter), _)                   =>
           matching(filter).headOption.foreach { doc => storage -= doc; deleted += 1 }
-        case (WriteCommand.DeleteMany(filter), _)                 =>
+        case (WriteCommand.DeleteMany(filter), _)                  =>
           val matches = matching(filter)
           storage --= matches
           deleted += matches.size
@@ -241,22 +265,28 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   private def matching(filter: Filter[E]): List[BsonDocument] = storage.filter(matches(_, filter)).toList
 
+  private def firstMatching(filter: Filter[E], sort: Sort[E]): Option[BsonDocument] =
+    val matched = matching(filter)
+    (if sort.isEmpty then matched else matched.sortWith(orderedBy(sort))).headOption
+
   private def matches(document: BsonDocument, filter: Filter[E]): Boolean = filter match
-    case Filter.Eq(path, value)         => at(document, path).contains(value)
-    case Filter.Ne(path, value)         => !at(document, path).contains(value)
-    case Filter.Gt(path, value)         => at(document, path).exists(BsonOrdering.compare(_, value) > 0)
-    case Filter.Gte(path, value)        => at(document, path).exists(BsonOrdering.compare(_, value) >= 0)
-    case Filter.Lt(path, value)         => at(document, path).exists(BsonOrdering.compare(_, value) < 0)
-    case Filter.Lte(path, value)        => at(document, path).exists(BsonOrdering.compare(_, value) <= 0)
-    case Filter.In(path, values)        => at(document, path).exists(values.contains)
-    case Filter.Nin(path, values)       => !at(document, path).exists(values.contains)
-    case Filter.Exists(path, exists)    => at(document, path).isDefined == exists
-    case Filter.Regex(path, pattern, _) => at(document, path).exists(v => v.isString && v.asString.getValue.matches(pattern))
-    case Filter.And(filters)            => filters.forall(matches(document, _))
-    case Filter.Or(filters)             => filters.exists(matches(document, _))
-    case Filter.Not(inner)              => !matches(document, inner)
-    case Filter.MatchAll()              => true
-    case Filter.MatchNone()             => false
+    case Filter.Eq(path, value)               => equals(document, path, value)
+    case Filter.Ne(path, value)               => !equals(document, path, value)
+    case Filter.Gt(path, value)               => leaves(document, path).exists(BsonOrdering.compare(_, value) > 0)
+    case Filter.Gte(path, value)              => leaves(document, path).exists(BsonOrdering.compare(_, value) >= 0)
+    case Filter.Lt(path, value)               => leaves(document, path).exists(BsonOrdering.compare(_, value) < 0)
+    case Filter.Lte(path, value)              => leaves(document, path).exists(BsonOrdering.compare(_, value) <= 0)
+    case Filter.In(path, values)              => values.exists(equals(document, path, _))
+    case Filter.Nin(path, values)             => !values.exists(equals(document, path, _))
+    case Filter.Exists(path, exists)          => candidates(document, path).nonEmpty == exists
+    case Filter.Regex(path, pattern, options) =>
+      val compiled = BsonOrdering.regex(pattern, options)
+      leaves(document, path).exists(value => value.isString && compiled.matcher(value.asString.getValue).find())
+    case Filter.And(filters)                  => filters.forall(matches(document, _))
+    case Filter.Or(filters)                   => filters.exists(matches(document, _))
+    case Filter.Not(inner)                    => !matches(document, inner)
+    case Filter.MatchAll()                    => true
+    case Filter.MatchNone()                   => false
 
     case Filter.All(path, values) => elementsAt(document, path).exists(elements => values.forall(elements.contains))
     case Filter.Size(path, size)  => at(document, path).exists(v => v.isArray && v.asArray.size == size)
@@ -292,6 +322,29 @@ final class FakeMongoCollection[F[*], S[*], E](
   private def elementsAt(document: BsonDocument, path: mongo4s.FieldPath): Option[List[BsonValue]] =
     at(document, path).collect { case array if array.isArray => array.asArray.getValues.asScala.toList }
 
+  private def candidates(document: BsonDocument, path: mongo4s.FieldPath): List[BsonValue] =
+    def go(current: BsonValue, segments: List[String]): List[BsonValue] = segments match
+      case Nil         => List(current)
+      case seg :: rest =>
+        current match
+          case nested: BsonDocument => Option(nested.get(seg)).toList.flatMap(go(_, rest))
+          case array: BsonArray     => array.getValues.asScala.toList.flatMap(go(_, segments))
+          case _                    => Nil
+
+    go(document, storedSegments(path))
+  end candidates
+
+  private def leaves(document: BsonDocument, path: mongo4s.FieldPath): List[BsonValue] =
+    candidates(document, path).flatMap {
+      case array: BsonArray => array :: array.getValues.asScala.toList
+      case value            => List(value)
+    }
+
+  private def equals(document: BsonDocument, path: mongo4s.FieldPath, value: BsonValue): Boolean =
+    if value.isNull
+    then candidates(document, path).isEmpty || leaves(document, path).exists(_.isNull)
+    else leaves(document, path).contains(value)
+
   private def at(document: BsonDocument, path: mongo4s.FieldPath): Option[BsonValue] =
     def go(current: BsonValue, segments: List[String]): Option[BsonValue] = segments match
       case Nil         => Some(current)
@@ -303,8 +356,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Update.Set(path, value)  => setAt(document, storedSegments(path), value)
     case Update.Unset(path)       => unsetAt(document, storedSegments(path))
     case Update.Inc(path, amount) =>
-      val current = at(document, path).map(_.asNumber.longValue).getOrElse(0L)
-      setAt(document, storedSegments(path), org.bson.BsonInt64(current + amount.asNumber.longValue))
+      setAt(document, storedSegments(path), BsonOrdering.increment(at(document, path), amount))
     case Update.Combine(updates)  => updates.foldLeft(document)(applyUpdate)
     case other                    => throw UnsupportedOperationException(s"FakeMongoCollection: $other is not simulated")
 
@@ -401,10 +453,19 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Stage.Skip(n)                 => documents.drop(n)
     case Stage.Limit(n)                => documents.take(n)
     case Stage.ProjectStage(selected)  => documents.map(applyProjection(_, selected))
-    case Stage.Count(fieldName)        => List(BsonDocument(fieldName, BsonInt32(documents.size)))
+    case Stage.Count(fieldName)        =>
+      if documents.isEmpty then Nil else List(BsonDocument(fieldName, BsonInt32(documents.size)))
     case Stage.Group(by, accumulators) => grouped(documents, by, accumulators)
     case other                         =>
-      throw UnsupportedOperationException(s"FakeMongoCollection: ${other.key} is not simulated")
+      throw UnsupportedOperationException(s"FakeMongoCollection: ${stageName(other)} is not simulated")
+
+  private def stageName(stage: Stage[E]): String =
+    if stage.key.nonEmpty
+    then stage.key
+    else
+      stage match
+        case Stage.Raw(document) if !document.isEmpty => s"the raw stage ${document.getFirstKey}"
+        case _                                        => "a raw stage"
 
   private def grouped(
       documents: List[BsonDocument],
@@ -430,8 +491,8 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Accumulator.Avg(expression)   => averaged(valuesOf(expression, documents))
     case Accumulator.Min(expression)   => extreme(valuesOf(expression, documents), _ < 0)
     case Accumulator.Max(expression)   => extreme(valuesOf(expression, documents), _ > 0)
-    case Accumulator.First(expression) => valuesOf(expression, documents).headOption.getOrElse(BsonNull.VALUE)
-    case Accumulator.Last(expression)  => valuesOf(expression, documents).lastOption.getOrElse(BsonNull.VALUE)
+    case Accumulator.First(expression) => positional(expression, documents.headOption)
+    case Accumulator.Last(expression)  => positional(expression, documents.lastOption)
     case Accumulator.Push(expression)  => BsonArray(valuesOf(expression, documents).asJava)
 
     case Accumulator.AddToSet(_) =>
@@ -441,6 +502,9 @@ final class FakeMongoCollection[F[*], S[*], E](
 
     case Accumulator.Raw(document) =>
       throw UnsupportedOperationException(s"FakeMongoCollection: the raw accumulator $document is not simulated")
+
+  private def positional(expression: Accumulator.Expression[E], document: Option[BsonDocument]): BsonValue =
+    document.flatMap(one => valuesOf(expression, List(one)).headOption).getOrElse(BsonNull.VALUE)
 
   private def valuesOf(expression: Accumulator.Expression[E], documents: List[BsonDocument]): List[BsonValue] =
     expression match
@@ -604,4 +668,33 @@ private object BsonOrdering:
   def compare(a: BsonValue, b: BsonValue): Int =
     if a.isNumber && b.isNumber then java.lang.Double.compare(a.asNumber.doubleValue, b.asNumber.doubleValue)
     else if a.isString && b.isString then a.asString.getValue.compareTo(b.asString.getValue)
+    else if a.isDateTime && b.isDateTime then java.lang.Long.compare(a.asDateTime.getValue, b.asDateTime.getValue)
+    else if a.isObjectId && b.isObjectId then a.asObjectId.getValue.compareTo(b.asObjectId.getValue)
+    else if a.isBoolean && b.isBoolean then java.lang.Boolean.compare(a.asBoolean.getValue, b.asBoolean.getValue)
+    else if a.isTimestamp && b.isTimestamp then a.asTimestamp.getValue.compareTo(b.asTimestamp.getValue)
     else throw UnsupportedOperationException(s"FakeMongoCollection: cannot compare $a and $b")
+
+  def regex(pattern: String, options: String): java.util.regex.Pattern =
+    val flags = options.foldLeft(0) { (acc, flag) =>
+      flag match
+        case 'i' => acc | java.util.regex.Pattern.CASE_INSENSITIVE
+        case 'm' => acc | java.util.regex.Pattern.MULTILINE
+        case 's' => acc | java.util.regex.Pattern.DOTALL
+        case 'x' => acc | java.util.regex.Pattern.COMMENTS
+        case _   => acc
+    }
+
+    java.util.regex.Pattern.compile(pattern, flags)
+  end regex
+
+  def increment(current: Option[BsonValue], amount: BsonValue): BsonValue =
+    val base = current.getOrElse(BsonInt32(0))
+
+    if base.isDecimal128 || amount.isDecimal128
+    then throw UnsupportedOperationException("FakeMongoCollection: $inc over a Decimal128 is not simulated")
+    else if base.isDouble || amount.isDouble
+    then BsonDouble(base.asNumber.doubleValue + amount.asNumber.doubleValue)
+    else
+      val total = base.asNumber.longValue + amount.asNumber.longValue
+      if base.isInt32 && amount.isInt32 && total.isValidInt then BsonInt32(total.toInt) else BsonInt64(total)
+  end increment

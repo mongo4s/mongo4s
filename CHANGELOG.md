@@ -120,6 +120,19 @@ part of `2.0.0` below.
 
 ### Fixed
 
+- **`FakeMongoCollection` answered several queries differently from the server.** A filter over an array field
+  compared the whole array to the value, so `contains` never matched and `$ne` always did; a dotted path through an
+  array of documents resolved to nothing; `$regex` anchored the whole string and dropped its options; `$inc`
+  truncated its amount to a `Long` and rewrote the field as `Int64`, after which the fake could not find the row it
+  had just updated; `$count` reported `0` where the server reports nothing; `findOneAndUpdate`/`Replace`/`Delete`
+  ignored their `sort`; `$eq`/`$ne` against `null` disagreed with the server about a missing field; sorting or
+  comparing a date, `ObjectId` or boolean threw; `$first`/`$last` skipped documents missing the field instead of
+  taking the first or last; a bulk `UpdateOne`/`UpdateMany` silently discarded its `UpdateOptions`; inserts neither
+  stamped an `_id` nor refused a duplicate one. Every one of these is now checked against a real MongoDB by
+  `FakeFidelityParityItSpec`.
+
+### Fixed
+
 - `RsBridge.unit` reported a publisher's failure wrapped in a `CompletionException` on backends that do not unwrap
   one themselves, which hid the driver's own exception type — and with it the error labels the new transaction
   retries depend on. It now reports the exception the publisher raised, on every backend.

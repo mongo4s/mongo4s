@@ -512,6 +512,22 @@ inside this build. Alongside it, `FakeRepository` is a `BaseMongoRepository` ove
 repository logic, only the collection faked. Nothing about repository behaviour is reimplemented for tests, so the
 fake cannot drift from what production does; the only thing standing in for MongoDB is the storage underneath.
 
+## What the fake got wrong, and why the first parity spec missed it
+
+The fake shipped a set of answers that differed from MongoDB's: a filter on an array compared the whole array rather
+than its elements, `$regex` anchored, `$inc` truncated to a `Long` and widened the field, `$count` reported zero
+where the server reports nothing, `findOneAnd*` ignored their sort, `$eq null` did not match a missing field, and
+ordering threw on anything that was not a number or a string. Each one makes a test pass that production fails —
+precisely what "a fake that lies is worse than no fake" was written to prevent.
+
+The parity spec that was supposed to catch this did not, and the reason is worth keeping: it seeded every row with
+every field and matched non-empty sets. Those are the conditions under which none of these divergences show. A
+parity spec is only as good as the shapes it seeds — missing fields, empty results, arrays, and the widths a value
+can take are where two implementations actually part company, so `FakeFidelityParityItSpec` runs each of them
+against a container and compares the fake's answer to the server's.
+
+It also fails on the pre-fix fake, all fifteen cases, which is the only evidence that it tests anything.
+
 ## Evolving the API
 
 Three commitments, and the mechanics that make each one keepable:

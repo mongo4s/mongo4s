@@ -1341,7 +1341,10 @@ Filters, updates, sorting, paging and projections are simulated, and so is a sub
 test to reach for Docker.
 
 `distinct` is simulated too, array fields flattened into their elements the way the server does, and so is `$slice`
-in a projection.
+in a projection. Filters follow the server's array semantics — a filter on an array field matches its elements, and a
+dotted path descends through an array of documents — `$regex` searches rather than anchors and honours its options,
+`$eq null` matches a missing field, `$inc` keeps the width the server keeps, and an insert stamps an `_id` and
+refuses a duplicate one.
 
 Everything else throws `UnsupportedOperationException` naming what was asked for, rather than quietly answering
 wrong — a fake that lies is worse than no fake. That includes `watch`, `explain`, `$text` and ranking by
