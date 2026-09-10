@@ -21,6 +21,7 @@ object WireProductDerivation:
     make[A](
       mirror = m,
       labels = labels,
+      naming = config.fieldNaming,
       omitAbsentFields = config.omitNoneFields,
       codecsThunk = () => summonAll[Tuple.Map[m.MirroredElemTypes, WireCodec]].toList.asInstanceOf[List[WireCodec[Any]]].toArray
     )
@@ -29,6 +30,7 @@ object WireProductDerivation:
   @publicInBinary private[direct] def make[A](
       mirror: Mirror.ProductOf[A],
       labels: Array[String],
+      naming: mongo4s.bson.FieldNaming,
       omitAbsentFields: Boolean,
       codecsThunk: () => Array[WireCodec[Any]],
   ): WireCodec[A] =
@@ -36,8 +38,9 @@ object WireProductDerivation:
     val indexOf     = labels.zipWithIndex.toMap[String, Int]
 
     new FieldCodec[A]:
-      override def fieldNames: Array[String] = labels
-      override def isEmpty: Boolean          = labels.isEmpty
+      override def fieldNaming: mongo4s.bson.FieldNaming = naming
+      override def fieldNames: Array[String]             = labels
+      override def isEmpty: Boolean                      = labels.isEmpty
 
       override def readEmpty: A =
         if labels.isEmpty

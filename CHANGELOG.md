@@ -120,6 +120,9 @@ part of `2.0.0` below.
 
 ### Fixed
 
+- A `snake_case` (or otherwise renamed) `WireCodec` and the queries against its collection could disagree about
+  field names, and every query then matched nothing. A derived codec now carries its `fieldNaming`, and
+  `getDirectCollection` defaults to it, so the two cannot part company without being asked to.
 - `selectAs` reported `MissingField` for an `Option` label whose field the document did not carry, while reading the
   whole entity gave `None` for the very same document. The absent value now goes to the decoder, which is what makes
   the two agree; a field the entity requires is still reported as missing.

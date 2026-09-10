@@ -90,6 +90,18 @@ The reason is the one `Index` and `WireCodecConfig` already carry: a `case class
 breaking `apply`/`copy` in every release, and change-stream options keep arriving. `withExpandedEvents` is the first
 one that had to, so the treatment happened now rather than being restated as a hazard.
 
+### `getDirectCollection` takes its codec before its name
+
+The clauses were swapped so the `naming` parameter can default to the codec's own:
+
+```scala
+def getDirectCollection[A](using WireCodec[A], ClassTag[A])(collectionName: String, naming: FieldNaming = codec.fieldNaming)
+```
+
+Calls are unchanged — `database.getDirectCollection[Person]("people")` still compiles, and now spells field names
+the way the codec wrote them instead of defaulting to `identity`. Only an implementation of `MongoDatabase` outside
+this library has to follow. If you were passing `naming` to match a `WireCodecConfig`, you can drop it.
+
 ### `WireCodec` is no longer derived automatically
 
 A case class, enum or sealed trait used to get a `WireCodec` from implicit scope alone. Now it needs to be asked:

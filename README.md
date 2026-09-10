@@ -1101,9 +1101,11 @@ and the reason new derivation options can be added in a minor release without br
 given WireCodecConfig = WireCodecConfig.SnakeCase.withDiscriminatorNaming(FieldNaming.snakeCase)
 ```
 
-`WireCodecConfig` only affects how `WireCodec`
-derives — pass the matching `FieldNaming` (e.g. `WireCodecConfig.SnakeCase.fieldNaming`) to `getDirectCollection`'s
-own `naming` parameter too, so `Filter`/`Update`/`Field` queries render the same field names the codec wrote.
+A derived `WireCodec` remembers the naming it was configured with, and `getDirectCollection` takes that as its
+default — so a `snake_case` codec and the `Filter`/`Update`/`Field` queries against it spell the same names without
+being told twice. Pass `naming` explicitly only to override it. `getCollection` cannot do the same, because a
+`BsonDocumentCodec` from `medeia`, `calypso` or `zio-bson` carries its own naming configuration that mongo4s cannot
+read; there the parameter still has to match the codec.
 
 `FieldNaming` applies per *derived* segment only. Stored names — `Field.stored`, a `PrimaryKey`'s field names, a
 `$lookup`'s foreign field, map keys — are used verbatim. `FieldNaming.snakeCase` splits on every capital, so

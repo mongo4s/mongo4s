@@ -42,10 +42,13 @@ private[mongo4s] final class MongoDatabaseImpl[F[*], S[*]](
       )
     )
 
-  def getDirectCollection[A](
+  def getDirectCollection[A](using
+      codec: WireCodec[A],
+      tag: ClassTag[A]
+  )(
       collectionName: String,
       naming: FieldNaming,
-  )(using WireCodec[A], ClassTag[A]): F[MongoCollection[F, S, A]] =
+  ): F[MongoCollection[F, S, A]] =
     F.delay(
       DirectMongoCollectionImpl(
         underlying.getCollection(collectionName, classOf[BsonDocument]),

@@ -8,6 +8,8 @@ import org.bson.{BsonReader, BsonWriter}
     "ScalarWireCodec[Underlying].imap(wrap)(unwrap)"
 )
 trait WireCodec[A] extends WireEncoder[A] with WireDecoder[A]:
+  def fieldNaming: mongo4s.bson.FieldNaming = mongo4s.bson.FieldNaming.identity
+
   def imap[B](f: A => B)(g: B => A): WireCodec[B] =
     WireCodec.from(contramap(g), map(f))
 

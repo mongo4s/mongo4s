@@ -127,6 +127,22 @@ CodecRegistries.fromRegistries(CodecRegistries.fromCodecs(derived), underlying.g
 The other order was tried and was wrong: a `Codec[A]` in the user's registry silently shadowed the derived codec, so
 the collection wrote a shape nobody had asked for and no error was raised. Also pinned by a spec.
 
+## The codec decides how field names are spelled
+
+`WireCodecConfig` renames fields on the way out; `Filter`/`Update`/`Sort` render them through the collection's
+`FieldNaming`. Those were two separate settings with separate defaults, so a `SnakeCase` codec on a collection
+opened with the default `identity` wrote `first_name` and then queried `firstName` — every query matching nothing,
+silently, which is the exact failure this library says it exists to remove.
+
+A derived codec now reports the naming it was configured with, and `getDirectCollection` uses it as the default for
+its `naming` parameter. That takes clause interleaving — the using-clause comes first so the default can name the
+codec — and leaves the explicit parameter available for the case where the two genuinely differ.
+
+`getCollection` cannot be given the same treatment, and that asymmetry is deliberate rather than unfinished: a
+`BsonDocumentCodec` comes from `medeia`, `calypso` or `zio-bson`, each with its own naming configuration that
+mongo4s has no way to read. There the parameter still has to be kept in step by hand, and saying so is better than
+defaulting it to something that would be wrong just as often.
+
 ## Nothing derives without being asked
 
 `WireCodec`'s derivation used to be a `given`, which meant implicit scope produced one for any type with a `Mirror` —

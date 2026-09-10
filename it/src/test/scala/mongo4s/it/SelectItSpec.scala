@@ -37,7 +37,7 @@ final class SelectItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAnd
     for
       client     <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
       database   <- client.getDatabase("select_it")
-      collection <- database.getDirectCollection[Person](name, FieldNaming.snakeCase)
+      collection <- database.getDirectCollection[Person](name)
       _          <- collection.insertMany(List(Person("1", "bob", 30, "hidden"), Person("2", "alice", 25, "hidden")))
     yield collection
 

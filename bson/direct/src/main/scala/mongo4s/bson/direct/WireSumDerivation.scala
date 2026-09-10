@@ -22,6 +22,7 @@ object WireSumDerivation:
     make[A](
       mirror,
       discriminators,
+      config.fieldNaming,
       config.encodeEmptyCasesAsString,
       () => childCodecs[mirror.MirroredElemTypes].toArray,
     )
@@ -41,6 +42,7 @@ object WireSumDerivation:
   @publicInBinary private[direct] def make[A](
       mirror: Mirror.SumOf[A],
       discriminators: Array[String],
+      naming: mongo4s.bson.FieldNaming,
       encodeEmptyCasesAsString: Boolean,
       codecsThunk: () => Array[WireCodec[Any]],
   ): WireCodec[A] =
