@@ -114,17 +114,17 @@ open class BaseMongoRepository[F[*], S[*], E, K](
     page.limit.fold(skipped)(skipped.limit)
 
   protected def batched[A, B](values: List[A])(f: List[A] => F[List[B]]): F[List[B]] =
-    Effect.traverse(values.grouped(batchSize).toList)(f)
+    Effect.flatTraverse(values.grouped(batchSize).toList)(f)
 
   protected def batchedList[A, B](values: List[A])(f: List[A] => F[B]): F[List[B]] =
-    Effect.traverse(values.grouped(batchSize).toList)(chunk => F.map(f(chunk))(List(_)))
+    Effect.flatTraverse(values.grouped(batchSize).toList)(chunk => F.map(f(chunk))(List(_)))
 
   protected def batchedResults[A](values: List[A])(f: List[A] => F[BulkWriteResult]): F[BulkWriteResult] =
     val chunks  = values.grouped(batchSize).toList
     val offsets = chunks.scanLeft(0)(_ + _.size)
 
     F.map {
-      Effect.traverse(chunks.zip(offsets)) { (chunk, offset) =>
+      Effect.flatTraverse(chunks.zip(offsets)) { (chunk, offset) =>
         F.map(f(chunk))(result => List(result.shiftUpsertedIds(offset)))
       }
     }(BulkWriteResult.combine)

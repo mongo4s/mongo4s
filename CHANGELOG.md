@@ -120,6 +120,10 @@ part of `2.0.0` below.
 
 ### Fixed
 
+- `Effect.traverse` is `Effect.flatTraverse`: its function returns `F[List[B]]` and the result is flattened, which
+  is not what `traverse` means anywhere else.
+- `mongo4s.bson.DecodeResult` moved from `mongo4s-core` to `mongo4s-bson-core`, so the `mongo4s.bson` package lives
+  in one artifact instead of being split across two.
 - `$min` and `$max` were gated on `NumericOf`, so `lastSeen.max(now)` on an `Instant` field did not compile although
   MongoDB orders dates perfectly well. They take a new `ComparableOf` — numbers, `String`, `Instant`, `ObjectId`,
   `UUID`, `Boolean`, `BigDecimal`, and their `Option`s. `$inc` and `$mul` remain numeric.

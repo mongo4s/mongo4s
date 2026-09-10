@@ -90,6 +90,10 @@ The reason is the one `Index` and `WireCodecConfig` already carry: a `case class
 breaking `apply`/`copy` in every release, and change-stream options keep arriving. `withExpandedEvents` is the first
 one that had to, so the treatment happened now rather than being restated as a hazard.
 
+### `Effect.traverse` is now `Effect.flatTraverse`
+
+Same signature, honest name: the function returns `F[List[B]]` and the results are flattened. Rename the call.
+
 ### `aggregate` takes a decoder
 
 `aggregate[B]` now requires `BsonDocumentDecoder[B]` instead of `BsonDocumentCodec[B]`. Every codec is a decoder, so

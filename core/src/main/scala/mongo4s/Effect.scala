@@ -60,13 +60,13 @@ object Effect:
   def fromEither[F[*], A](either: Either[BsonError, A])(using F: Effect[F]): F[A] =
     either.fold(error => F.raiseError(error.toThrowable), F.pure)
 
-  def traverse[F[*], A, B](values: List[A])(f: A => F[List[B]])(using F: Effect[F]): F[List[B]] =
+  def flatTraverse[F[*], A, B](values: List[A])(f: A => F[List[B]])(using F: Effect[F]): F[List[B]] =
     val reversed = values.foldLeft(F.pure(List.empty[List[B]])) { (acc, value) =>
       F.flatMap(acc)(chunks => F.map(f(value))(_ :: chunks))
     }
 
     F.map(reversed)(chunks => chunks.reverse.flatten)
-  end traverse
+  end flatTraverse
 
   def traverse_[F[*], A](values: List[A])(f: A => F[Unit])(using F: Effect[F]): F[Unit] =
     values.foldLeft(F.pure(())) { (acc, value) =>

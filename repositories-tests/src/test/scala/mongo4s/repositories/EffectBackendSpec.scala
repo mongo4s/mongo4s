@@ -191,15 +191,15 @@ trait EffectBackendSpec[F[*]] extends AnyWordSpec, Matchers:
     "preserve order across chunks" in {
       val values = List(1, 2, 3, 4, 5)
 
-      run(Effect.traverse(values)(n => F.pure(List(n, n * 10)))) shouldBe List(1, 10, 2, 20, 3, 30, 4, 40, 5, 50)
+      run(Effect.flatTraverse(values)(n => F.pure(List(n, n * 10)))) shouldBe List(1, 10, 2, 20, 3, 30, 4, 40, 5, 50)
     }
 
     "run effects in order and stop at the first failure" in {
       val seen = AtomicReference(List.empty[Int])
-      val boom = Boom("traverse")
+      val boom = Boom("flatTraverse")
 
       val result = runAttempt(
-        Effect.traverse(List(1, 2, 3)): n =>
+        Effect.flatTraverse(List(1, 2, 3)): n =>
           if n == 3 then F.raiseError[List[Int]](boom)
           else F.delay { seen.updateAndGet(n :: _); List(n) }
       )
