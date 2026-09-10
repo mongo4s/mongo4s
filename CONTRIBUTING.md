@@ -3,6 +3,20 @@
 Thanks for taking the time to contribute! This document covers what you need to build the project,
 run its tests, and where to make changes for common kinds of contributions.
 
+## Documentation
+
+`README.md` is checked two ways. `ReadmeSnippets.scala` under `examples/` re-types most of its Scala blocks so they
+compile, and `ReadmeReferencesSpec` reads the README itself and asserts that every `Object.member` it names is
+defined in the source that owns it.
+
+The second exists because the first is a copy: a snippet re-typed in `examples/` can be corrected there while the
+README keeps the old spelling, which is how a `geo2dsphere` that no code has ever had survived in the README next to
+a `geo2DSphere` that compiles. The reference check reads the README, so a rename in the code fails it.
+
+It is a guard, not a compiler — it verifies names, not that a block would type-check. Adding a new AST object to the
+README means adding it to that spec's map; a mapped source that goes missing fails the check rather than silently
+skipping it.
+
 ## Building
 
 Tested against JDK 25 (LTS) — that's what CI uses. `Scala 3.9` itself needs only JDK 17, but anything

@@ -139,6 +139,9 @@ part of `2.0.0` below.
 - `selectAs` reported `MissingField` for an `Option` label whose field the document did not carry, while reading the
   whole entity gave `None` for the very same document. The absent value now goes to the decoder, which is what makes
   the two agree; a field the entity requires is still reported as missing.
+- `ReadmeReferencesSpec` reads `README.md` and fails if a Scala block names an `Object.member` the source does not
+  define. The compiled snippets under `examples/` are re-typed copies, so they could be right while the README was
+  wrong — which is exactly how `Index.geo2dsphere` survived beside the `geo2DSphere` that exists.
 - `Repository.bulkWrite` had no `ordered` flag, although the collection underneath does, and it always batched — so
   an unordered bulk stopped at the first batch that failed rather than applying everything it could. It takes
   `ordered` now, batches only when ordered (where batching preserves the meaning), and sends an unordered bulk as
