@@ -109,12 +109,12 @@ trait RepositoryBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
     }
   }
 
-  "findBy / findByFilter" should {
+  "findByField / findByFilter" should {
     "filter by a single field" in {
       val (collection, repository) = repo()
       run(collection.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 25))))
 
-      run(repository.findBy(Field.of[Person, String](_.name), "bob")) shouldBe List(Person("1", "bob", 30))
+      run(repository.findByField(Field.of[Person, String](_.name), "bob")) shouldBe List(Person("1", "bob", 30))
     }
 
     "filter by an arbitrary Filter" in {
@@ -127,7 +127,7 @@ trait RepositoryBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
   }
 
   if supportsStreaming then
-    "getAll / getBy" should {
+    "getAll / getByFilter" should {
       "stream every document, and filtered documents" in {
         given Streamable[S, Person]  = streamable
         val (collection, repository) = repo()
@@ -136,7 +136,7 @@ trait RepositoryBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
         drain(repository.getAll) should contain theSameElementsAs List(Person("1", "bob", 30), Person("2", "alice", 25))
 
         val filter = Field.of[Person, String](_.name).equalTo("alice")
-        drain(repository.getBy(filter)) shouldBe List(Person("2", "alice", 25))
+        drain(repository.getByFilter(filter)) shouldBe List(Person("2", "alice", 25))
       }
     }
 
@@ -179,12 +179,12 @@ trait RepositoryBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
     }
   }
 
-  "updateBy" should {
+  "updateByFilter" should {
     "apply an update to every document matching the filter and report the modified count" in {
       val (collection, repository) = repo()
       run(collection.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 30), Person("3", "eve", 40))))
 
-      val modified = run(repository.updateBy(Field.of[Person, Int](_.age).equalTo(30), Update.set(Field.of[Person, Int](_.age), 99)))
+      val modified = run(repository.updateByFilter(Field.of[Person, Int](_.age).equalTo(30), Update.set(Field.of[Person, Int](_.age), 99)))
 
       modified.matchedCount shouldBe 2L
       collection.snapshot should contain theSameElementsAs List(Person("1", "bob", 99), Person("2", "alice", 99), Person("3", "eve", 40))

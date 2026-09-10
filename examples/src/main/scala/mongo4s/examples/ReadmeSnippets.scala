@@ -284,7 +284,7 @@ object ReadmeSnippets:
     yield result
 
   def pagedStream(users: BaseMongoRepository[IO, S, User, String]): S[User] =
-    users.getBy(adults, Page.first(100))
+    users.getByFilter(adults, Page.first(100))
 
   def atomically(users: BaseMongoRepository[IO, S, User, String]): IO[Option[User]] =
     users.findOneAndUpdate("1", birthday)

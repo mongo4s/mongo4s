@@ -12,6 +12,9 @@ part of `2.0.0` below.
 
 ### Added
 
+- `Repository.getByField`, `updateByField` and `deleteByField`, completing the grid the renames above opened up:
+  every condition-based operation now has both a field-and-value and a whole-`Filter` spelling. Each is its
+  `…ByFilter` counterpart over `field.equalTo(value)`.
 - **`WireCodec` no longer derives itself for any case class it meets.** It comes from `derives WireCodec`, from a
   `given` you wrote, or from an existing `BsonEncoder`/`BsonDecoder` pair. A field whose type has no codec is a
   compile error naming the type, rather than a silently derived codec — and an `opaque type` keeps the
@@ -81,6 +84,10 @@ part of `2.0.0` below.
 
 ### Changed
 
+- **`Repository`'s condition-based methods say what they take.** `findBy` is `findByField`, `updateBy` is
+  `updateByFilter`, `deleteBy` is `deleteByFilter` and `getBy` is `getByFilter`. `By` used to mean a field in
+  `findBy` and a filter in `updateBy`/`deleteBy`/`getBy`, while the filter-taking read was `findByFilter` — so the
+  same idea had two names and one name had two meanings.
 - **`Repository.insertOne` returns `K` and `insertMany` returns `List[K]`**, instead of the driver's
   `Option[org.bson.BsonValue]` and `List[org.bson.BsonValue]`. A repository is parameterised on its key type and can
   name the key itself through `PrimaryKey`, so it never had a reason to hand back raw BSON for the caller to decode;

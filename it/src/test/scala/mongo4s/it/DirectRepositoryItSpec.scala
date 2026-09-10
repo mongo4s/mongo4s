@@ -56,11 +56,11 @@ trait DirectRepositoryItSpec[F[*], S[*]] extends AnyWordSpec, Matchers, BeforeAn
       missing shouldBe None
     }
 
-    "insertMany / findMany / findBy / findByFilter batch and filter correctly" in {
+    "insertMany / findMany / findByField / findByFilter batch and filter correctly" in {
       val (client, repo) = repository("direct_it_find_many")
       run(repo.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 25), Person("3", "eve", 40))))
       val many           = run(repo.findMany(List("1", "3")))
-      val byName         = run(repo.findBy(Field.of[Person, String](_.name), "alice"))
+      val byName         = run(repo.findByField(Field.of[Person, String](_.name), "alice"))
       val byFilter       = run(repo.findByFilter(Field.of[Person, Int](_.age).gt(28)))
       run(client.close)
 
@@ -69,12 +69,12 @@ trait DirectRepositoryItSpec[F[*], S[*]] extends AnyWordSpec, Matchers, BeforeAn
       byFilter.map(_.id) should contain allOf ("1", "3")
     }
 
-    "getAll / getBy stream matching documents" in {
+    "getAll / getByFilter stream matching documents" in {
       given Streamable[S, Person] = streamable
       val (client, repo)          = repository("direct_it_streaming")
       run(repo.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 25))))
       val all                     = drain(repo.getAll)
-      val filtered                = drain(repo.getBy(Field.of[Person, String](_.name).equalTo("alice")))
+      val filtered                = drain(repo.getByFilter(Field.of[Person, String](_.name).equalTo("alice")))
       run(client.close)
 
       all should contain theSameElementsAs List(Person("1", "bob", 30), Person("2", "alice", 25))
@@ -94,11 +94,11 @@ trait DirectRepositoryItSpec[F[*], S[*]] extends AnyWordSpec, Matchers, BeforeAn
       found2 shouldBe Some(Person("2", "alice", 25))
     }
 
-    "updateField / updateBy apply real Mongo update operators" in {
+    "updateField / updateByFilter apply real Mongo update operators" in {
       val (client, repo) = repository("direct_it_update")
       run(repo.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 30), Person("3", "eve", 40))))
       run(repo.updateField("1", Field.of[Person, Int](_.age), 99))
-      val modified       = run(repo.updateBy(Field.of[Person, Int](_.age).equalTo(30), Update.set(Field.of[Person, Int](_.age), 50)))
+      val modified       = run(repo.updateByFilter(Field.of[Person, Int](_.age).equalTo(30), Update.set(Field.of[Person, Int](_.age), 50)))
       val one            = run(repo.findOne("1"))
       val two            = run(repo.findOne("2"))
       run(client.close)

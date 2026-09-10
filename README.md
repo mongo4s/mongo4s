@@ -1345,7 +1345,22 @@ entities `mongo4s` already has codecs for.
 ## Repositories
 
 `BaseMongoRepository[F, S, E, K]` implements `Repository` — `count/find/insert/upsert/update/delete/bulkWrite`, batched
-by `batchSize` (default 500) — over any `MongoCollection[F, S, E]`, from either codec path:
+by `batchSize` (default 500) — over any `MongoCollection[F, S, E]`, from either codec path.
+
+Reads and writes that take a *condition* rather than a key come in two spellings, and the name says which: `…ByField`
+takes a field and a value, `…ByFilter` takes a whole `Filter`. `findByField`/`findByFilter` return a `List`,
+`getByField`/`getByFilter` the same rows as a stream, and `updateByField`/`updateByFilter` and
+`deleteByField`/`deleteByFilter` write to every row that matches:
+
+```scala
+users.findByField(nameField, "alice")             // List[User]
+users.getByField(nameField, "alice")              // the same, as a stream
+users.updateByField(ageField, 30, birthday)       // every 30-year-old
+users.deleteByField(ageField, 30)                 // likewise
+```
+
+A `…ByField` call is exactly its `…ByFilter` counterpart over `field.equalTo(value)` — there for the common case
+that would otherwise spell out a one-field filter.
 
 `bulkWrite` takes the same `ordered` flag the collection does. An ordered bulk is sent in batches, which keeps its
 meaning — it stops at the first failure and what came before it stays applied. An **unordered** bulk is sent as one
@@ -1378,7 +1393,7 @@ Paging goes through `Page`:
 import mongo4s.repositories.Page
 
 users.findByFilter(adults, Page.sortedBy(Sort.asc(nameField)).skipping(20).taking(10))
-users.getBy(adults, Page.first(100)) // same, as a stream
+users.getByFilter(adults, Page.first(100)) // same, as a stream
 ```
 
 Skip-based paging re-scans what it skips, so it degrades on deep pages — and a row deleted earlier in the

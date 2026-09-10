@@ -89,12 +89,12 @@ final class RepositoryItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befor
       }
     }
 
-    "insertMany / findMany / findBy / findByFilter batch and filter correctly" in {
+    "insertMany / findMany / findByField / findByFilter batch and filter correctly" in {
       (for
         (client, repo) <- repository("repo_it_find_many")
         _              <- repo.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 25), Person("3", "eve", 40)))
         many           <- repo.findMany(List("1", "3"))
-        byName         <- repo.findBy(Field.of[Person, String](_.name), "alice")
+        byName         <- repo.findByField(Field.of[Person, String](_.name), "alice")
         byFilter       <- repo.findByFilter(Field.of[Person, Int](_.age).gt(28))
         _              <- client.close
       yield (many, byName, byFilter)).timeout(30.seconds).asserting { case (many, byName, byFilter) =>
@@ -104,12 +104,32 @@ final class RepositoryItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befor
       }
     }
 
-    "getAll / getBy stream matching documents" in {
+    "getByField / updateByField / deleteByField work off a field and a value" in {
+      (for
+        (client, repo) <- repository("repo_it_by_field")
+        _              <- repo.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 30), Person("3", "eve", 40)))
+        streamed       <- repo.getByField(Field.of[Person, Int](_.age), 30).compile.toList
+        updated        <- repo.updateByField(Field.of[Person, Int](_.age), 30, Update.set(Field.of[Person, String](_.name), "z"))
+        afterUpdate    <- repo.findByFilter(Field.of[Person, String](_.name).equalTo("z"))
+        deleted        <- repo.deleteByField(Field.of[Person, Int](_.age), 30)
+        remaining      <- repo.getAll.compile.toList
+        _              <- client.close
+      yield (streamed, updated, afterUpdate, deleted, remaining)).timeout(30.seconds).asserting {
+        case (streamed, updated, afterUpdate, deleted, remaining) =>
+          streamed.map(_.id) should contain theSameElementsAs List("1", "2")
+          updated.matchedCount shouldBe 2L
+          afterUpdate.map(_.id) should contain theSameElementsAs List("1", "2")
+          deleted.deletedCount shouldBe 2L
+          remaining shouldBe List(Person("3", "eve", 40))
+      }
+    }
+
+    "getAll / getByFilter stream matching documents" in {
       (for
         (client, repo) <- repository("repo_it_streaming")
         _              <- repo.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 25)))
         all            <- repo.getAll.compile.toList
-        filtered       <- repo.getBy(Field.of[Person, String](_.name).equalTo("alice")).compile.toList
+        filtered       <- repo.getByFilter(Field.of[Person, String](_.name).equalTo("alice")).compile.toList
         _              <- client.close
       yield (all, filtered)).timeout(30.seconds).asserting { case (all, filtered) =>
         all should contain theSameElementsAs List(Person("1", "bob", 30), Person("2", "alice", 25))
@@ -132,12 +152,12 @@ final class RepositoryItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befor
       }
     }
 
-    "updateField / updateBy apply real Mongo update operators" in {
+    "updateField / updateByFilter apply real Mongo update operators" in {
       (for
         (client, repo) <- repository("repo_it_update")
         _              <- repo.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 30), Person("3", "eve", 40)))
         _              <- repo.updateField("1", Field.of[Person, Int](_.age), 99)
-        modified       <- repo.updateBy(Field.of[Person, Int](_.age).equalTo(30), Update.set(Field.of[Person, Int](_.age), 50))
+        modified       <- repo.updateByFilter(Field.of[Person, Int](_.age).equalTo(30), Update.set(Field.of[Person, Int](_.age), 50))
         one            <- repo.findOne("1")
         two            <- repo.findOne("2")
         _              <- client.close

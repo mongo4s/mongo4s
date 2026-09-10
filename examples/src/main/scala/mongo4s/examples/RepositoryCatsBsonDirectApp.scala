@@ -66,7 +66,7 @@ object RepositoryCatsBsonDirectApp extends IOApp.Simple:
         foundUser <- users.findOne(UserId("1"))
         _         <- IO.println(s"user: $foundUser")
 
-        admins <- users.findBy(Field.of[User, UserRole](_.userRole), UserRole.Admin)
+        admins <- users.findByField(Field.of[User, UserRole](_.userRole), UserRole.Admin)
         _      <- IO.println(s"admins: ${admins.map(_.name)}")
 
         tokens     <- BaseMongoRepository.create[IO, S, ApiToken, ObjectId](db, "repo_direct_tokens")

@@ -30,12 +30,12 @@ open class BaseMongoRepository[F[*], S[*], E, K](
   def findMany(keys: List[K])(using session: Option[ClientSession]): F[List[E]] =
     batched(keys)(chunk => collection.find(pk.inFilter(chunk))(using session).projection(defaultProjection).all)
 
-  def findBy[A](field: Field[E, A], value: A, page: Page[E])(using
+  def findByField[A](field: Field[E, A], value: A, page: Page[E])(using
       session: Option[ClientSession]
   )(using
       encoder: BsonEncoder[A]
   ): F[List[E]] =
-    findByFilter(Filter.Eq(field.path, encoder.encode(value)), page)(using session)
+    findByFilter(fieldEq(field, value), page)(using session)
 
   def findByFilter(filter: Filter[E], page: Page[E])(using session: Option[ClientSession]): F[List[E]] =
     paged(collection.find(filter)(using session).projection(defaultProjection), page).all
@@ -56,7 +56,15 @@ open class BaseMongoRepository[F[*], S[*], E, K](
   def getAll(using session: Option[ClientSession])(using Streamable[S, E]): S[E] =
     collection.find()(using session).projection(defaultProjection).stream
 
-  def getBy(filter: Filter[E], page: Page[E])(using session: Option[ClientSession])(using Streamable[S, E]): S[E] =
+  def getByField[A](field: Field[E, A], value: A, page: Page[E])(using
+      session: Option[ClientSession]
+  )(using
+      streamable: Streamable[S, E],
+      encoder: BsonEncoder[A],
+  ): S[E] =
+    getByFilter(fieldEq(field, value), page)(using session)
+
+  def getByFilter(filter: Filter[E], page: Page[E])(using session: Option[ClientSession])(using Streamable[S, E]): S[E] =
     paged(collection.find(filter)(using session).projection(defaultProjection), page).stream
 
   def insertOne(entity: E)(using session: Option[ClientSession]): F[K] =
@@ -83,7 +91,14 @@ open class BaseMongoRepository[F[*], S[*], E, K](
   def updateOne(key: K, update: Update[E], options: UpdateOptions)(using session: Option[ClientSession]): F[UpdateResult] =
     collection.updateOne(pk.eqFilter(key), update, options)(using session)
 
-  def updateBy(filter: Filter[E], update: Update[E])(using session: Option[ClientSession]): F[UpdateResult] =
+  def updateByField[A](field: Field[E, A], value: A, update: Update[E])(using
+      session: Option[ClientSession]
+  )(using
+      encoder: BsonEncoder[A]
+  ): F[UpdateResult] =
+    updateByFilter(fieldEq(field, value), update)(using session)
+
+  def updateByFilter(filter: Filter[E], update: Update[E])(using session: Option[ClientSession]): F[UpdateResult] =
     collection.updateMany(filter, update)(using session)
 
   def findOneAndUpdate(key: K, update: Update[E], options: FindOneAndUpdateOptions[E])(using session: Option[ClientSession]): F[Option[E]] =
@@ -100,7 +115,14 @@ open class BaseMongoRepository[F[*], S[*], E, K](
   def deleteMany(keys: List[K])(using session: Option[ClientSession]): F[DeleteResult] =
     F.map(batchedList(keys)(chunk => collection.deleteMany(pk.inFilter(chunk))(using session)))(results => DeleteResult(results.map(_.deletedCount).sum))
 
-  def deleteBy(filter: Filter[E])(using session: Option[ClientSession]): F[DeleteResult] =
+  def deleteByField[A](field: Field[E, A], value: A)(using
+      session: Option[ClientSession]
+  )(using
+      encoder: BsonEncoder[A]
+  ): F[DeleteResult] =
+    deleteByFilter(fieldEq(field, value))(using session)
+
+  def deleteByFilter(filter: Filter[E])(using session: Option[ClientSession]): F[DeleteResult] =
     collection.deleteMany(filter)(using session)
 
   def ensureKeyIndex(using session: Option[ClientSession]): F[String] =
@@ -108,6 +130,9 @@ open class BaseMongoRepository[F[*], S[*], E, K](
 
   def createIndex(index: Index[E])(using session: Option[ClientSession]): F[String] =
     collection.createIndex(index)(using session)
+
+  private def fieldEq[A](field: Field[E, A], value: A)(using encoder: BsonEncoder[A]): Filter[E] =
+    Filter.Eq(field.path, encoder.encode(value))
 
   private def paged(query: mongo4s.queries.FindQuery[F, S, E], page: Page[E]): mongo4s.queries.FindQuery[F, S, E] =
     val sorted  = if page.sort.isEmpty then query else query.sort(page.sort)

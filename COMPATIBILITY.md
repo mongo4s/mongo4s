@@ -104,6 +104,23 @@ its own bridge, as the four in-tree ones do.
 
 Same signature, honest name: the function returns `F[List[B]]` and the results are flattened. Rename the call.
 
+### `Repository`'s `…By` methods are `…ByField` or `…ByFilter`
+
+```scala
+// 2.x                          // 3.0.0
+repo.findBy(field, value)       repo.findByField(field, value)
+repo.getBy(filter)              repo.getByFilter(filter)
+repo.updateBy(filter, update)   repo.updateByFilter(filter, update)
+repo.deleteBy(filter)           repo.deleteByFilter(filter)
+```
+
+`findByFilter` is unchanged. `By` used to mean a field in `findBy` and a filter everywhere else, which made
+`findByFilter` and `deleteBy` two names for the same idea; the suffix now names the argument in every case. Renames
+only — the signatures and behaviour are untouched, so each call site is a search and replace.
+
+`getByField`, `updateByField` and `deleteByField` are new, and are each the `…ByFilter` method over
+`field.equalTo(value)`.
+
 ### `Repository.insertOne`/`insertMany` return the key
 
 ```scala

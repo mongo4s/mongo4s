@@ -72,12 +72,12 @@ final class BaseMongoRepositorySpec extends AsyncWordSpec, AsyncIOSpec, Matchers
     }
   }
 
-  "findBy / findByFilter" should {
+  "findByField / findByFilter" should {
     "filter by a single field" in {
       val repository = repo()
       for
         _     <- repository.fake.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 25)))
-        found <- repository.findBy(Field.of[Person, String](_.name), "bob")
+        found <- repository.findByField(Field.of[Person, String](_.name), "bob")
       yield found shouldBe List(Person("1", "bob", 30))
     }
 
@@ -91,17 +91,30 @@ final class BaseMongoRepositorySpec extends AsyncWordSpec, AsyncIOSpec, Matchers
     }
   }
 
-  "getAll / getBy" should {
+  "getAll / getByFilter" should {
     "stream every document, and filtered documents" in {
       val repository = repo()
       val filter     = Field.of[Person, String](_.name).equalTo("alice")
       for
         _        <- repository.fake.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 25)))
         all      <- repository.getAll.compile.toList
-        filtered <- repository.getBy(filter).compile.toList
+        filtered <- repository.getByFilter(filter).compile.toList
       yield
         all should contain theSameElementsAs List(Person("1", "bob", 30), Person("2", "alice", 25))
         filtered shouldBe List(Person("2", "alice", 25))
+    }
+  }
+
+  "getByField" should {
+    "stream exactly the documents whose field holds the value" in {
+      val repository = repo()
+      for
+        _        <- repository.fake.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 25), Person("3", "alice", 41)))
+        filtered <- repository.getByField(Field.of[Person, String](_.name), "alice").compile.toList
+        none     <- repository.getByField(Field.of[Person, String](_.name), "nobody").compile.toList
+      yield
+        filtered should contain theSameElementsAs List(Person("2", "alice", 25), Person("3", "alice", 41))
+        none shouldBe Nil
     }
   }
 
@@ -171,15 +184,49 @@ final class BaseMongoRepositorySpec extends AsyncWordSpec, AsyncIOSpec, Matchers
     }
   }
 
-  "updateBy" should {
+  "updateByFilter" should {
     "apply an update to every document matching the filter and report the modified count" in {
       val repository = repo()
       for
         _        <- repository.fake.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 30), Person("3", "eve", 40)))
-        modified <- repository.updateBy(Field.of[Person, Int](_.age).equalTo(30), Update.set(Field.of[Person, Int](_.age), 99))
+        modified <- repository.updateByFilter(Field.of[Person, Int](_.age).equalTo(30), Update.set(Field.of[Person, Int](_.age), 99))
       yield
         modified.matchedCount shouldBe 2L
         repository.fake.snapshot should contain theSameElementsAs List(Person("1", "bob", 99), Person("2", "alice", 99), Person("3", "eve", 40))
+    }
+  }
+
+  "updateByField" should {
+    "apply an update to every document whose field holds the value" in {
+      val repository = repo()
+      for
+        _        <- repository.fake.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 30), Person("3", "eve", 40)))
+        modified <- repository.updateByField(Field.of[Person, Int](_.age), 30, Update.set(Field.of[Person, String](_.name), "z"))
+      yield
+        modified.matchedCount shouldBe 2L
+        repository.fake.snapshot should contain theSameElementsAs List(Person("1", "z", 30), Person("2", "z", 30), Person("3", "eve", 40))
+    }
+
+    "report nothing matched when no document holds the value" in {
+      val repository = repo()
+      for
+        _        <- repository.fake.insertOne(Person("1", "bob", 30))
+        modified <- repository.updateByField(Field.of[Person, Int](_.age), 99, Update.set(Field.of[Person, String](_.name), "z"))
+      yield
+        modified.matchedCount shouldBe 0L
+        repository.fake.snapshot shouldBe List(Person("1", "bob", 30))
+    }
+  }
+
+  "deleteByField" should {
+    "remove every document whose field holds the value, and leave the rest" in {
+      val repository = repo()
+      for
+        _       <- repository.fake.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 30), Person("3", "eve", 40)))
+        deleted <- repository.deleteByField(Field.of[Person, Int](_.age), 30)
+      yield
+        deleted.deletedCount shouldBe 2L
+        repository.fake.snapshot shouldBe List(Person("3", "eve", 40))
     }
   }
 

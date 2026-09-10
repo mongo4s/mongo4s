@@ -15,7 +15,7 @@ trait Repository[F[*], S[*], E, K]:
   def findOne(key: K)(using session: Option[ClientSession] = None): F[Option[E]]
   def findMany(keys: List[K])(using session: Option[ClientSession] = None): F[List[E]]
 
-  def findBy[A](
+  def findByField[A](
       field: Field[E, A],
       value: A,
       page: Page[E] = Page.all[E],
@@ -32,7 +32,19 @@ trait Repository[F[*], S[*], E, K]:
   ): F[List[E]]
 
   def getAll(using session: Option[ClientSession] = None)(using Streamable[S, E]): S[E]
-  def getBy(filter: Filter[E], page: Page[E] = Page.all[E])(using
+
+  def getByField[A](
+      field: Field[E, A],
+      value: A,
+      page: Page[E] = Page.all[E],
+  )(using
+      session: Option[ClientSession] = None
+  )(using
+      Streamable[S, E],
+      BsonEncoder[A],
+  ): S[E]
+
+  def getByFilter(filter: Filter[E], page: Page[E] = Page.all[E])(using
       session: Option[ClientSession] = None
   )(using
       Streamable[S, E]
@@ -51,7 +63,14 @@ trait Repository[F[*], S[*], E, K]:
   ): F[UpdateResult]
 
   def updateOne(key: K, update: Update[E], options: UpdateOptions = UpdateOptions.default)(using session: Option[ClientSession] = None): F[UpdateResult]
-  def updateBy(filter: Filter[E], update: Update[E])(using session: Option[ClientSession] = None): F[UpdateResult]
+
+  def updateByField[A](field: Field[E, A], value: A, update: Update[E])(using
+      session: Option[ClientSession] = None
+  )(using
+      BsonEncoder[A]
+  ): F[UpdateResult]
+
+  def updateByFilter(filter: Filter[E], update: Update[E])(using session: Option[ClientSession] = None): F[UpdateResult]
 
   def findOneAndUpdate(key: K, update: Update[E], options: FindOneAndUpdateOptions[E] = FindOneAndUpdateOptions.default[E])(using
       session: Option[ClientSession] = None
@@ -61,7 +80,13 @@ trait Repository[F[*], S[*], E, K]:
 
   def deleteOne(key: K)(using session: Option[ClientSession] = None): F[DeleteResult]
   def deleteMany(keys: List[K])(using session: Option[ClientSession] = None): F[DeleteResult]
-  def deleteBy(filter: Filter[E])(using session: Option[ClientSession] = None): F[DeleteResult]
+  def deleteByField[A](field: Field[E, A], value: A)(using
+      session: Option[ClientSession] = None
+  )(using
+      BsonEncoder[A]
+  ): F[DeleteResult]
+
+  def deleteByFilter(filter: Filter[E])(using session: Option[ClientSession] = None): F[DeleteResult]
 
   def ensureKeyIndex(using session: Option[ClientSession] = None): F[String]
 
