@@ -104,8 +104,9 @@ bind inside the `for` and are discharged by `ZIO.scoped`/`Scope.run`), and rapid
 `mongo4s.bson.BsonInstances.given` needed unless you're summoning one directly.
 
 Already have a model on `medeia`, `zio-schema`, or `calypso`? Swap `derives WireCodec` + `getDirectCollection` for
-`derives MedeiaDocumentCodec`/etc. + `getCollection` (and `BaseMongoRepository.create(db, "users")` instead of
-constructing it from a collection directly) — see [BSON codecs](#bson-codecs) below for all four backends.
+`derives MedeiaDocumentCodec`/etc. + `getCollection` (and `BaseMongoRepository.create[F, S, User, String](db, "users")`
+instead of constructing it from a collection directly — `E` and `K` come from the type arguments, not from the
+arguments, so they have to be written out) — see [BSON codecs](#bson-codecs) below for all four backends.
 
 Already have a `MongoClientSettings` built elsewhere (connection pool tuning, read/write concerns, TLS, credentials,
 …)? Use `MongoClientResource.fromSettings` instead of `fromConnectionString`. `MongoClient.fromClient`/`fromSettings`/
@@ -131,7 +132,7 @@ A driver `CodecRegistry` is not how you plug a codec into `mongo4s`, though — 
 
 For more examples see [examples/src/main/scala/mongo4s/examples](examples/src/main/scala/mongo4s/examples) — a
 shared domain model (opaque types, enums, nested case classes) run through every runtime/codec combination
-(`cats + medeia`, `ZIO + zio-bson`, `kyo + medeia`, `rapid + calypso`), a repository example covering all three
+(`cats + medeia`, `ZIO + zio-bson`, `kyo + medeia`, `rapid + calypso`), a repository example covering all four
 `BaseMongoRepository` construction styles against bson-direct, and a sessions/transactions + typed aggregation
 pipeline example on `cats + medeia`. Most of what this README shows is compiled there too —
 [`ReadmeSnippets.scala`](examples/src/main/scala/mongo4s/examples/ReadmeSnippets.scala) walks the same ground section by
@@ -150,7 +151,7 @@ trait MongoCollection[F[*], S[*], A]:
 
   def updateOne(filter: Filter[A], update: Update[A], options: UpdateOptions = UpdateOptions.default)(using session: Option[ClientSession] = None): F[UpdateResult]
 
-  def deleteOne(filter: Filter[A])(using session: Option[ClientSession] = None): F[DeleteResult]
+  def deleteOne(filter: Filter[A], options: DeleteOptions = DeleteOptions.default)(using session: Option[ClientSession] = None): F[DeleteResult]
 
   def findOneAndUpdate(filter: Filter[A], update: Update[A], options: FindOneAndUpdateOptions[A] = FindOneAndUpdateOptions.default[A])(using session: Option[ClientSession] = None): F[Option[A]]
 
@@ -296,7 +297,8 @@ documents — `PushOptions.default[Note].sortedBy(Sort.desc(rankField))` renders
 The positional operators are path segments, so `/` builds them — `$[]` updates every element and needs nothing else:
 
 ```scala
-val everyQty: Field[Order, Int] = Field.of[Order, List[Item]](_.items) / "$[]" / "qty"
+val orderId: Field[Order, String]  = Field.of[Order, String](_.id)
+val everyQty: Field[Order, Int]    = Field.of[Order, List[Item]](_.items) / "$[]" / "qty"
 
 collection.updateOne(orderId.equalTo("1"), Update.set(everyQty, 0))
 ```
@@ -1357,8 +1359,13 @@ BaseMongoRepository.withoutId[F, S, E, K](db, "collection")  // strips _id from 
 BaseMongoRepository.objectId[F, S, E](db, "collection")      // WithId[ObjectId, E], auto _id round-trip
 ```
 
-`create` is the default. Reach for `withoutId` only when the entity genuinely does not model `_id` and its codec
-would reject the extra field — never for an entity keyed on `_id`, since the key would come back missing.
+`create` is the default, and it is the right one far more often than it looks: none of the four codec backends
+rejects a document carrying an `_id` the entity does not model — `medeia`, `zio-bson`, `calypso` and a bridged
+`WireCodec` all decode it and ignore the field. So `withoutId` is not needed to make such an entity readable.
+
+Reach for it when a codec **you** wrote is strict about unknown fields, or when you would rather not carry `_id`
+over the wire at all. Never reach for it for an entity keyed on `_id`: the projection strips the key, and it comes
+back missing.
 
 `insertOne` returns the entity's `K`, and `insertMany` the `K` of every entity, in insertion order and across
 batches. A repository carries a `PrimaryKey[E, K]`, so it can name what it just inserted rather than hand back a
