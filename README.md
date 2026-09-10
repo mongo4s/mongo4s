@@ -519,9 +519,26 @@ recognise depends on where your key lives:
 | `storedId(_._id)` — key **is** `_id` | your key | `BsonString("k1")` | yes |
 | `WithId[ObjectId, E]` | the `ObjectId` you constructed it with | that same `ObjectId` | yes |
 
-This holds identically for `collection.replaceOne`/`updateOne` with `upsert` and for `Repository.upsert`/
-`upsertMany` — the repository builds the same command. It is also why `Repository.insertOne` returns `K` instead of
-forwarding an id: the key comes from the entity, which is the one answer that is right for every row of that table.
+Read that table as three common arrangements, not as a rule — `_id` and `K` are independent. What lands in `_id`
+is decided by the **entity's codec**; `PrimaryKey` only decides what the repository filters on. Let them disagree
+and `upsertedId` is neither:
+
+```scala
+final case class Doc(_id: String, tenant: String, name: String) derives MedeiaDocumentCodec
+object Doc:
+  given PrimaryKey[Doc, String] = PrimaryKey.single("tenant")(_.tenant)
+
+repo.upsert(Doc("d1", "tenant-A", "x"))  // K is "tenant-A"; upsertedId is BsonString("d1")
+```
+
+`_id` can also be an `Int`, or a whole subdocument, or pinned by the filter (`_id` equality in an upsert's filter
+is copied into the document the server creates). That is why the type is `BsonValue` and not something narrower: at
+the collection level there is no `K` to narrow it to, and at the repository level the key is not what the field
+holds. `Repository.insertOne` returns `K` for exactly this reason — the key comes from the entity, which is right
+in every arrangement above, whereas the id is only ever right about `_id`.
+
+This all holds identically for `collection.replaceOne`/`updateOne` with `upsert` and for `Repository.upsert`/
+`upsertMany` — the repository builds the same command.
 
 Under an unacknowledged write concern (`w=0`) the server sends nothing back, so every one of these comes back empty —
 zero counts, `None` for the ids. That is indistinguishable from a write that matched nothing, which is the trade
