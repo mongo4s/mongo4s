@@ -1327,6 +1327,11 @@ BaseMongoRepository.objectId[F, S, E](db, "collection")      // WithId[ObjectId,
 `create` is the default. Reach for `withoutId` only when the entity genuinely does not model `_id` and its codec
 would reject the extra field — never for an entity keyed on `_id`, since the key would come back missing.
 
+`insertOne` returns the entity's `K`, and `insertMany` the `K` of every entity, in insertion order and across
+batches. A repository carries a `PrimaryKey[E, K]`, so it can name what it just inserted rather than hand back a
+raw `BsonValue` for you to decode. `MongoCollection` has no key type and keeps returning the driver's
+`InsertOneResult`/`InsertManyResult` — that is where the server's own `_id` still lives.
+
 Paging goes through `Page`:
 
 ```scala

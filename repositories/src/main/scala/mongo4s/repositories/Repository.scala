@@ -38,8 +38,8 @@ trait Repository[F[*], S[*], E, K]:
       Streamable[S, E]
   ): S[E]
 
-  def insertOne(entity: E)(using session: Option[ClientSession] = None): F[Option[org.bson.BsonValue]]
-  def insertMany(entities: List[E])(using session: Option[ClientSession] = None): F[List[org.bson.BsonValue]]
+  def insertOne(entity: E)(using session: Option[ClientSession] = None): F[K]
+  def insertMany(entities: List[E])(using session: Option[ClientSession] = None): F[List[K]]
 
   def upsert(entity: E)(using session: Option[ClientSession] = None): F[UpdateResult]
   def upsertMany(entities: List[E])(using session: Option[ClientSession] = None): F[BulkWriteResult]

@@ -62,6 +62,33 @@ final class RepositoryItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befor
       }
     }
 
+    "insertOne returns the primary key, and findOne accepts it unchanged" in {
+      (for
+        (client, repo) <- repository("repo_it_insert_one_key")
+        key            <- repo.insertOne(Person("1", "bob", 30))
+        found          <- repo.findOne(key)
+        _              <- client.close
+      yield (key, found)).timeout(30.seconds).asserting { case (key, found) =>
+        key shouldBe "1"
+        found shouldBe Some(Person("1", "bob", 30))
+      }
+    }
+
+    "insertMany returns every primary key in insertion order, across batches" in {
+      val people = List(Person("1", "a", 1), Person("2", "b", 2), Person("3", "c", 3), Person("4", "d", 4), Person("5", "e", 5))
+      (for
+        client   <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+        database <- client.getDatabase("repo_it_insert_many_keys")
+        repo     <- BaseMongoRepository.create[IO, S, Person, String](database, "people", batchSize = 2)
+        keys     <- repo.insertMany(people)
+        found    <- repo.findMany(keys)
+        _        <- client.close
+      yield (keys, found)).timeout(30.seconds).asserting { case (keys, found) =>
+        keys shouldBe List("1", "2", "3", "4", "5")
+        found should contain theSameElementsAs people
+      }
+    }
+
     "insertMany / findMany / findBy / findByFilter batch and filter correctly" in {
       (for
         (client, repo) <- repository("repo_it_find_many")
@@ -159,5 +186,20 @@ final class RepositoryItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befor
         found      <- repository.findOne(oid)
         _          <- client.close
       yield found).timeout(30.seconds).asserting(_ shouldBe Some(WithId(oid, Note("hello"))))
+    }
+
+    "insertOne returns the ObjectId key, and findOne accepts it unchanged" in {
+      val oid = ObjectId.get()
+      (for
+        client     <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+        database   <- client.getDatabase("repo_it_oid_key")
+        repository <- BaseMongoRepository.objectId[IO, S, Note](database, "notes")
+        key        <- repository.insertOne(WithId(oid, Note("bye")))
+        found      <- repository.findOne(key)
+        _          <- client.close
+      yield (key, found)).timeout(30.seconds).asserting { case (key, found) =>
+        key shouldBe oid
+        found shouldBe Some(WithId(oid, Note("bye")))
+      }
     }
   }

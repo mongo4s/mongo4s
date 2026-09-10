@@ -116,6 +116,34 @@ final class BaseMongoRepositorySpec extends AsyncWordSpec, AsyncIOSpec, Matchers
     }
   }
 
+  "insertOne" should {
+    "return the primary key of the inserted entity, ready for findOne" in {
+      val repository = repo()
+      for
+        key   <- repository.insertOne(Person("1", "bob", 30))
+        found <- repository.findOne(key)
+      yield
+        key shouldBe "1"
+        found shouldBe Some(Person("1", "bob", 30))
+    }
+  }
+
+  "insertMany" should {
+    "return every primary key in insertion order, across batches" in {
+      val repository = repo(batchSize = 2)
+      val people     = List(Person("1", "a", 1), Person("2", "b", 2), Person("3", "c", 3), Person("4", "d", 4), Person("5", "e", 5))
+      for
+        keys  <- repository.insertMany(people)
+        found <- repository.findMany(keys)
+      yield
+        keys shouldBe List("1", "2", "3", "4", "5")
+        found should contain theSameElementsAs people
+    }
+
+    "return no keys for an empty batch" in
+      repo().insertMany(Nil).map(_ shouldBe Nil)
+  }
+
   "upsert / upsertMany" should {
     "insert when the key is new and replace when it already exists" in {
       val repository = repo()

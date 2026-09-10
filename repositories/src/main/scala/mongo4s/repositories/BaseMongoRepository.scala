@@ -1,6 +1,5 @@
 package mongo4s.repositories
 
-import org.bson.BsonValue
 import org.bson.types.ObjectId
 import com.mongodb.reactivestreams.client.ClientSession
 
@@ -60,11 +59,11 @@ open class BaseMongoRepository[F[*], S[*], E, K](
   def getBy(filter: Filter[E], page: Page[E])(using session: Option[ClientSession])(using Streamable[S, E]): S[E] =
     paged(collection.find(filter)(using session).projection(defaultProjection), page).stream
 
-  def insertOne(entity: E)(using session: Option[ClientSession]): F[Option[BsonValue]] =
-    F.map(collection.insertOne(entity)(using session))(_.insertedId)
+  def insertOne(entity: E)(using session: Option[ClientSession]): F[K] =
+    F.map(collection.insertOne(entity)(using session))(_ => pk.key(entity))
 
-  def insertMany(entities: List[E])(using session: Option[ClientSession]): F[List[BsonValue]] =
-    batched(entities)(chunk => F.map(collection.insertMany(chunk)(using session))(_.insertedIds))
+  def insertMany(entities: List[E])(using session: Option[ClientSession]): F[List[K]] =
+    batched(entities)(chunk => F.map(collection.insertMany(chunk)(using session))(_ => chunk.map(pk.key)))
 
   def upsert(entity: E)(using session: Option[ClientSession]): F[UpdateResult] =
     collection.replaceOne(pk.eqFilter(pk.key(entity)), entity, ReplaceOptions.upsert)(using session)

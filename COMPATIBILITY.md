@@ -104,6 +104,35 @@ its own bridge, as the four in-tree ones do.
 
 Same signature, honest name: the function returns `F[List[B]]` and the results are flattened. Rename the call.
 
+### `Repository.insertOne`/`insertMany` return the key
+
+```scala
+// 2.x
+def insertOne(entity: E)(using Option[ClientSession]): F[Option[org.bson.BsonValue]]
+def insertMany(entities: List[E])(using Option[ClientSession]): F[List[org.bson.BsonValue]]
+
+// 3.0.0
+def insertOne(entity: E)(using Option[ClientSession]): F[K]
+def insertMany(entities: List[E])(using Option[ClientSession]): F[List[K]]
+```
+
+A `Repository[F, S, E, K]` carries a `PrimaryKey[E, K]`, so it can name the key of what it just inserted without
+asking the driver for an id to decode. The keys come back in insertion order, across `batchSize` batches.
+
+Anything that ignored the result — `_ <- repo.insertOne(entity)` — compiles unchanged. Anything that decoded the
+`BsonValue` drops the decode:
+
+```scala
+// 2.x
+repo.insertOne(person).map(_.flatMap(BsonDecoder[String].decode(_).toOption))
+
+// 3.0.0
+repo.insertOne(person)
+```
+
+`MongoCollection.insertOne`/`insertMany` are unchanged: a collection has no key type, so `InsertOneResult` and
+`InsertManyResult` keep reporting what the driver reports. Reach for those if you need the server's `_id` itself.
+
 ### `Repository.bulkWrite` takes `ordered`
 
 `bulkWrite(commands)` is unchanged and still ordered. `bulkWrite(commands, ordered = false)` now behaves the way the

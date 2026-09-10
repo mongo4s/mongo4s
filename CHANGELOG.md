@@ -81,6 +81,13 @@ part of `2.0.0` below.
 
 ### Changed
 
+- **`Repository.insertOne` returns `K` and `insertMany` returns `List[K]`**, instead of the driver's
+  `Option[org.bson.BsonValue]` and `List[org.bson.BsonValue]`. A repository is parameterised on its key type and can
+  name the key itself through `PrimaryKey`, so it never had a reason to hand back raw BSON for the caller to decode;
+  the keys come back in insertion order, across batches. `MongoCollection`, which has no key type, still returns
+  `InsertOneResult`/`InsertManyResult` exactly as the driver reports them. Code that ignored the result — which is
+  how the result was used everywhere it appeared — needs no change; code that decoded the `BsonValue` should drop the
+  decode.
 - **The direct path reads numbers the way the `BsonValue` path does.** A `Long` field stored as an `Int32`, a
   `Double` stored as a whole `Int64`, and every other lossless width now decode through `getDirectCollection` as
   they always did through `getCollection`; what would lose information is still refused on both. The rule lives in
