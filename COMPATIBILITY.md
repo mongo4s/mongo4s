@@ -15,8 +15,11 @@
 
 ## Migrating from 2.x to 3.0.0
 
-`3.0.0` requires **`Scala 3.9 LTS`**, and changes three things in the API: compound `PrimaryKey`s are named tuples,
-`withTransaction` retries the way the driver does, and `WatchOptions` became a builder. Nothing else moved.
+`3.0.0` requires **`Scala 3.9 LTS`**. Most of what it adds is additive, but a number of things did move, and each
+one is a section below. The changes that reach ordinary calling code are: compound `PrimaryKey`s became named
+tuples, `WireCodec` stopped deriving itself for any case class it met, and driver exceptions are now `MongoError`.
+The rest touch code that pattern matches the query AST, constructs an options value positionally, or implements one
+of the public traits.
 
 ### Why this is a major release
 

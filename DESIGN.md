@@ -360,10 +360,10 @@ things previously buried in `toBson` are visible at a glance — `Accumulator.Co
 `LookupPipeline` share `$lookup`. The fake also names a refused stage with `stage.key` instead of rendering the
 whole stage just to read its first field.
 
-Four cases carry an empty key, and that is the shape rather than an oversight: `Stage.Raw`, `Update.Raw`,
-`Filter.Raw` and `Filter.MatchAll` render no operator of their own — `Raw` carries whatever the caller wrote, and
-`MatchAll` is the empty document. `Filter.Eq` and `Filter.Regex` are the same: MongoDB spells them `{path: value}`
-with no operator at all.
+Eight cases carry an empty key, and that is the shape rather than an oversight. `Stage.Raw`, `Update.Raw`,
+`Filter.Raw` and `Accumulator.Raw` carry whatever the caller wrote; `Filter.MatchAll` is the empty document and
+`Update.Combine` is a container rather than an operator; `Filter.Eq` and `Filter.Regex` are spelled `{path: value}`
+by MongoDB, with no operator at all.
 
 **`Near` was split into `Near` and `NearSphere` to make this hold.** It used to be one case with a `spherical:
 Boolean`, which meant its operator was chosen at render time — the one place a declared key would have been a lie.

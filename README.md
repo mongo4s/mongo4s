@@ -339,7 +339,7 @@ collection.deleteMany(filter, DeleteOptions.default.withCollation(caseInsensitiv
 collection.count(filter, CountOptions.default.withSkip(20).withLimit(10))
 ```
 
-What each type carries today: `collation`, `hint` and `comment` everywhere; `bypassDocumentValidation` on the two
+What each type carries today: `collation` and `hint` everywhere, `comment` on everything but `count`; `bypassDocumentValidation` on the two
 that write whole documents (`UpdateOptions`, `ReplaceOptions`); `limit`, `skip` and `maxTime` on `CountOptions`.
 
 Each operation family has its own options type on purpose rather than one shared bag: `upsert` means nothing on a
@@ -847,7 +847,7 @@ collection.createIndex(Index.ascending(createdAtField).expiringAfter(30.days)) /
 collection.createIndex(Index.ascending(ageField).where(ageField.gte(18))) // partial
 collection.createIndex(Index.text(bioField).withSparse)
 collection.createIndex(Index.hashed(idField)) // sharding
-collection.createIndex(Index.geo2dsphere(Field.stored[User, Any]("location"))) // also geo2d
+collection.createIndex(Index.geo2DSphere(Field.stored[User, Any]("location"))) // also geo2D
 collection.createIndex(Index.ascending(ageField).withHidden) // built, but ignored by the planner
 collection.createIndex(Index.ascending(Field.stored[User, Any]("$**"))) // wildcard: just a stored path
 
@@ -1084,8 +1084,10 @@ back** through the entity's own codec. That is what `selectAs` is for — see [P
 
 Strictness stops at the field list, though — **not** at BSON numeric widths. A document that stores `42` as an
 Int32 where the model says `Long` (written by `mongosh`, by a `$inc`, or by another service) reads the same through
-`getDirectCollection` as through `getCollection`: any whole number in range is accepted, and one that would lose
-something — `7.5` into a `Long`, a value past `2^63` — is refused on both. The rule is written once, in
+`getDirectCollection` as through `getCollection`: any whole number in range is accepted, and one that cannot be a
+whole number of that type — `7.5` into a `Long`, a value past `2^63` — is refused on both. A `Double` target is the
+exception on both paths: every BSON number converts to one, so a very large `Int64` or a long `Decimal128` rounds
+rather than being refused, exactly as `BsonDecoder[Double]` has always done. The rule is written once, in
 `BsonDecoder`, and the wire codec defers to it, so the two cannot drift apart.
 
 What that costs: a field stored in the width the model declares is read straight off the wire, allocating nothing;
@@ -1268,8 +1270,9 @@ final case class Team(members: NonEmptyList[String]) derives MedeiaDocumentCodec
 `NonEmptySet`/`NonEmptyMap` additionally need a `cats.Order` for their element/key type — the same `Order` you'd
 already need to construct one of these types directly.
 
-`Ior[A, B]` gets a `WireCodec` too — flat and discriminated by each branch's own type name, the same idea as
-`bson-direct`'s own `Either[A, B]` above, not `"Left"`/`"Right"`/`"Both"`. `Both` doesn't have a
+`Ior[A, B]` gets a `WireCodec` too, discriminated by each branch's own type name rather than
+`"Left"`/`"Right"`/`"Both"`. Unlike `Either`, which inlines a case class branch's fields, `Ior`'s single-sided
+branches always nest their payload under `"value"`. `Both` doesn't have a
 single "own" type — it holds an `A` and a `B` at once — so its discriminator is the two names joined (`"String+Foo"`),
 with each side nested under its own `"left"`/`"right"` key rather than inlined, to avoid a silent
 field-name collision if `A` and `B` happen to share a field.
@@ -1461,13 +1464,16 @@ given RsBridgeConfig = RsBridgeConfig.default
   .withStrictSingleResult     // fail on a second result instead of taking the first
 ```
 
-`bufferSize` bounds memory against a fast cursor; it does not apply to `all`, which asks for everything by
-definition. `timeout` is a backstop for a cursor that stops signalling entirely — the driver has its own timeouts,
+`bufferSize` bounds memory against a fast cursor. On `cats` and `kyo` it does not apply to `all`, which asks for
+everything by definition; `zio` and `rapid` read `all` through the same buffered source as a stream, so it applies
+there. `timeout` is a backstop for a cursor that stops signalling entirely — the driver has its own timeouts,
 and streams are deliberately excluded, since a change stream sitting idle is working rather than stuck.
 `strictSingleResult` is off by default, matching the driver.
 
 Operations that expect at most one document read two, not the whole cursor — enough to notice a second result under
-`strictSingleResult`, and no more. `AggregateQuery.first` pushes a `$limit` into the pipeline for the same reason.
+`strictSingleResult`, and no more. `find(...).first` and `AggregateQuery.first` also push a `limit`/`$limit` to the
+server, so on those the server sends one document and `strictSingleResult` has nothing to catch; it is `distinct` and
+the other single-result publishers that it guards.
 
 ## Modules
 
@@ -1505,7 +1511,9 @@ removal. `mongo4s-kyo` sits outside the promise while kyo is on a release candid
 `3.0.0` moves the whole build onto `Scala 3.9 LTS` and drops `3.3 LTS`. `TASTy` is not forward compatible, and that
 is a break MiMa cannot see, which is why it takes a major release rather than a minor. What it buys is one Scala
 version across every module: the three that used to be pinned to a fast-release `3.8` are on the LTS line with the
-rest. The only API change riding along is compound `PrimaryKey`s, which became named tuples.
+rest. It carries API changes of its own — compound `PrimaryKey`s became named tuples, `WireCodec` no longer
+derives itself unasked, and driver exceptions arrive as `MongoError` — each with a migration note in
+[COMPATIBILITY.md](COMPATIBILITY.md).
 
 Full policy, the migration guides and the Scala-version rules: **[COMPATIBILITY.md](COMPATIBILITY.md)**.
 What changed in each release: **[CHANGELOG.md](CHANGELOG.md)**. What is not covered yet and how it will land:

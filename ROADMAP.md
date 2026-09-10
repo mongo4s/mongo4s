@@ -21,9 +21,9 @@ full API applies.
 ## How these land
 
 Most of the list is **additive** — new methods, new options on the existing options values, new `Stage` cases, a new
-codec-bridge module. Since `2.0.0` froze the shape of every operation signature — and `3.0.0` changed only the
-Scala version, not the API — those can ship in a `3.x` minor release without breaking anybody, and will as demand
-appears.
+codec-bridge module. `3.0.0` moved what it needed to move (see [COMPATIBILITY.md](COMPATIBILITY.md)); from here the
+shape of every operation signature is frozen again, so those additions can ship in a `3.x` minor release without
+breaking anybody, and will as demand appears.
 
 Several of them are less additive than they look, though — a new `Stage` or `Filter` case breaks an exhaustive
 match, a new abstract method breaks anything implementing the trait, and a new parameter on an existing method is

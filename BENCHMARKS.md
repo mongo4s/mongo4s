@@ -2,7 +2,7 @@
 
 [← back to the README](README.md)
 
-Three separate JMH harnesses in [`benchmarks/`](benchmarks), one developer machine — `JDK 25`, `MongoDB 7` — directional
+Five JMH harnesses in [`benchmarks/`](benchmarks), one developer machine — `JDK 25`, `MongoDB 7` — directional
 ballparks, not hardware-independent authorities. Run them on your own hardware before making decisions on the numbers
 alone.
 
@@ -31,8 +31,8 @@ handwritten `forProductN` is **1.4×** the next backend, which is what skipping 
 though that is the one number here with real spread (±5.3% within the run and ~5% between runs, against ±0.5% for
 `medeia`).
 
-`bson-direct` is in this table through `DocumentCodecBridge.toDocumentCodec` — the path `aggregate` and `distinct`
-take on a direct collection, `WireCodec` forced to materialize the `BsonDocument` it normally skips. Even handicapped
+`bson-direct` is in this table through `DocumentCodecBridge.toDocumentCodec` — the path `aggregate` takes on a
+direct collection when the caller hands it that bridge, `WireCodec` forced to materialize the `BsonDocument` it normally skips. Even handicapped
 that way it encodes **2×** *faster* than `medeia`; on decode it falls behind `medeia` and `zio-bson`, which read the
 `BsonDocument` natively instead of through a `BsonDocumentReader`. Its AST-free numbers are in the next
 table — but note the two tables stop in different places, this one at a `BsonDocument` and the next at real bytes, so
@@ -174,8 +174,12 @@ wider than the spread between the columns. The one real outlier is `mongo4cats-c
 *ops/s*
 against its own `.all`'s **1339**, and against **~2200** on its own single-document ops) — it bridges through a
 hand-rolled
-`cats.effect.std.Queue`-backed `Subscriber` instead of `fs2.interop.reactivestreams`, which every `mongo4s` `.stream()`
-uses. Full table and methodology notes are in the benchmark source.
+`cats.effect.std.Queue`-backed `Subscriber` instead of `fs2.interop.reactivestreams`, which `mongo4s-cats` uses.
+Each `mongo4s` runtime uses its own interop — `zio-interop-reactivestreams`, `kyo-reactive-streams`, and a
+`PublisherIterator` of mongo4s's own for `rapid`.
+
+`deleteOne` reads about half of the other single-document operations because the benchmark inserts a document first,
+so its number covers two round trips rather than one.
 
 ## Codec choice under real `MongoDB` — `mongo4s` vs `mongo4cats`
 
