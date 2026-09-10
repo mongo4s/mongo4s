@@ -156,3 +156,18 @@ final class AggregateSpec extends AnyWordSpec, Matchers:
       }
     }
   }
+
+  "aggregate's output type" should {
+
+    "need only a decoder, since nothing is ever encoded into it" in {
+      final case class Counted(total: Int)
+
+      given BsonDocumentDecoder[Counted] = document =>
+        Option(document.get("total"))
+          .toRight(BsonError.MissingField("total"))
+          .flatMap(BsonDecoder[Int].decode)
+          .map(Counted.apply)
+
+      collection.aggregate[Counted](Seq(Stage.count("total"))).all.unsafeRunSync() shouldBe List(Counted(4))
+    }
+  }

@@ -90,6 +90,12 @@ The reason is the one `Index` and `WireCodecConfig` already carry: a `case class
 breaking `apply`/`copy` in every release, and change-stream options keep arriving. `withExpandedEvents` is the first
 one that had to, so the treatment happened now rather than being restated as a hazard.
 
+### `aggregate` takes a decoder
+
+`aggregate[B]` now requires `BsonDocumentDecoder[B]` instead of `BsonDocumentCodec[B]`. Every codec is a decoder, so
+existing calls compile unchanged; a read model that only decodes no longer needs an encoder written for it. Only an
+implementation of `MongoCollection` outside this library has to follow.
+
 ### `getDirectCollection` takes its codec before its name
 
 The clauses were swapped so the `naming` parameter can default to the codec's own:

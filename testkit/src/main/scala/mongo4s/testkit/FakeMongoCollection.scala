@@ -224,8 +224,8 @@ final class FakeMongoCollection[F[*], S[*], E](
       BulkWriteResult(inserted, matched, modified, deleted, upserted.toMap)
     }
 
-  def aggregate[B](pipeline: Seq[Stage[E]])(using session: Option[ClientSession])(using codecB: BsonDocumentCodec[B]): AggregateQuery[F, S, B] =
-    FakeAggregateQuery(pipeline.toList, codecB)
+  def aggregate[B](pipeline: Seq[Stage[E]])(using session: Option[ClientSession])(using decoderB: BsonDocumentDecoder[B]): AggregateQuery[F, S, B] =
+    FakeAggregateQuery(pipeline.toList, decoderB)
 
   def distinct[B](field: Field[E, B], filter: Filter[E])(using
       session: Option[ClientSession]
@@ -566,7 +566,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     private def decoded: List[B] =
       distinctValues(path, filter).map(decoder.decode(_).fold(error => throw error.toThrowable, identity))
 
-  private final class FakeAggregateQuery[B](stages: List[Stage[E]], codecB: BsonDocumentCodec[B]) extends AggregateQuery[F, S, B]:
+  private final class FakeAggregateQuery[B](stages: List[Stage[E]], decoderB: BsonDocumentDecoder[B]) extends AggregateQuery[F, S, B]:
     def allowDiskUse(allow: Boolean): AggregateQuery[F, S, B] = this
 
     def hint(keys: BsonDocument): AggregateQuery[F, S, B]                                    = this
@@ -585,13 +585,13 @@ final class FakeMongoCollection[F[*], S[*], E](
       throw UnsupportedOperationException("FakeMongoCollection: streaming an aggregation needs an emitter for its output type")
 
     def attempting: DecodeAttempts[F, S, B] = new DecodeAttempts[F, S, B]:
-      def all: F[List[DecodeResult[B]]] = F.delay(runPipeline(stages).map(codecB.decodeDocument))
+      def all: F[List[DecodeResult[B]]] = F.delay(runPipeline(stages).map(decoderB.decodeDocument))
 
       def stream(using Streamable[S, DecodeResult[B]]): S[DecodeResult[B]] =
         throw UnsupportedOperationException("FakeMongoCollection: streaming an aggregation needs an emitter for its output type")
 
     private def decoded: List[B] =
-      runPipeline(stages).map(codecB.decodeDocument(_).fold(error => throw error.toThrowable, identity))
+      runPipeline(stages).map(decoderB.decodeDocument(_).fold(error => throw error.toThrowable, identity))
 
   private final class FakeFindQuery(
       filter: Filter[E],

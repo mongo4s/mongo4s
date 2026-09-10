@@ -17,7 +17,7 @@ import mongo4s.operations.*
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.queries.{AggregateQuery, DistinctQuery, FindQuery}
 import mongo4s.{Effect, Field, MongoCollection, RsBridge, Streamable}
-import mongo4s.bson.{BsonDecoder, BsonDocumentCodec, DecodeResult, FieldNaming}
+import mongo4s.bson.{BsonDecoder, BsonDocumentCodec, DecodeResult, FieldNaming, BsonDocumentDecoder}
 
 import scala.jdk.CollectionConverters.given
 
@@ -213,11 +213,11 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
         F.map(rs.one(publisher))(BulkWriteResult.fromDriver)
       }
 
-  def aggregate[B](pipeline: Seq[Stage[A]])(using session: Option[ClientSession])(using codec: BsonDocumentCodec[B]): AggregateQuery[F, S, B] =
+  def aggregate[B](pipeline: Seq[Stage[A]])(using session: Option[ClientSession])(using decoder: BsonDocumentDecoder[B]): AggregateQuery[F, S, B] =
     AggregateQueryImpl(
       collection = underlying,
       pipeline = pipeline.map(_.toBson(naming)),
-      codec = codec,
+      decoder = decoder,
       allowDiskUse = None,
       session = session,
     )

@@ -154,7 +154,7 @@ trait MongoCollection[F[*], S[*], A]:
 
   def findOneAndUpdate(filter: Filter[A], update: Update[A], options: FindOneAndUpdateOptions[A] = FindOneAndUpdateOptions.default[A])(using session: Option[ClientSession] = None): F[Option[A]]
 
-  def aggregate[B](pipeline: Seq[Stage[A]])(using session: Option[ClientSession] = None)(using BsonDocumentCodec[B]): AggregateQuery[F, S, B]
+  def aggregate[B](pipeline: Seq[Stage[A]])(using session: Option[ClientSession] = None)(using BsonDocumentDecoder[B]): AggregateQuery[F, S, B]
 
   def distinct[B](field: Field[A, B], filter: Filter[A] = Filter.all)(using session: Option[ClientSession] = None)(using BsonDecoder[B]): DistinctQuery[F, S, B]
 
@@ -790,10 +790,11 @@ val buckets = Seq(
 )
 ```
 
-For an output shape you'd rather not model, `BsonDocumentCodec[BsonDocument]` is in scope by default, so
-`aggregate[BsonDocument]` just works — useful for `$facet` and ad-hoc `$project`s.
+`aggregate` asks for a `BsonDocumentDecoder[B]`, not a full codec: a pipeline's output is read and never written,
+so a read model needs no encoder you would have to invent. A `BsonDocumentCodec` satisfies it, and
+`aggregate[BsonDocument]` works out of the box — useful for `$facet` and ad-hoc `$project`s.
 
-`aggregateDirect[B]` is the AST-free counterpart: it asks for a `WireCodec[B]` rather than a `BsonDocumentCodec[B]`
+`aggregateDirect[B]` is the AST-free counterpart: it asks for a `WireCodec[B]` rather than a `BsonDocumentDecoder[B]`
 and, on a collection opened with `getDirectCollection`, decodes the pipeline's output straight off the wire with no
 `BsonDocument` in between — the same trip `find` already makes there.
 

@@ -11,6 +11,8 @@ trait BsonDocumentDecoder[A] extends BsonDecoder[A]:
     else Left(BsonError.typeMismatch(BsonTypeName.Object, bson))
 
 object BsonDocumentDecoder:
+  given raw: BsonDocumentDecoder[BsonDocument] = document => Right(document)
+
   inline def apply[A](using instance: BsonDocumentDecoder[A]): BsonDocumentDecoder[A] = instance
 
   def instance[A](f: BsonDocument => Either[BsonError, A]): BsonDocumentDecoder[A] =

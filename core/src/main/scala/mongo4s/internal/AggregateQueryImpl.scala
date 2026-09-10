@@ -10,7 +10,7 @@ import com.mongodb.client.model.Collation
 import com.mongodb.reactivestreams.client.{AggregatePublisher, ClientSession, MongoCollection as RSMongoCollection}
 
 import mongo4s.{RsBridge, Streamable}
-import mongo4s.bson.{BsonDocumentCodec, DecodeResult}
+import mongo4s.bson.{BsonDocumentDecoder, DecodeResult}
 import mongo4s.queries.{AggregateQuery, DecodeAttempts}
 
 import scala.jdk.CollectionConverters.given
@@ -18,7 +18,7 @@ import scala.jdk.CollectionConverters.given
 private[mongo4s] final class AggregateQueryImpl[F[*], S[*], A](
     collection: RSMongoCollection[BsonDocument],
     pipeline: Seq[Bson],
-    codec: BsonDocumentCodec[A],
+    decoder: BsonDocumentDecoder[A],
     allowDiskUse: Option[Boolean],
     session: Option[ClientSession],
     options: QueryOptions = QueryOptions.empty,
@@ -40,12 +40,12 @@ private[mongo4s] final class AggregateQueryImpl[F[*], S[*], A](
 
   def attempting: DecodeAttempts[F, S, A] = new DecodeAttempts[F, S, A]:
     def all: F[List[DecodeResult[A]]] =
-      rs.list(AttemptingPublisher(documents(limited = false), codec.decodeDocument))
+      rs.list(AttemptingPublisher(documents(limited = false), decoder.decodeDocument))
 
     def stream(using Streamable[S, DecodeResult[A]]): S[DecodeResult[A]] =
-      rs.stream(AttemptingPublisher(documents(limited = false), codec.decodeDocument))
+      rs.stream(AttemptingPublisher(documents(limited = false), decoder.decodeDocument))
 
-  private def publisher(limited: Boolean): Publisher[A] = DecodingPublisher(documents(limited), codec.decodeDocument)
+  private def publisher(limited: Boolean): Publisher[A] = DecodingPublisher(documents(limited), decoder.decodeDocument)
 
   private def writesToCollection: Boolean =
     pipeline.lastOption match
@@ -78,7 +78,7 @@ private[mongo4s] final class AggregateQueryImpl[F[*], S[*], A](
       allowDiskUse: Option[Boolean] = allowDiskUse,
       options: QueryOptions = options,
   ): AggregateQueryImpl[F, S, A] =
-    AggregateQueryImpl(collection, pipeline, codec, allowDiskUse, session, options)
+    AggregateQueryImpl(collection, pipeline, decoder, allowDiskUse, session, options)
 
 private[mongo4s] object AggregateQueryImpl:
   private[internal] val TerminalStages = Set("$out", "$merge")

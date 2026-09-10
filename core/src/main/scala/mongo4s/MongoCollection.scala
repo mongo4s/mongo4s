@@ -12,7 +12,7 @@ import mongo4s.operations.*
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec}
 import mongo4s.queries.{AggregateQuery, DistinctQuery, FindQuery}
-import mongo4s.bson.{BsonDecoder, BsonDocumentCodec, DecodeResult, FieldNaming}
+import mongo4s.bson.{BsonDecoder, BsonDocumentCodec, BsonDocumentDecoder, DecodeResult, FieldNaming}
 
 trait MongoCollection[F[*], S[*], A]:
   def name: String
@@ -73,7 +73,7 @@ trait MongoCollection[F[*], S[*], A]:
   def aggregate[B](pipeline: Seq[Stage[A]])(using
       session: Option[ClientSession] = None
   )(using
-      BsonDocumentCodec[B]
+      BsonDocumentDecoder[B]
   ): AggregateQuery[F, S, B]
 
   def aggregateDirect[B](pipeline: Seq[Stage[A]])(using

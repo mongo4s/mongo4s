@@ -120,6 +120,8 @@ part of `2.0.0` below.
 
 ### Fixed
 
+- `aggregate[B]` asked for a `BsonDocumentCodec[B]` while only ever decoding, so a read model had to carry an
+  encoder that nothing called. It takes a `BsonDocumentDecoder[B]` now, like `watchAs` beside it.
 - A `snake_case` (or otherwise renamed) `WireCodec` and the queries against its collection could disagree about
   field names, and every query then matched nothing. A derived codec now carries its `fieldNaming`, and
   `getDirectCollection` defaults to it, so the two cannot part company without being asked to.
