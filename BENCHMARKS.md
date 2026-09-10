@@ -2,9 +2,20 @@
 
 [← back to the README](README.md)
 
-Five JMH harnesses in [`benchmarks/`](benchmarks), one developer machine — `JDK 25`, `MongoDB 7` — directional
-ballparks, not hardware-independent authorities. Run them on your own hardware before making decisions on the numbers
-alone.
+Five JMH harnesses in [`benchmarks/`](benchmarks). Every number below was measured on one machine, in one
+sitting:
+
+| | |
+| --- | --- |
+| Machine | Apple M4 Max (`Mac16,5`), 14 cores, 36 GB |
+| OS | macOS 26.6.2 (`25G83`) |
+| JVM | OpenJDK 25.0.4.1 (Homebrew), 64-Bit Server VM, mixed mode, sharing |
+| Scala | 3.9.0, sbt 2.0.8, JMH 1.37 |
+| Server | `mongo:7` in Docker, `localhost:27018`, single node |
+
+These are directional ballparks from one laptop, not hardware-independent authorities — an M4 Max has no
+hyper-threading and a memory system unlike a typical server's, and the MongoDB numbers cross a loopback socket
+rather than a network. Run them on your own hardware before making decisions on the numbers alone.
 
 ## Codec backends — to `org.bson.BsonDocument`
 

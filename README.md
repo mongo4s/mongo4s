@@ -43,6 +43,7 @@ flowchart LR
 * [Runtime backends](#runtime-backends)
 * [Modules](#modules)
 * [Benchmarks](#benchmarks)
+* [Adopters](#adopters)
 * [Design notes](#design-notes)
 * [Changelog](CHANGELOG.md)
 * [Roadmap](ROADMAP.md)
@@ -1161,9 +1162,8 @@ given WireCodecConfig = WireCodecConfig.SnakeCase.withDiscriminatorNaming(FieldN
 `getDirectCollection` takes no `naming` of its own: the codec is what writes the field names, so it is what decides
 how a query spells them. A derived `WireCodec` reports the `WireCodecConfig` it was built with; a hand-written one
 says so by overriding `fieldNaming`. `getCollection` still takes the parameter, because a `BsonDocumentCodec` from
-`medeia`, `calypso` or `zio-bson` carries its own naming configuration that mongo4s cannot read. `getCollection` cannot do the same, because a
-`BsonDocumentCodec` from `medeia`, `calypso` or `zio-bson` carries its own naming configuration that mongo4s cannot
-read; there the parameter still has to match the codec.
+`medeia`, `calypso` or `zio-bson` carries its own naming configuration that mongo4s cannot read; there the parameter
+still has to match the codec.
 
 `FieldNaming` applies per *derived* segment only. Stored names — `Field.stored`, a `PrimaryKey`'s field names, a
 `$lookup`'s foreign field, map keys — are used verbatim. `FieldNaming.snakeCase` splits on every capital, so
@@ -1599,6 +1599,17 @@ error for all six stacks, while bulk reads pull ahead — `mongo4cats` allocates
 `findAll`/`findStream`, and its `find(...).stream` runs at **397 ops/s** against `mongo4s`'s **1465**.
 
 Every table, the methodology and the commands to reproduce them: **[BENCHMARKS.md](BENCHMARKS.md)**.
+
+## Adopters
+
+<a href="https://betby.com">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="logos/betby.svg"/>
+    <img src="logos/betby-dark.svg" alt="Betby" height="56"/>
+  </picture>
+</a>
+
+Using mongo4s? Open a PR to add your logo.
 
 ## Design notes
 
