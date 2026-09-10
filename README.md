@@ -509,10 +509,18 @@ result.map(r => if r.wasUpserted then r.upsertedId else None)
 `DeleteResult` carries `deletedCount`; `BulkWriteResult` carries all four counts plus `upsertedIds`, keyed by the
 position of the command that produced it. `InsertOneResult`/`InsertManyResult` carry the stored `_id`s.
 
+**`upsertedId` is the document's `_id`, not your primary key.** The two coincide only when the `PrimaryKey` names
+`_id` — `PrimaryKey.storedId`, or `WithId[Id, E]`. For a key on any other field the server generates a fresh
+`ObjectId` for `_id` and reports *that*, so it is unrelated to `K` in both value and BSON type. This is why
+`Repository.insertOne` returns `K` rather than forwarding the id: it names the key from the entity, which is the
+one answer that is always right.
+
 Under an unacknowledged write concern (`w=0`) the server sends nothing back, so every one of these comes back empty —
 zero counts, `None` for the ids. That is indistinguishable from a write that matched nothing, which is the trade
 `w=0` makes: the driver has no answer to report. Nothing throws, so the write path stays usable; if you need to tell
-the two apart, do not use `w=0`.
+the two apart, do not use `w=0`. `Repository.insertOne`/`insertMany` are the one exception: their key
+comes from the entity you passed, never from the server, so they still return it under `w=0` — a write that failed
+silently there returns a key just the same, exactly as `w=0` asks for.
 
 ### Reads that survive bad documents
 
@@ -1385,7 +1393,8 @@ test to reach for Docker.
 in a projection. Filters follow the server's array semantics — a filter on an array field matches its elements, and a
 dotted path descends through an array of documents — `$regex` searches rather than anchors and honours its options,
 `$eq null` matches a missing field, `$inc` keeps the width the server keeps, and an insert stamps an `_id` and
-refuses a duplicate one.
+refuses a duplicate one — through `insertOne`, `insertMany`, a `bulkWrite` insert, and an upsert that inserts, so
+`wasUpserted` and `upsertedIds` say what the server would say.
 
 Every update operator is simulated — `$set`, `$unset`, `$inc`, `$mul`, `$min`, `$max`, `$rename`, `$currentDate`,
 `$push` with its `$each`/`$position`/`$slice`/`$sort` modifiers, `$pull`, `$pullAll`, `$pop` and `$addToSet` — and

@@ -2,7 +2,7 @@ package mongo4s.testkit
 
 import scala.collection.mutable
 
-import org.bson.{BsonArray, BsonDateTime, BsonDocument, BsonDouble, BsonInt32, BsonInt64, BsonNull, BsonObjectId, BsonString, BsonValue}
+import org.bson.{BsonArray, BsonDateTime, BsonDocument, BsonDouble, BsonInt32, BsonInt64, BsonNull, BsonObjectId, BsonValue}
 import com.mongodb.{ExplainVerbosity, MongoWriteException, ReadConcern, ReadPreference, ServerAddress, WriteConcern, WriteError}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
@@ -87,7 +87,7 @@ final class FakeMongoCollection[F[*], S[*], E](
           storage(storage.indexOf(existing)) = codec.encodeDocument(replacement)
           UpdateResult(matchedCount = 1, modifiedCount = 1, upsertedId = None)
         case None if options.upsert =>
-          val encoded = codec.encodeDocument(replacement)
+          val encoded = identified(codec.encodeDocument(replacement))
           storage += encoded
           UpdateResult(matchedCount = 0, modifiedCount = 0, upsertedId = Option(encoded.get("_id")))
         case None                   => UpdateResult.none
@@ -186,7 +186,7 @@ final class FakeMongoCollection[F[*], S[*], E](
 
       commands.zipWithIndex.foreach {
         case (WriteCommand.InsertOne(document), _)                 =>
-          storage += codec.encodeDocument(document)
+          storage += identified(codec.encodeDocument(document))
           inserted += 1
         case (WriteCommand.ReplaceOne(filter, value, options), i)  =>
           matching(filter).headOption match
@@ -195,9 +195,9 @@ final class FakeMongoCollection[F[*], S[*], E](
               matched += 1
               modified += 1
             case None if options.upsert =>
-              val encoded = codec.encodeDocument(value)
+              val encoded = identified(codec.encodeDocument(value))
               storage += encoded
-              upserted.update(i, upsertedId(encoded))
+              Option(encoded.get("_id")).foreach(id => upserted.update(i, id))
             case None                   => ()
         case (WriteCommand.UpdateOne(filter, update, options), _)  =>
           requireDefaultUpdateOptions(options, "bulkWrite UpdateOne")
@@ -445,11 +445,6 @@ final class FakeMongoCollection[F[*], S[*], E](
     value match
       case document: BsonDocument => at(document, path)
       case _                      => None
-
-  private def upsertedId(document: BsonDocument): BsonValue =
-    Option(document.get("_id"))
-      .orElse(Option(document.get("id")))
-      .getOrElse(BsonString(document.toJson))
 
   private def decodeProjected(document: BsonDocument, projection: Projection[E]): Option[E] =
     codec.decodeDocument(applyProjection(document, projection)).toOption

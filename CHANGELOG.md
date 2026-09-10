@@ -127,6 +127,13 @@ part of `2.0.0` below.
 
 ### Fixed
 
+- **`FakeMongoCollection` reported an upsert that inserted as if it had done nothing.** `replaceOne` with
+  `upsert = true` stored the replacement without stamping an `_id`, so `upsertedId` came back `None` and
+  `wasUpserted`/`wasApplied` came back `false` where the server returns the new id and `true` — a test asserting on
+  `wasUpserted` passed against the fake and inverted against a real server. The bulk path was worse: it reported the
+  entity's own `id` field, or the whole document as JSON when there was none, instead of the `_id`. Both now go
+  through the same `_id` stamping and duplicate check `insertOne` uses, as does a `bulkWrite` insert, which was
+  skipping it too. A parity spec pins all four against MongoDB 7.
 - `Streamable.instance` is `private[mongo4s]`. It satisfied any `Streamable[S, A]`, so a hand-written `given` for
   kyo's stream type compiled and then threw at runtime, because kyo's bridge needs the instance it derives itself.
   A runtime module still supplies one for its own stream type; nothing else can forge one.

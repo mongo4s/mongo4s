@@ -185,4 +185,63 @@ final class FakeFidelityParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matcher
         _.find().sort(Sort.asc(Field.stored[BsonDocument, ObjectId]("oid"))).all.map(_.map(_.getString("name").getValue))
       }
     }
+
+    "agree on what a replaceOne upsert reports when it inserts" in {
+      val seed = List(BsonDocument("name", BsonString("present")))
+      agree("upsert_insert", seed) { collection =>
+        for
+          result <- collection.replaceOne(nameF.equalTo("absent"), BsonDocument("name", BsonString("absent")), ReplaceOptions.upsert)
+          stored <- collection.find(nameF.equalTo("absent")).all
+        yield (
+          result.matchedCount,
+          result.modifiedCount,
+          result.wasUpserted,
+          result.wasApplied,
+          result.upsertedId.map(_.getBsonType),
+          result.upsertedId == stored.headOption.flatMap(document => Option(document.get("_id"))),
+        )
+      }
+    }
+
+    "agree on what a replaceOne upsert reports when it matches" in {
+      val seed = List(BsonDocument("name", BsonString("present")))
+      agree("upsert_match", seed) {
+        _.replaceOne(nameF.equalTo("present"), BsonDocument("name", BsonString("present")), ReplaceOptions.upsert)
+          .map(result => (result.matchedCount, result.modifiedCount, result.wasUpserted, result.upsertedId))
+      }
+    }
+
+    "agree on what a bulk replaceOne upsert reports" in {
+      val seed = List(BsonDocument("name", BsonString("present")))
+      agree("upsert_bulk", seed) { collection =>
+        val commands = List(
+          WriteCommand.replaceOne(nameF.equalTo("present"), BsonDocument("name", BsonString("present")), ReplaceOptions.upsert),
+          WriteCommand.replaceOne(nameF.equalTo("first"), BsonDocument("name", BsonString("first")), ReplaceOptions.upsert),
+          WriteCommand.replaceOne(nameF.equalTo("second"), BsonDocument("name", BsonString("second")), ReplaceOptions.upsert),
+        )
+
+        for
+          result <- collection.bulkWrite(commands)
+          stored <- collection.find().all
+        yield
+          val idsByName = stored.flatMap(d => Option(d.get("_id")).map(d.getString("name").getValue -> _)).toMap
+
+          (
+            result.matchedCount,
+            result.modifiedCount,
+            result.upsertedIds.keySet,
+            result.upsertedIds.values.map(_.getBsonType).toSet,
+            result.upsertedIds == Map(1 -> idsByName("first"), 2 -> idsByName("second")),
+          )
+      }
+    }
+
+    "agree that a bulk insertOne stamps an _id" in {
+      agree("bulk_insert_id", Nil) { collection =>
+        for
+          _      <- collection.bulkWrite(List(WriteCommand.InsertOne(BsonDocument("name", BsonString("fresh")))))
+          stored <- collection.find().all
+        yield stored.map(document => Option(document.get("_id")).map(_.getBsonType))
+      }
+    }
   }
