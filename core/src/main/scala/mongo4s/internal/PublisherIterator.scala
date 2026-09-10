@@ -52,6 +52,9 @@ private[mongo4s] final class PublisherIterator[A](
 
     if subscription ne null
     then subscription.cancel()
+
+    if terminated.compareAndSet(false, true)
+    then queue.offer(Success(None)): Unit
   end cancel
 
   def hasNext: Boolean =

@@ -139,6 +139,9 @@ part of `2.0.0` below.
 - `selectAs` reported `MissingField` for an `Option` label whose field the document did not carry, while reading the
   whole entity gave `None` for the very same document. The absent value now goes to the decoder, which is what makes
   the two agree; a field the entity requires is still reported as missing.
+- `PublisherIterator.cancel` cancelled the subscription but left no terminal in the queue, so a consumer already
+  parked in `hasNext` stayed parked — a leaked thread per cancelled or timed-out `rapid` stream. It now enqueues the
+  end of the stream, and a spec asserts the parked consumer is released.
 - `ReadmeReferencesSpec` reads `README.md` and fails if a Scala block names an `Object.member` the source does not
   define. The compiled snippets under `examples/` are re-typed copies, so they could be right while the README was
   wrong — which is exactly how `Index.geo2dsphere` survived beside the `geo2DSphere` that exists.

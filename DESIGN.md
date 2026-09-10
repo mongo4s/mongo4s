@@ -392,6 +392,20 @@ transaction that then rolls back, and asserts that the one taking `(using Option
 while the one without it keeps it. Documenting a trap without a test that reproduces it is how the documentation
 drifts away from what the code does.
 
+## Cancelling a stream has to wake whoever is waiting on it
+
+`rapid` reads a publisher through `PublisherIterator`, whose `hasNext` blocks on a queue. Cancelling it set the flag
+and cancelled the subscription — correct as far as the publisher is concerned, and useless to a consumer already
+parked in `queue.take()`, which had nothing to wake it. A cancelled or timed-out stream therefore left a thread
+blocked for the life of the process.
+
+Cancellation now enqueues the end of the stream, under the same `terminated` compare-and-set that `onComplete` and
+`onError` use, so exactly one terminal reaches the consumer whichever of the three happens first.
+
+The equivalent question for the other three runtimes — does a timeout actually cancel the subscription — was already
+answered: `RsBridgeBackendSpec` asserts it for `one`, `option`, `list` and `unit` on all four, which is what a
+cross-runtime spec is for.
+
 ## The query AST
 
 `Filter` and `Update` are real `enum` ADTs that `mongo4s` interprets itself, not thin wrappers over the driver's
