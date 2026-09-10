@@ -9,7 +9,7 @@ import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSM
 import mongo4s.operations.*
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.{Effect, Field, FieldPath, MongoCollection, MongoError, Streamable}
-import mongo4s.bson.{BsonDocumentCodec, BsonDocumentDecoder, DecodeResult, FieldNaming}
+import mongo4s.bson.{BsonDocumentCodec, BsonDocumentDecoder, BsonField, DecodeResult, FieldNaming}
 import mongo4s.queries.{AggregateQuery, DecodeAttempts, DistinctQuery, FindQuery, SelectQuery}
 import mongo4s.results.{BulkWriteResult, DeleteResult, InsertManyResult, InsertOneResult, UpdateResult}
 
@@ -52,25 +52,25 @@ final class FakeMongoCollection[F[*], S[*], E](
     F.delay {
       val encoded = identified(codec.encodeDocument(document))
       storage += encoded
-      InsertOneResult(Option(encoded.get(FieldPath.IdName)))
+      InsertOneResult(Option(encoded.get(BsonField.Id)))
     }
 
   def insertMany(documents: Seq[E])(using session: Option[ClientSession]): F[InsertManyResult] =
     F.delay {
       val encoded = documents.map(document => identified(codec.encodeDocument(document)))
       storage ++= encoded
-      InsertManyResult(encoded.flatMap(d => Option(d.get(FieldPath.IdName))).toList)
+      InsertManyResult(encoded.flatMap(d => Option(d.get(BsonField.Id))).toList)
     }
 
   private def identified(document: BsonDocument): BsonDocument =
     val stamped =
-      if document.containsKey(FieldPath.IdName)
+      if document.containsKey(BsonField.Id)
       then document
-      else copyOf(document).append(FieldPath.IdName, BsonObjectId(org.bson.types.ObjectId.get()))
+      else copyOf(document).append(BsonField.Id, BsonObjectId(org.bson.types.ObjectId.get()))
 
-    val id = stamped.get(FieldPath.IdName)
+    val id = stamped.get(BsonField.Id)
 
-    if storage.exists(existing => Option(existing.get(FieldPath.IdName)).contains(id))
+    if storage.exists(existing => Option(existing.get(BsonField.Id)).contains(id))
     then
       throw MongoError.DuplicateKey(
         MongoWriteException(WriteError(11000, s"E11000 duplicate key error: _id $id", BsonDocument()), ServerAddress(), java.util.Collections.emptyList())
@@ -89,7 +89,7 @@ final class FakeMongoCollection[F[*], S[*], E](
         case None if options.upsert =>
           val encoded = identified(codec.encodeDocument(replacement))
           storage += encoded
-          UpdateResult(matchedCount = 0, modifiedCount = 0, upsertedId = Option(encoded.get(FieldPath.IdName)))
+          UpdateResult(matchedCount = 0, modifiedCount = 0, upsertedId = Option(encoded.get(BsonField.Id)))
         case None                   => UpdateResult.none
     }
 
@@ -197,7 +197,7 @@ final class FakeMongoCollection[F[*], S[*], E](
             case None if options.upsert =>
               val encoded = identified(codec.encodeDocument(value))
               storage += encoded
-              Option(encoded.get(FieldPath.IdName)).foreach(id => upserted.update(i, id))
+              Option(encoded.get(BsonField.Id)).foreach(id => upserted.update(i, id))
             case None                   => ()
         case (WriteCommand.UpdateOne(filter, update, options), _)  =>
           requireDefaultUpdateOptions(options, "bulkWrite UpdateOne")
@@ -462,7 +462,7 @@ final class FakeMongoCollection[F[*], S[*], E](
         }
 
         if withId
-        then Option(document.get(FieldPath.IdName)).fold(kept)(id => kept.append(FieldPath.IdName, id))
+        then Option(document.get(BsonField.Id)).fold(kept)(id => kept.append(BsonField.Id, id))
         else kept
 
     projection.slices.foldLeft(projected) { (acc, entry) =>
@@ -557,7 +557,7 @@ final class FakeMongoCollection[F[*], S[*], E](
 
     keyed.map(_._1).distinct.map { key =>
       val members = keyed.collect { case (candidate, document) if candidate == key => document }
-      accumulators.foldLeft(BsonDocument(FieldPath.IdName, key)) { (acc, entry) =>
+      accumulators.foldLeft(BsonDocument(BsonField.Id, key)) { (acc, entry) =>
         acc.append(entry._1, accumulated(entry._2, members))
       }
     }

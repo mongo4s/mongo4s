@@ -3,7 +3,7 @@ package mongo4s.operations
 import org.bson.*
 
 import mongo4s.{Field, FieldPath}
-import mongo4s.bson.{BsonEncoder, FieldNaming}
+import mongo4s.bson.{BsonEncoder, BsonField, FieldNaming}
 
 import scala.jdk.CollectionConverters.given
 
@@ -115,7 +115,7 @@ enum Stage[E](val key: String):
 
     case Stage.Group(by, accumulators) =>
       val group = BsonDocument(
-        FieldPath.IdName,
+        BsonField.Id,
         by.fold(BsonNull.VALUE: BsonValue)(path => BsonString("$" + path.render(naming)))
       )
       accumulators.foreach((name, accumulator) => group.append(name, accumulator.toBson(naming)))

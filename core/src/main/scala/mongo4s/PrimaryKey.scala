@@ -4,7 +4,7 @@ import scala.NamedTuple.NamedTuple
 import scala.compiletime.{constValueTuple, summonAll}
 
 import mongo4s.operations.Filter
-import mongo4s.bson.{BsonEncoder, FieldNaming}
+import mongo4s.bson.{BsonEncoder, BsonField, FieldNaming}
 
 trait PrimaryKey[E, K] extends KeyRef[E, K]:
   def key(entity: E): K
@@ -22,7 +22,7 @@ object PrimaryKey:
     single("id")(keyOf)
 
   def storedId[E, Id](keyOf: E => Id)(using encoder: BsonEncoder[Id]): PrimaryKey[E, Id] =
-    single(FieldPath.IdName)(keyOf)
+    single(BsonField.Id)(keyOf)
 
   def single[E, F1](name: String)(keyOf: E => F1)(using encoder: BsonEncoder[F1]): PrimaryKey[E, F1] =
     make(keyOf, List(name), key => KeyFields.one(name, encoder.encode(key)))

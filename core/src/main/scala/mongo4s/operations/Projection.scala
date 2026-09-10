@@ -2,7 +2,7 @@ package mongo4s.operations
 
 import org.bson.{BsonDocument, BsonInt32}
 
-import mongo4s.bson.FieldNaming
+import mongo4s.bson.{BsonField, FieldNaming}
 import mongo4s.{ElementOf, Field, FieldPath}
 
 enum Projection[E]:
@@ -52,7 +52,7 @@ enum Projection[E]:
 
 object Projection:
 
-  private[operations] val IdPath: FieldPath = FieldPath.Id
+  private[operations] val IdPath: FieldPath = FieldPath.literal(BsonField.Id)
 
   def empty[E]: Everything[E]  = Everything()
   def excludeId[E]: Exclude[E] = Exclude(List(IdPath))

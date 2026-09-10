@@ -19,14 +19,9 @@ object FieldPath:
 
   def apply(segments: List[Segment]): FieldPath = segments
 
-  /** The reserved primary-key field. Never renamed, whatever the `FieldNaming`. */
-  val IdName: String = "_id"
-
   def of(segment: String): FieldPath             = List(Segment.Derived(segment))
   def derived(segments: List[String]): FieldPath = segments.map(Segment.Derived.apply)
   def literal(stored: String): FieldPath         = stored.split('.').toList.map(Segment.Stored.apply)
-
-  val Id: FieldPath = literal(IdName)
 
   extension (path: FieldPath)
 

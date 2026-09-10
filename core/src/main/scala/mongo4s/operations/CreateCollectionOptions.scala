@@ -6,7 +6,7 @@ import scala.concurrent.duration.FiniteDuration
 
 import org.bson.BsonDocument
 
-import mongo4s.FieldPath
+import mongo4s.bson.BsonField
 import com.mongodb.client.model.{
   Collation,
   ValidationLevel,
@@ -56,7 +56,7 @@ final class ClusteredIndex private (val key: BsonDocument, val name: Option[Stri
   end toDriver
 
 object ClusteredIndex:
-  val onId: ClusteredIndex = new ClusteredIndex(BsonDocument(FieldPath.IdName, org.bson.BsonInt32(1)), None)
+  val onId: ClusteredIndex = new ClusteredIndex(BsonDocument(BsonField.Id, org.bson.BsonInt32(1)), None)
 
 final class CreateCollectionOptions private (
     val capped: Option[Long],

@@ -3,7 +3,7 @@ package mongo4s
 import org.bson.BsonObjectId
 import org.bson.types.ObjectId
 
-import mongo4s.bson.BsonEncoder
+import mongo4s.bson.{BsonEncoder, BsonField}
 import mongo4s.operations.{Filter, Sort}
 
 trait KeyRef[E, K]:
@@ -69,5 +69,5 @@ object KeyRef:
 
   def objectId[E]: KeyRef[E, ObjectId] =
     new KeyRef[E, ObjectId]:
-      def fieldNames: List[String]         = List(FieldPath.IdName)
-      def fields(key: ObjectId): KeyFields = KeyFields.one(FieldPath.IdName, BsonObjectId(key))
+      def fieldNames: List[String]         = List(BsonField.Id)
+      def fields(key: ObjectId): KeyFields = KeyFields.one(BsonField.Id, BsonObjectId(key))
