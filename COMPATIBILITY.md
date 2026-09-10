@@ -90,6 +90,13 @@ The reason is the one `Index` and `WireCodecConfig` already carry: a `case class
 breaking `apply`/`copy` in every release, and change-stream options keep arriving. `withExpandedEvents` is the first
 one that had to, so the treatment happened now rather than being restated as a hazard.
 
+### `Streamable.instance` is internal
+
+A `given Streamable[S, A] = Streamable.instance` written outside mongo4s no longer compiles. It never worked on kyo
+anyway — that backend carries its element `Tag`s in the instance and threw when handed a forged one. Import the
+runtime module's `given`s instead. A backend implemented outside this library needs its `Streamable` to come from
+its own bridge, as the four in-tree ones do.
+
 ### `Effect.traverse` is now `Effect.flatTraverse`
 
 Same signature, honest name: the function returns `F[List[B]]` and the results are flattened. Rename the call.

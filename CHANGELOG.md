@@ -120,6 +120,9 @@ part of `2.0.0` below.
 
 ### Fixed
 
+- `Streamable.instance` is `private[mongo4s]`. It satisfied any `Streamable[S, A]`, so a hand-written `given` for
+  kyo's stream type compiled and then threw at runtime, because kyo's bridge needs the instance it derives itself.
+  A runtime module still supplies one for its own stream type; nothing else can forge one.
 - `Effect.traverse` is `Effect.flatTraverse`: its function returns `F[List[B]]` and the result is flattened, which
   is not what `traverse` means anywhere else.
 - `mongo4s.bson.DecodeResult` moved from `mongo4s-core` to `mongo4s-bson-core`, so the `mongo4s.bson` package lives
