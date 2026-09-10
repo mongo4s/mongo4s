@@ -1312,6 +1312,11 @@ entities `mongo4s` already has codecs for.
 `BaseMongoRepository[F, S, E, K]` implements `Repository` — `count/find/insert/upsert/update/delete/bulkWrite`, batched
 by `batchSize` (default 500) — over any `MongoCollection[F, S, E]`, from either codec path:
 
+`bulkWrite` takes the same `ordered` flag the collection does. An ordered bulk is sent in batches, which keeps its
+meaning — it stops at the first failure and what came before it stays applied. An **unordered** bulk is sent as one
+command, because the point of `ordered = false` is that the server applies everything it can, and batching would
+stop at the first batch that failed instead.
+
 ```scala
 BaseMongoRepository(collection)                              // over a collection you already have
 BaseMongoRepository.create[F, S, E, K](db, "collection")     // reads return the document as stored, _id included

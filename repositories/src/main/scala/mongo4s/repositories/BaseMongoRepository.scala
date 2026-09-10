@@ -90,8 +90,10 @@ open class BaseMongoRepository[F[*], S[*], E, K](
   def findOneAndUpdate(key: K, update: Update[E], options: FindOneAndUpdateOptions[E])(using session: Option[ClientSession]): F[Option[E]] =
     collection.findOneAndUpdate(pk.eqFilter(key), update, options.withProjection(defaultProjection))(using session)
 
-  def bulkWrite(commands: Seq[WriteCommand[E]])(using session: Option[ClientSession]): F[BulkWriteResult] =
-    batchedResults(commands.toList)(chunk => collection.bulkWrite(chunk)(using session))
+  def bulkWrite(commands: Seq[WriteCommand[E]], ordered: Boolean)(using session: Option[ClientSession]): F[BulkWriteResult] =
+    if ordered
+    then batchedResults(commands.toList)(chunk => collection.bulkWrite(chunk, ordered = true)(using session))
+    else collection.bulkWrite(commands, ordered = false)(using session)
 
   def deleteOne(key: K)(using session: Option[ClientSession]): F[DeleteResult] =
     collection.deleteOne(pk.eqFilter(key))(using session)

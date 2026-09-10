@@ -57,7 +57,7 @@ trait Repository[F[*], S[*], E, K]:
       session: Option[ClientSession] = None
   ): F[Option[E]]
 
-  def bulkWrite(commands: Seq[WriteCommand[E]])(using session: Option[ClientSession] = None): F[BulkWriteResult]
+  def bulkWrite(commands: Seq[WriteCommand[E]], ordered: Boolean = true)(using session: Option[ClientSession] = None): F[BulkWriteResult]
 
   def deleteOne(key: K)(using session: Option[ClientSession] = None): F[DeleteResult]
   def deleteMany(keys: List[K])(using session: Option[ClientSession] = None): F[DeleteResult]

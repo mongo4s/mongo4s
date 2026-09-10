@@ -104,6 +104,12 @@ its own bridge, as the four in-tree ones do.
 
 Same signature, honest name: the function returns `F[List[B]]` and the results are flattened. Rename the call.
 
+### `Repository.bulkWrite` takes `ordered`
+
+`bulkWrite(commands)` is unchanged and still ordered. `bulkWrite(commands, ordered = false)` now behaves the way the
+collection does — one command, everything the server can apply — instead of batching and stopping at the first
+failure. Only an implementation of `Repository` outside this library has to follow the added parameter.
+
 ### `aggregate` takes a decoder
 
 `aggregate[B]` now requires `BsonDocumentDecoder[B]` instead of `BsonDocumentCodec[B]`. Every codec is a decoder, so

@@ -139,6 +139,10 @@ part of `2.0.0` below.
 - `selectAs` reported `MissingField` for an `Option` label whose field the document did not carry, while reading the
   whole entity gave `None` for the very same document. The absent value now goes to the decoder, which is what makes
   the two agree; a field the entity requires is still reported as missing.
+- `Repository.bulkWrite` had no `ordered` flag, although the collection underneath does, and it always batched — so
+  an unordered bulk stopped at the first batch that failed rather than applying everything it could. It takes
+  `ordered` now, batches only when ordered (where batching preserves the meaning), and sends an unordered bulk as
+  one command.
 - **`FakeMongoCollection` simulated four update operators out of eighteen** while the documentation said updates
   were simulated, so a unit test reaching for `push`, `pull`, `pop`, `rename`, `mul`, `min`, `max`, `addToSet` or
   `currentDate` failed with `UnsupportedOperationException`. All of them are simulated now, `$push`'s
