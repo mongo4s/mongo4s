@@ -5,7 +5,7 @@ import java.time.Instant
 import org.bson.{BsonArray, BsonBoolean, BsonDocument, BsonInt32, BsonString, BsonValue}
 
 import mongo4s.bson.{BsonEncoder, FieldNaming}
-import mongo4s.{ElementOf, Field, FieldPath, NumericOf}
+import mongo4s.{ComparableOf, ElementOf, Field, FieldPath, NumericOf}
 
 enum Update[E](val key: String):
   case Set[T](path: FieldPath, value: BsonValue)           extends Update[T]("$set")
@@ -76,14 +76,14 @@ object Update:
     Mul(field.path, numeric.encode(factor))
 
   def min[E, C, A](field: Field[E, C], value: A)(using
-      numeric: NumericOf[C, A],
+      comparable: ComparableOf[C, A],
   ): Update[E] =
-    Min(field.path, numeric.encode(value))
+    Min(field.path, comparable.encode(value))
 
   def max[E, C, A](field: Field[E, C], value: A)(using
-      numeric: NumericOf[C, A],
+      comparable: ComparableOf[C, A],
   ): Update[E] =
-    Max(field.path, numeric.encode(value))
+    Max(field.path, comparable.encode(value))
 
   def currentDate[E](field: Field[E, Instant]): Update[E] = CurrentDate(field.path)
 

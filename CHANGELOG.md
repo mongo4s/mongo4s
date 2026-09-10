@@ -120,6 +120,9 @@ part of `2.0.0` below.
 
 ### Fixed
 
+- `$min` and `$max` were gated on `NumericOf`, so `lastSeen.max(now)` on an `Instant` field did not compile although
+  MongoDB orders dates perfectly well. They take a new `ComparableOf` — numbers, `String`, `Instant`, `ObjectId`,
+  `UUID`, `Boolean`, `BigDecimal`, and their `Option`s. `$inc` and `$mul` remain numeric.
 - `aggregate[B]` asked for a `BsonDocumentCodec[B]` while only ever decoding, so a read model had to carry an
   encoder that nothing called. It takes a `BsonDocumentDecoder[B]` now, like `watchAs` beside it.
 - A `snake_case` (or otherwise renamed) `WireCodec` and the queries against its collection could disagree about

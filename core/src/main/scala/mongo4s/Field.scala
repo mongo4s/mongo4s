@@ -67,10 +67,10 @@ object Field:
     def descending: Sort[E]                                     = Sort.desc(field)
 
   extension [E, C](field: Field[E, C])
-    def inc[A](amount: A)(using NumericOf[C, A]): Update[E] = Update.inc(field, amount)
-    def mul[A](factor: A)(using NumericOf[C, A]): Update[E] = Update.mul(field, factor)
-    def min[A](value: A)(using NumericOf[C, A]): Update[E]  = Update.min(field, value)
-    def max[A](value: A)(using NumericOf[C, A]): Update[E]  = Update.max(field, value)
+    def inc[A](amount: A)(using NumericOf[C, A]): Update[E]   = Update.inc(field, amount)
+    def mul[A](factor: A)(using NumericOf[C, A]): Update[E]   = Update.mul(field, factor)
+    def min[A](value: A)(using ComparableOf[C, A]): Update[E] = Update.min(field, value)
+    def max[A](value: A)(using ComparableOf[C, A]): Update[E] = Update.max(field, value)
 
     def push[A](value: A)(using ElementOf[C, A], BsonEncoder[A]): Update[E] = Update.push(field, value)
 

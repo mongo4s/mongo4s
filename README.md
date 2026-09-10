@@ -262,6 +262,9 @@ change it: an `$inc` that overflows an `Int32` is stored as an `Int64`, silently
 fits the modelled `Int` is a decode error naming the value — `2147483711 is out of range for Int`. Model a counter
 that can grow as `Long`, and read a field whose stored width you do not control as the widest type it can reach.
 
+`$min` and `$max` take any type MongoDB orders — a date, a string, an `ObjectId` — not only a number, because that
+is what the server compares. `$inc` and `$mul` stay numeric, since arithmetic is what they do.
+
 `Update.combine`/`and` merge operators of the same name into one sub-document, so setting two fields produces one
 `$set`. `Update.Raw` carries operators the `AST` does not model and merges the same way:
 

@@ -14,7 +14,7 @@ import mongo4s.bson.BsonInstances.given
 
 object UpdateSpec:
   final case class Note(text: String, rank: Int)
-  final case class Person(name: String, age: Int, tags: List[String], score: Option[Long], notes: List[Note])
+  final case class Person(name: String, age: Int, tags: List[String], score: Option[Long], notes: List[Note], lastSeen: java.time.Instant)
 
   object Note:
     given BsonEncoder[Note] = note => BsonDocument().append("text", BsonString(note.text)).append("rank", BsonInt32(note.rank))
@@ -181,5 +181,31 @@ final class UpdateSpec extends AnyWordSpec, Matchers:
 
     "refuse a numeric operator on a field that is not numeric" in {
       typeChecks("Update.inc(Field.of[UpdateSpec.Person, String](_.name), 1)") shouldBe false
+    }
+  }
+
+  "$min and $max" should {
+
+    "apply to every type MongoDB orders, not only to numbers" in {
+      typeChecks("Update.max(Field.of[UpdateSpec.Person, Int](_.age), 5)") shouldBe true
+      typeChecks("Update.max(Field.of[UpdateSpec.Person, String](_.name), \"z\")") shouldBe true
+      typeChecks("Update.max(Field.of[UpdateSpec.Person, java.time.Instant](_.lastSeen), java.time.Instant.now)") shouldBe true
+      typeChecks("Update.min(Field.of[UpdateSpec.Person, java.time.Instant](_.lastSeen), java.time.Instant.now)") shouldBe true
+    }
+
+    "reach through an Option the way $inc does" in {
+      typeChecks("Update.max(Field.of[UpdateSpec.Person, Option[Long]](_.score), 5L)") shouldBe true
+    }
+
+    "still refuse a value of another type than the field" in {
+      typeChecks("Update.max(Field.of[UpdateSpec.Person, Int](_.age), \"z\")") shouldBe false
+      typeChecks("Update.max(Field.of[UpdateSpec.Person, java.time.Instant](_.lastSeen), 5)") shouldBe false
+    }
+
+    "render the value the field's own encoder writes" in {
+      val at = java.time.Instant.ofEpochMilli(1000)
+
+      json(Update.max(Field.of[UpdateSpec.Person, java.time.Instant](_.lastSeen), at)) shouldBe
+        """{"$max": {"lastSeen": {"$date": "1970-01-01T00:00:01Z"}}}"""
     }
   }
