@@ -6,7 +6,8 @@ import org.bson.{BsonDocument, BsonNull}
 
 import mongo4s.bson.{BsonDecoder, BsonError}
 
-@publicInBinary private[mongo4s] object SelectSupport:
+@publicInBinary
+private[mongo4s] object SelectSupport:
 
   def decodeField[A](document: BsonDocument, name: String, decoder: BsonDecoder[A]): Either[BsonError, Any] =
     Option(document.get(name)) match

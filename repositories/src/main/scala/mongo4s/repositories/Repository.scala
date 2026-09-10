@@ -25,10 +25,12 @@ trait Repository[F[*], S[*], E, K]:
       BsonEncoder[A]
   ): F[List[E]]
 
-  def findByFilter(filter: Filter[E], page: Page[E] = Page.all[E])(using session: Option[ClientSession] = None): F[List[E]]
+  def findByFilter(filter: Filter[E], page: Page[E] = Page.all[E])(using
+      session: Option[ClientSession] = None,
+  ): F[List[E]]
 
   def findPage(limit: Int, after: Option[K] = None, filter: Filter[E] = Filter.all)(using
-      session: Option[ClientSession] = None
+      session: Option[ClientSession] = None,
   ): F[List[E]]
 
   def getAll(using session: Option[ClientSession] = None)(using Streamable[S, E]): S[E]
@@ -38,16 +40,16 @@ trait Repository[F[*], S[*], E, K]:
       value: A,
       page: Page[E] = Page.all[E],
   )(using
-      session: Option[ClientSession] = None
+      session: Option[ClientSession] = None,
   )(using
       Streamable[S, E],
       BsonEncoder[A],
   ): S[E]
 
   def getByFilter(filter: Filter[E], page: Page[E] = Page.all[E])(using
-      session: Option[ClientSession] = None
+      session: Option[ClientSession] = None,
   )(using
-      Streamable[S, E]
+      Streamable[S, E],
   ): S[E]
 
   def insertOne(entity: E)(using session: Option[ClientSession] = None): F[K]
@@ -57,33 +59,47 @@ trait Repository[F[*], S[*], E, K]:
   def upsertMany(entities: List[E])(using session: Option[ClientSession] = None): F[BulkWriteResult]
 
   def updateField[A](key: K, field: Field[E, A], value: A)(using
-      session: Option[ClientSession] = None
+      session: Option[ClientSession] = None,
   )(using
-      BsonEncoder[A]
+      BsonEncoder[A],
   ): F[UpdateResult]
 
-  def updateOne(key: K, update: Update[E], options: UpdateOptions = UpdateOptions.default)(using session: Option[ClientSession] = None): F[UpdateResult]
+  def updateOne(
+      key: K,
+      update: Update[E],
+      options: UpdateOptions = UpdateOptions.default,
+  )(using session: Option[ClientSession] = None): F[UpdateResult]
 
-  def updateByField[A](field: Field[E, A], value: A, update: Update[E])(using
-      session: Option[ClientSession] = None
+  def updateByField[A](
+      field: Field[E, A],
+      value: A,
+      update: Update[E],
   )(using
-      BsonEncoder[A]
+      session: Option[ClientSession] = None,
+  )(using
+      BsonEncoder[A],
   ): F[UpdateResult]
 
-  def updateByFilter(filter: Filter[E], update: Update[E])(using session: Option[ClientSession] = None): F[UpdateResult]
+  def updateByFilter(filter: Filter[E], update: Update[E])(using
+      session: Option[ClientSession] = None,
+  ): F[UpdateResult]
 
-  def findOneAndUpdate(key: K, update: Update[E], options: FindOneAndUpdateOptions[E] = FindOneAndUpdateOptions.default[E])(using
-      session: Option[ClientSession] = None
-  ): F[Option[E]]
+  def findOneAndUpdate(
+      key: K,
+      update: Update[E],
+      options: FindOneAndUpdateOptions[E] = FindOneAndUpdateOptions.default[E],
+  )(using session: Option[ClientSession] = None): F[Option[E]]
 
-  def bulkWrite(commands: Seq[WriteCommand[E]], ordered: Boolean = true)(using session: Option[ClientSession] = None): F[BulkWriteResult]
+  def bulkWrite(commands: Seq[WriteCommand[E]], ordered: Boolean = true)(using
+      session: Option[ClientSession] = None,
+  ): F[BulkWriteResult]
 
   def deleteOne(key: K)(using session: Option[ClientSession] = None): F[DeleteResult]
   def deleteMany(keys: List[K])(using session: Option[ClientSession] = None): F[DeleteResult]
   def deleteByField[A](field: Field[E, A], value: A)(using
-      session: Option[ClientSession] = None
+      session: Option[ClientSession] = None,
   )(using
-      BsonEncoder[A]
+      BsonEncoder[A],
   ): F[DeleteResult]
 
   def deleteByFilter(filter: Filter[E])(using session: Option[ClientSession] = None): F[DeleteResult]

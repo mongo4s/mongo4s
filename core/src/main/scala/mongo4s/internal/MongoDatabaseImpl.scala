@@ -42,7 +42,10 @@ private[mongo4s] final class MongoDatabaseImpl[F[*], S[*]](
       )
     )
 
-  def getDirectCollection[A](collectionName: String)(using codec: WireCodec[A], tag: ClassTag[A]): F[MongoCollection[F, S, A]] =
+  def getDirectCollection[A](collectionName: String)(using
+      codec: WireCodec[A],
+      tag: ClassTag[A],
+  ): F[MongoCollection[F, S, A]] =
     F.delay(
       DirectMongoCollectionImpl(
         underlying.getCollection(collectionName, classOf[BsonDocument]),
@@ -66,7 +69,9 @@ private[mongo4s] final class MongoDatabaseImpl[F[*], S[*]](
     rs.stream(publisher)
   end listCollections
 
-  def createCollection(name: String, options: CreateCollectionOptions)(using session: Option[ClientSession]): F[Unit] =
+  def createCollection(name: String, options: CreateCollectionOptions)(using
+      session: Option[ClientSession],
+  ): F[Unit] =
     val driverOptions = options.toDriver
 
     val publisher = session match
@@ -92,7 +97,9 @@ private[mongo4s] final class MongoDatabaseImpl[F[*], S[*]](
     rs.unit(publisher)
   end drop
 
-  def dropCollection(collectionName: String)(using session: Option[ClientSession]): F[Unit] =
+  def dropCollection(collectionName: String)(using
+      session: Option[ClientSession],
+  ): F[Unit] =
     val collection = underlying.getCollection(collectionName, classOf[BsonDocument])
 
     val publisher = session match
@@ -113,8 +120,12 @@ private[mongo4s] final class MongoDatabaseImpl[F[*], S[*]](
     )
 
   def watchAs[A](options: WatchOptions[A])(using
-      session: Option[ClientSession]
-  )(using decoder: BsonDocumentDecoder[A])(using Streamable[S, ChangeEvent[A]]): S[ChangeEvent[A]] =
+      session: Option[ClientSession],
+  )(using
+      decoder: BsonDocumentDecoder[A],
+  )(using
+      Streamable[S, ChangeEvent[A]],
+  ): S[ChangeEvent[A]] =
     rs.liveStream(
       DecodingPublisher(
         changeStreamPublisher(options),
@@ -123,8 +134,12 @@ private[mongo4s] final class MongoDatabaseImpl[F[*], S[*]](
     )
 
   def watchAsAttempting[A](options: WatchOptions[A])(using
-      session: Option[ClientSession]
-  )(using decoder: BsonDocumentDecoder[A])(using Streamable[S, DecodeResult[ChangeEvent[A]]]): S[DecodeResult[ChangeEvent[A]]] =
+      session: Option[ClientSession],
+  )(using
+      decoder: BsonDocumentDecoder[A],
+  )(using
+      Streamable[S, DecodeResult[ChangeEvent[A]]],
+  ): S[DecodeResult[ChangeEvent[A]]] =
     rs.liveStream(
       AttemptingPublisher(
         changeStreamPublisher(options),
@@ -133,7 +148,7 @@ private[mongo4s] final class MongoDatabaseImpl[F[*], S[*]](
     )
 
   private def changeStreamPublisher[E](options: WatchOptions[E])(using
-      session: Option[ClientSession]
+      session: Option[ClientSession],
   ): ChangeStreamPublisher[BsonDocument] =
     val stages = options.pipeline.map(_.toBson(FieldNaming.identity)).toList
 

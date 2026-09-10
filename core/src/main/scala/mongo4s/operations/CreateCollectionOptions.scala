@@ -36,7 +36,8 @@ final class TimeSeries private (
   private def copy(
       metaField: Option[String] = metaField,
       granularity: Option[TimeSeriesGranularity] = granularity,
-  ): TimeSeries = new TimeSeries(timeField, metaField, granularity)
+  ): TimeSeries =
+    new TimeSeries(timeField, metaField, granularity)
 
 object TimeSeries:
   def on(timeField: String): TimeSeries = new TimeSeries(timeField, None, None)
@@ -50,7 +51,8 @@ final class ClusteredIndex private (val key: BsonDocument, val name: Option[Stri
     name.foreach(options.name)
 
     options
-
+  end toDriver
+    
 object ClusteredIndex:
   val onId: ClusteredIndex = new ClusteredIndex(BsonDocument("_id", org.bson.BsonInt32(1)), None)
 

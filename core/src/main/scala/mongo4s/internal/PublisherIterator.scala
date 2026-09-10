@@ -23,7 +23,7 @@ private[mongo4s] final class PublisherIterator[A](
   private var pending   = Option.empty[A]
   private var exhausted = false
 
-  publisher.subscribe(
+  publisher.subscribe {
     new Subscriber[A]:
       def onSubscribe(subscription: Subscription): Unit =
         subscriptionRef.set(subscription)
@@ -43,7 +43,7 @@ private[mongo4s] final class PublisherIterator[A](
       def onComplete(): Unit =
         if terminated.compareAndSet(false, true)
         then queue.put(Success(None))
-  )
+  }
 
   def cancel(): Unit =
     cancelled.set(true)

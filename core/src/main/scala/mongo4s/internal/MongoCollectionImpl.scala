@@ -68,7 +68,8 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
         }
       }
 
-  def find(filter: Filter[A])(using session: Option[ClientSession]): FindQuery[F, S, A] = query(filter, session)
+  def find(filter: Filter[A])(using session: Option[ClientSession]): FindQuery[F, S, A] =
+    query(filter, session)
 
   def replaceOne(
       filter: Filter[A],
@@ -111,7 +112,9 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       F.map(rs.one(publisher))(UpdateResult.fromDriver)
     }
 
-  def deleteOne(filter: Filter[A], options: DeleteOptions)(using session: Option[ClientSession]): F[DeleteResult] =
+  def deleteOne(filter: Filter[A], options: DeleteOptions)(using
+      session: Option[ClientSession],
+  ): F[DeleteResult] =
     F.suspend {
       val driverOptions = driverDelete(options)
 
@@ -124,7 +127,9 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       }
     }
 
-  def deleteMany(filter: Filter[A], options: DeleteOptions)(using session: Option[ClientSession]): F[DeleteResult] =
+  def deleteMany(filter: Filter[A], options: DeleteOptions)(using
+      session: Option[ClientSession],
+  ): F[DeleteResult] =
     F.suspend {
       val driverOptions = driverDelete(options)
 
@@ -142,7 +147,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       update: Update[A],
       options: FindOneAndUpdateOptions[A],
   )(using
-      session: Option[ClientSession]
+      session: Option[ClientSession],
   ): F[Option[A]] =
     F.suspend {
       val driverOptions = driverFindOneAndUpdate(options)
@@ -159,7 +164,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       replacement: A,
       options: FindOneAndReplaceOptions[A],
   )(using
-      session: Option[ClientSession]
+      session: Option[ClientSession],
   ): F[Option[A]] =
     F.suspend {
       val driverOptions = driverFindOneAndReplace(options)
@@ -173,7 +178,9 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       decodeOptional(publisher)
     }
 
-  def findOneAndDelete(filter: Filter[A], options: FindOneAndDeleteOptions[A])(using session: Option[ClientSession]): F[Option[A]] =
+  def findOneAndDelete(filter: Filter[A], options: FindOneAndDeleteOptions[A])(using
+      session: Option[ClientSession],
+  ): F[Option[A]] =
     F.suspend {
       val driverOptions = driverFindOneAndDelete(options)
 
@@ -184,7 +191,9 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       decodeOptional(publisher)
     }
 
-  def count(filter: Filter[A], options: CountOptions)(using session: Option[ClientSession]): F[Long] =
+  def count(filter: Filter[A], options: CountOptions)(using
+      session: Option[ClientSession],
+  ): F[Long] =
     F.suspend {
       val bson          = filter.toBson(naming)
       val driverOptions = driverCount(options)
@@ -198,7 +207,9 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
 
   def estimatedCount: F[Long] = F.map(rs.one(underlying.estimatedDocumentCount()))(_.longValue)
 
-  def bulkWrite(commands: Seq[WriteCommand[A]], ordered: Boolean)(using session: Option[ClientSession]): F[BulkWriteResult] =
+  def bulkWrite(commands: Seq[WriteCommand[A]], ordered: Boolean)(using
+      session: Option[ClientSession],
+  ): F[BulkWriteResult] =
     if commands.isEmpty
     then F.pure(BulkWriteResult.none)
     else
@@ -213,7 +224,11 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
         F.map(rs.one(publisher))(BulkWriteResult.fromDriver)
       }
 
-  def aggregate[B](pipeline: Seq[Stage[A]])(using session: Option[ClientSession])(using decoder: BsonDocumentDecoder[B]): AggregateQuery[F, S, B] =
+  def aggregate[B](pipeline: Seq[Stage[A]])(using
+      session: Option[ClientSession],
+  )(using
+      decoder: BsonDocumentDecoder[B],
+  ): AggregateQuery[F, S, B] =
     AggregateQueryImpl(
       collection = underlying,
       pipeline = pipeline.map(_.toBson(naming)),
@@ -223,9 +238,9 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
     )
 
   def distinct[B](field: Field[A, B], filter: Filter[A])(using
-      session: Option[ClientSession]
+      session: Option[ClientSession],
   )(using
-      decoder: BsonDecoder[B]
+      decoder: BsonDecoder[B],
   ): DistinctQuery[F, S, B] =
     DistinctQueryImpl(
       collection = underlying,
@@ -278,7 +293,11 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
     rs.unit(publisher)
   end drop
 
-  def watch(options: WatchOptions[A])(using session: Option[ClientSession])(using Streamable[S, ChangeEvent[A]]): S[ChangeEvent[A]] =
+  def watch(options: WatchOptions[A])(using
+      session: Option[ClientSession],
+  )(using
+      Streamable[S, ChangeEvent[A]],
+  ): S[ChangeEvent[A]] =
     rs.liveStream(
       DecodingPublisher(
         ChangeStreamSupport.configure(changeStreamPublisher(options), options),
@@ -287,8 +306,10 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
     )
 
   def watchAttempting(options: WatchOptions[A])(using
-      session: Option[ClientSession]
-  )(using Streamable[S, DecodeResult[ChangeEvent[A]]]): S[DecodeResult[ChangeEvent[A]]] =
+      session: Option[ClientSession],
+  )(using
+      Streamable[S, DecodeResult[ChangeEvent[A]]],
+  ): S[DecodeResult[ChangeEvent[A]]] =
     rs.liveStream(
       AttemptingPublisher(
         ChangeStreamSupport.configure(changeStreamPublisher(options), options),
@@ -296,7 +317,9 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       )
     )
 
-  private def changeStreamPublisher(options: WatchOptions[A])(using session: Option[ClientSession]) =
+  private def changeStreamPublisher(options: WatchOptions[A])(using
+      session: Option[ClientSession],
+  ) =
     val stages = options.pipeline.map(_.toBson(naming)).toList
 
     if stages.isEmpty

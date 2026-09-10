@@ -8,7 +8,8 @@ import mongo4s.operations.Projection
 import mongo4s.queries.{FindQuery, SelectQuery}
 import mongo4s.bson.{BsonDecoder, BsonDocumentDecoder, FieldNaming}
 
-@publicInBinary private[mongo4s] object SelectMacro:
+@publicInBinary
+private[mongo4s] object SelectMacro:
 
   def impl[F[*]: Type, S[*]: Type, A: Type, K <: AnyNamedTuple: Type](
       query: Expr[FindQuery[F, S, A]],

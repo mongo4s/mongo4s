@@ -24,24 +24,30 @@ trait MongoCollection[F[*], S[*], A]:
 
   def find(filter: Filter[A] = Filter.all)(using session: Option[ClientSession] = None): FindQuery[F, S, A]
 
-  def replaceOne(filter: Filter[A], replacement: A, options: ReplaceOptions = ReplaceOptions.default)(using
-      session: Option[ClientSession] = None
-  ): F[UpdateResult]
+  def replaceOne(
+      filter: Filter[A],
+      replacement: A,
+      options: ReplaceOptions = ReplaceOptions.default,
+  )(using session: Option[ClientSession] = None): F[UpdateResult]
 
-  def updateOne(filter: Filter[A], update: Update[A], options: UpdateOptions = UpdateOptions.default)(using
-      session: Option[ClientSession] = None
-  ): F[UpdateResult]
+  def updateOne(
+      filter: Filter[A],
+      update: Update[A],
+      options: UpdateOptions = UpdateOptions.default,
+  )(using session: Option[ClientSession] = None): F[UpdateResult]
 
-  def updateMany(filter: Filter[A], update: Update[A], options: UpdateOptions = UpdateOptions.default)(using
-      session: Option[ClientSession] = None
-  ): F[UpdateResult]
+  def updateMany(
+      filter: Filter[A],
+      update: Update[A],
+      options: UpdateOptions = UpdateOptions.default,
+  )(using session: Option[ClientSession] = None): F[UpdateResult]
 
   def deleteOne(filter: Filter[A], options: DeleteOptions = DeleteOptions.default)(using
-      session: Option[ClientSession] = None
+      session: Option[ClientSession] = None,
   ): F[DeleteResult]
 
   def deleteMany(filter: Filter[A], options: DeleteOptions = DeleteOptions.default)(using
-      session: Option[ClientSession] = None
+      session: Option[ClientSession] = None,
   ): F[DeleteResult]
 
   def findOneAndUpdate(
@@ -61,23 +67,22 @@ trait MongoCollection[F[*], S[*], A]:
       options: FindOneAndDeleteOptions[A] = FindOneAndDeleteOptions.default[A],
   )(using session: Option[ClientSession] = None): F[Option[A]]
 
-  def count(filter: Filter[A] = Filter.all, options: CountOptions = CountOptions.default)(using
-      session: Option[ClientSession] = None
-  ): F[Long]
+  def count(
+      filter: Filter[A] = Filter.all,
+      options: CountOptions = CountOptions.default,
+  )(using session: Option[ClientSession] = None): F[Long]
   def estimatedCount: F[Long]
 
   def bulkWrite(commands: Seq[WriteCommand[A]], ordered: Boolean = true)(using
-      session: Option[ClientSession] = None
+      session: Option[ClientSession] = None,
   ): F[BulkWriteResult]
 
   def aggregate[B](pipeline: Seq[Stage[A]])(using
-      session: Option[ClientSession] = None
-  )(using
-      BsonDocumentDecoder[B]
-  ): AggregateQuery[F, S, B]
+      session: Option[ClientSession] = None,
+  )(using BsonDocumentDecoder[B]): AggregateQuery[F, S, B]
 
   def aggregateDirect[B](pipeline: Seq[Stage[A]])(using
-      session: Option[ClientSession] = None
+      session: Option[ClientSession] = None,
   )(using
       codec: WireCodec[B],
       @unused tag: ClassTag[B],
@@ -85,9 +90,9 @@ trait MongoCollection[F[*], S[*], A]:
     aggregate[B](pipeline)(using session)(using DocumentCodecBridge.toDocumentCodec[B](using codec))
 
   def distinct[B](field: Field[A, B], filter: Filter[A] = Filter.all)(using
-      session: Option[ClientSession] = None
+      session: Option[ClientSession] = None,
   )(using
-      BsonDecoder[B]
+      BsonDecoder[B],
   ): DistinctQuery[F, S, B]
 
   def createIndex(index: Index[A])(using session: Option[ClientSession] = None): F[String]
@@ -97,15 +102,15 @@ trait MongoCollection[F[*], S[*], A]:
   def drop(using session: Option[ClientSession] = None): F[Unit]
 
   def watch(options: WatchOptions[A] = WatchOptions.default[A])(using
-      session: Option[ClientSession] = None
+      session: Option[ClientSession] = None,
   )(using
-      Streamable[S, ChangeEvent[A]]
+      Streamable[S, ChangeEvent[A]],
   ): S[ChangeEvent[A]]
 
   def watchAttempting(options: WatchOptions[A] = WatchOptions.default[A])(using
-      session: Option[ClientSession] = None
+      session: Option[ClientSession] = None,
   )(using
-      Streamable[S, DecodeResult[ChangeEvent[A]]]
+      Streamable[S, DecodeResult[ChangeEvent[A]]],
   ): S[DecodeResult[ChangeEvent[A]]]
 
   def withReadConcern(concern: ReadConcern): MongoCollection[F, S, A]

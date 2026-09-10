@@ -197,7 +197,9 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
 
   def estimatedCount: F[Long] = F.map(rs.one(underlying.estimatedDocumentCount()))(_.longValue)
 
-  def bulkWrite(commands: Seq[WriteCommand[A]], ordered: Boolean)(using session: Option[ClientSession]): F[BulkWriteResult] =
+  def bulkWrite(commands: Seq[WriteCommand[A]], ordered: Boolean)(using
+      session: Option[ClientSession],
+  ): F[BulkWriteResult] =
     if commands.isEmpty
     then F.pure(BulkWriteResult.none)
     else
@@ -214,7 +216,7 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
   end bulkWrite
 
   override def aggregateDirect[B](pipeline: Seq[Stage[A]])(using
-      session: Option[ClientSession]
+      session: Option[ClientSession],
   )(using
       codecB: WireCodec[B],
       tagB: ClassTag[B],
@@ -240,7 +242,11 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
     )
   end aggregateDirect
 
-  def aggregate[B](pipeline: Seq[Stage[A]])(using session: Option[ClientSession])(using decoder: BsonDocumentDecoder[B]): AggregateQuery[F, S, B] =
+  def aggregate[B](pipeline: Seq[Stage[A]])(using
+      session: Option[ClientSession],
+  )(using
+      decoder: BsonDocumentDecoder[B],
+  ): AggregateQuery[F, S, B] =
     AggregateQueryImpl(
       collection = underlying,
       pipeline = pipeline.map(_.toBson(naming)),
@@ -250,7 +256,7 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
     )
 
   def distinct[B](field: Field[A, B], filter: Filter[A])(using
-      session: Option[ClientSession]
+      session: Option[ClientSession],
   )(using
       decoder: BsonDecoder[B]
   ): DistinctQuery[F, S, B] =

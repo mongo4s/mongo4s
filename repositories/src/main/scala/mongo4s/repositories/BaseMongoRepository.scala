@@ -101,12 +101,16 @@ open class BaseMongoRepository[F[*], S[*], E, K](
   def updateByFilter(filter: Filter[E], update: Update[E])(using session: Option[ClientSession]): F[UpdateResult] =
     collection.updateMany(filter, update)(using session)
 
-  def findOneAndUpdate(key: K, update: Update[E], options: FindOneAndUpdateOptions[E])(using session: Option[ClientSession]): F[Option[E]] =
+  def findOneAndUpdate(
+      key: K,
+      update: Update[E],
+      options: FindOneAndUpdateOptions[E],
+  )(using session: Option[ClientSession]): F[Option[E]] =
     collection.findOneAndUpdate(pk.eqFilter(key), update, options.withProjection(defaultProjection))(using session)
 
   def bulkWrite(commands: Seq[WriteCommand[E]], ordered: Boolean)(using session: Option[ClientSession]): F[BulkWriteResult] =
     if ordered
-    then batchedResults(commands.toList)(chunk => collection.bulkWrite(chunk, ordered = true)(using session))
+    then batchedResults(commands.toList)(chunk => collection.bulkWrite(chunk)(using session))
     else collection.bulkWrite(commands, ordered = false)(using session)
 
   def deleteOne(key: K)(using session: Option[ClientSession]): F[DeleteResult] =
