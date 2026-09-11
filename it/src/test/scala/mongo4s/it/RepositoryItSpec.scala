@@ -114,13 +114,12 @@ final class RepositoryItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befor
         deleted        <- repo.deleteByField(Field.of[Person, Int](_.age), 30)
         remaining      <- repo.getAll.compile.toList
         _              <- client.close
-      yield (streamed, updated, afterUpdate, deleted, remaining)).timeout(30.seconds).asserting {
-        case (streamed, updated, afterUpdate, deleted, remaining) =>
-          streamed.map(_.id) should contain theSameElementsAs List("1", "2")
-          updated.matchedCount shouldBe 2L
-          afterUpdate.map(_.id) should contain theSameElementsAs List("1", "2")
-          deleted.deletedCount shouldBe 2L
-          remaining shouldBe List(Person("3", "eve", 40))
+      yield (streamed, updated, afterUpdate, deleted, remaining)).timeout(30.seconds).asserting { case (streamed, updated, afterUpdate, deleted, remaining) =>
+        streamed.map(_.id) should contain theSameElementsAs List("1", "2")
+        updated.matchedCount shouldBe 2L
+        afterUpdate.map(_.id) should contain theSameElementsAs List("1", "2")
+        deleted.deletedCount shouldBe 2L
+        remaining shouldBe List(Person("3", "eve", 40))
       }
     }
 

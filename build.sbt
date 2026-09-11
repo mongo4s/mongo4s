@@ -9,19 +9,25 @@ lazy val checkedJdk: Int = {
   val running = sys.props.getOrElse("java.specification.version", "unknown")
   val major   = running.split('.').headOption.flatMap(_.toIntOption).getOrElse(0)
 
-  if major < requiredJdk then
+  if (major < requiredJdk) {
     sys.error(
       s"mongo4s requires JDK $requiredJdk or newer; this build is running on JDK $running. " +
         "mongo4s-kyo's class files target Java 25 and cannot be compiled by an older JDK. " +
         "Point JAVA_HOME at a JDK 25 install (`cs java --jvm 25`, or `brew install openjdk@25`) and retry."
     )
+  }
 
   major
 }
 
+Global / onLoad := {
+  val _ = checkedJdk
+  (Global / onLoad).value
+}
+
 lazy val sourceLevel = settingKey[String]("Scala -source level the build compiles against")
 
-lazy val commonSettings = { val _ = checkedJdk; Seq(
+lazy val commonSettings = Seq(
   organization           := "org.mongo4s",
   organizationName       := "Mongo4s",
   homepage               := Some(uri("https://mongo4s.org/")),
@@ -70,7 +76,7 @@ lazy val commonSettings = { val _ = checkedJdk; Seq(
   ),
   credentials ++= Seq(Path.userHome / ".sbt" / "sonatype_credentials").filter(_.isFile).map(Credentials(_)),
   mimaPreviousArtifacts  := binaryCompatibleWith.map(organization.value %% moduleName.value % _),
-) }
+)
 
 lazy val bsonCore = project
   .in(file("bson/core"))
