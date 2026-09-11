@@ -26,7 +26,6 @@ final case class LoginEvent(userId: UserId, at: Instant) derives WireCodec
 object LoginEvent:
   given BsonDocumentCodec[LoginEvent] = DocumentCodecBridge.toDocumentCodec[LoginEvent]
 
-// models no `_id` and is keyed on a plain field — the shape `withoutId` projects for
 final case class AuditEntry(ref: String, action: String, at: Instant) derives WireCodec
 
 object AuditEntry:
@@ -74,8 +73,6 @@ object RepositoryCatsBsonDirectApp extends IOApp.Simple:
         _          <- tokens.insertOne(token)
         foundToken <- tokens.findOne(token._id)
         _          <- IO.println(s"token: $foundToken")
-
-        // withoutId keeps `_id` off the wire entirely, rather than decoding and discarding it
         audit      <- BaseMongoRepository.withoutId[IO, S, AuditEntry, String](db, "repo_direct_audit")
         _          <- audit.insertOne(AuditEntry("a-1", "login", Instant.now()))
         foundAudit <- audit.findOne("a-1")

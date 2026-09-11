@@ -32,7 +32,6 @@ enum Geometry:
 
 object Geometry:
 
-  /** The key a geometry is wrapped under wherever MongoDB accepts one. */
   val key: String = "$geometry"
 
   object Polygon:

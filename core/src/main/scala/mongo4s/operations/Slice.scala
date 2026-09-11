@@ -5,7 +5,6 @@ import org.bson.{BsonArray, BsonInt32, BsonValue}
 import scala.jdk.CollectionConverters.given
 
 object Slice:
-  /** The projection operator a slice renders under. */
   val key: String = "$slice"
 
 final case class Slice(count: Int, skip: Option[Int]):

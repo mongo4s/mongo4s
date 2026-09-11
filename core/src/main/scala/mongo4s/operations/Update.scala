@@ -157,8 +157,6 @@ object Update:
     case Combine(updates)                => updates.foreach(write(_, naming, target))
     case Raw(document)                   => document.forEach((name, value) => mergeOperator(target, name, value))
 
-  // the modifiers `$each` accepts; `$slice` and `$sort` here are the push operators,
-  // which are not the projection or pipeline operators that share their names
   private val Each      = "$each"
   private val Position  = "$position"
   private val PushSlice = "$slice"

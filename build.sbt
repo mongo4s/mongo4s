@@ -3,10 +3,6 @@ import com.typesafe.tools.mima.plugin.MimaKeys.mimaPreviousArtifacts
 
 lazy val binaryCompatibleWith = Set.empty[String]
 
-// Every module is built and published for one JDK. `mongo4s-kyo` forces the floor: kyo's `Frame` macro runs inside
-// the compiler and its class files target Java 25, so anything older cannot compile that module at all. Rather than
-// let four modules build and the fifth fail with `UnsupportedClassVersionError: class file version 69.0`, the build
-// refuses up front and says why.
 lazy val requiredJdk = 25
 
 lazy val checkedJdk: Int = {

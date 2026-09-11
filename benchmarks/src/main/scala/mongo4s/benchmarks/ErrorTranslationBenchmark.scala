@@ -10,8 +10,6 @@ import mongo4s.internal.RsBridgeSupport
 
 object ErrorTranslationBenchmark:
 
-  /** A synchronous publisher that costs as little as a publisher can, so what is measured is the wrapper around it rather than the source feeding it.
-    */
   final class CountingPublisher(elements: Int) extends Publisher[Integer]:
     def subscribe(subscriber: Subscriber[? >: Integer]): Unit =
       subscriber.onSubscribe(
@@ -30,7 +28,6 @@ object ErrorTranslationBenchmark:
           def cancel(): Unit = done = true
       )
 
-  /** Consumes everything and returns the sum, so nothing can be optimised away. */
   def drain(publisher: Publisher[Integer]): Long =
     val total = AtomicLong(0L)
 
@@ -62,8 +59,6 @@ class ErrorTranslationBenchmark:
   @Setup(Level.Trial)
   def setup(): Unit = source = CountingPublisher(elements)
 
-  /** The publisher as the driver hands it over. */
   @Benchmark def untranslated: Long = drain(source)
 
-  /** The same publisher as every mongo4s operation sees it since 3.0.0. */
   @Benchmark def translated: Long = drain(RsBridgeSupport.translating(source))
