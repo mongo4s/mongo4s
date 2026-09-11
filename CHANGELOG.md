@@ -191,9 +191,6 @@ part of `2.0.0` below.
   taking the first or last; a bulk `UpdateOne`/`UpdateMany` silently discarded its `UpdateOptions`; inserts neither
   stamped an `_id` nor refused a duplicate one. Every one of these is now checked against a real MongoDB by
   `FakeFidelityParityItSpec`.
-
-### Fixed
-
 - `RsBridge.unit` reported a publisher's failure wrapped in a `CompletionException` on backends that do not unwrap
   one themselves, which hid the driver's own exception type — and with it the error labels the new transaction
   retries depend on. It now reports the exception the publisher raised, on every backend.
