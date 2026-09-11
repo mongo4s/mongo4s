@@ -54,8 +54,6 @@ jobs:
   forward-compat:
     name: Next Scala release (-source:future)
     runs-on: ubuntu-latest
-    # Advisory, not a gate: on 3.9 `-source:future` means 3.10 semantics, so this job is the early warning that
-    # the next Scala release will need work — it must not block a change that is fine on the version we ship.
     continue-on-error: true
     steps:
       - name: Checkout

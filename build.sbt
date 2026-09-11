@@ -19,10 +19,6 @@ lazy val checkedJdk: Int = {
   major
 }
 
-// Pinned rather than `future`, because on 3.9 `-source:future` means 3.10 semantics — a moving target under a
-// published library. CI overrides it in an advisory job
-// (`sbt 'set every sourceLevel := "future"; Test/compile'`), so a break in the next Scala release shows up there
-// instead of in the build everyone depends on.
 lazy val sourceLevel = settingKey[String]("Scala -source level the build compiles against")
 
 lazy val commonSettings = { val _ = checkedJdk; Seq(
@@ -71,9 +67,6 @@ lazy val commonSettings = { val _ = checkedJdk; Seq(
     "-Winfer-union",
     "-Wimplausible-patterns",
     "-Wrecurse-with-default",
-    // Not `-Wsafe-init`: its analysis crashes kyo's Tag macro with a MatchError on an HKTypeLambda. The same call
-    // sites already draw "Missing symbol position ... This is a compiler bug" under the plain flags, so the fault is
-    // upstream rather than here. Not `-Wnonunit-statement` either — every non-final ScalaTest assertion trips it.
   ),
   credentials ++= Seq(Path.userHome / ".sbt" / "sonatype_credentials").filter(_.isFile).map(Credentials(_)),
   mimaPreviousArtifacts  := binaryCompatibleWith.map(organization.value %% moduleName.value % _),
