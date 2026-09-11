@@ -19,7 +19,7 @@ import mongo4s.operations.geometry.{GeoShape, Geometry}
 
 final class GeoItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAfterAll:
 
-  private val container = new MongoDBContainer("mongo:7")
+  private val container = new MongoDBContainer("mongo:8.2")
 
   override def beforeAll(): Unit = container.start()
   override def afterAll(): Unit  = container.stop()

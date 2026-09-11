@@ -11,7 +11,7 @@ sitting:
 | OS | macOS 26.6.2 (`25G83`) |
 | JVM | OpenJDK 25.0.4.1 (Homebrew), 64-Bit Server VM, mixed mode, sharing |
 | Scala | 3.9.0, sbt 2.0.8, JMH 1.37 |
-| Server | `mongo:7` in Docker, `localhost:27018`, single node |
+| Server | `mongo:8.2` in Docker, `localhost:27018`, single node |
 
 These are directional ballparks from one laptop, not hardware-independent authorities — an M4 Max has no
 hyper-threading and a memory system unlike a typical server's, and the MongoDB numbers cross a loopback socket
@@ -193,6 +193,20 @@ round trip is a larger share of each result: where a table below shows a gap, th
 
 The codec sections above have no server in them and are unaffected.
 
+**How much the machine alone moves these numbers**, measured rather than guessed: the same `AggregateBenchmark`
+against the same `mongo:7`, run eight hours apart, reported 199 and 234 ops/s for the same case — an 18% swing with
+nothing changed but the time of day. Any cross-run comparison narrower than that is reading noise.
+
+Which is why the server versions were compared by **interleaving** them — `7`, `8.2`, `7`, `8.2`, `7`, `8.2` — rather
+than by running one after the other. Done that way the difference is small, reproducible in all three rounds, and
+goes both ways: `8.2` is about **9% faster** on the ten-document case and about **8% slower** on the
+ten-thousand-document one. Run sequentially instead, the same pair appeared to show `8.2` ahead by 20–35% on
+everything, which was the machine and not the server.
+
+`mongo:8` will not start on a current Docker Desktop at all: the `8.0` line it points at refuses to run on Linux
+kernels 6.19 and newer ([SERVER-121912](https://jira.mongodb.org/browse/SERVER-121912)), and Docker Desktop's VM is
+past that. `mongo:8.2` runs; `mongo:7` runs. That is why the tag above is pinned to `8.2` rather than `8`.
+
 ## Aggregation through a cursor — real `MongoDB`
 
 The tables above measure a codec in isolation. [`AggregateBenchmark`](benchmarks/src/main/scala/mongo4s/benchmarks/AggregateBenchmark.scala)
@@ -201,19 +215,19 @@ asks whether any of it survives a real server: the same `$match` pipeline, the s
 `BsonDocument`), and `aggregate` through `medeia`.
 
 ```bash
-docker run -d --name mongo4s-bench -p 27018:27017 mongo:7
+docker run -d --name mongo4s-bench -p 27018:27017 mongo:8.2
 sbt "benchmarks/Jmh/run -f 1 AggregateBenchmark"
 ```
 
 | Documents returned | `aggregateDirect` | `aggregate` + bridge | `aggregate` + `medeia` |
 | ---: | ---: | ---: | ---: |
-| 10 | 194 ops/s | 199 ops/s | **205 ops/s** |
-| 10000 | **67 ops/s** | 53 ops/s | 53 ops/s |
+| 10 | 262 ops/s | 268 ops/s | 258 ops/s |
+| 10000 | **69 ops/s** | 50 ops/s | 58 ops/s |
 
 **Both rows are the point.** At ten documents the three are indistinguishable — they sit inside each other's
 error bars (±7–10%), because the round trip is everything and the codec is noise, which is the honest answer for
 most CRUD. At ten thousand the decode starts to tell instead, and `aggregateDirect` is
-**1.27×** the bridged path and **1.26×** `medeia`, *including* the network round trip.
+**1.37×** the bridged path and **1.19×** `medeia`, *including* the network round trip.
 
 Read the absolute rates with the caveat in [Talking to a server](#talking-to-a-server) below — on this machine they
 are latency-bound, which compresses the ratio. The direction survives; the size of the gap would be larger wherever
@@ -229,32 +243,32 @@ insert/find/update/delete/count workload against a real MongoDB through every `m
 reference point:
 
 ```bash
-docker run -d --name mongo4s-bench -p 27018:27017 mongo:7
-sbt "benchmarks/Jmh/run -tu s .*RuntimeBenchmark.*"
+docker run -d --name mongo4s-bench -p 27018:27017 mongo:8.2
+sbt "benchmarks/Jmh/run -tu s -f 3 .*RuntimeBenchmark.*"
 ```
 
 **Throughput — operations per second, higher is better**
 
 | Operation | mongo4s-cats | mongo4s-zio | mongo4s-rapid | mongo4s-kyo | mongo4cats-cats | mongo4cats-zio |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `insertOne` | 203 | 184 | **211** | 167 | 201 | 185 |
-| `find(filter).all` (~100 docs) | 199 | 186 | 201 | 158 | **208** | 177 |
-| `find(filter).stream` (~100 docs) | 193 | 185 | **203** | 152 | 14 | 181 |
-| `updateOne` | 202 | 186 | **211** | 162 | 200 | 184 |
-| `count(filter)` | 199 | 181 | 200 | 160 | **202** | 180 |
+| `insertOne` | 253 | 214 | 254 | 256 | 256 | **260** |
+| `find(filter).all` (~100 docs) | 242 | 211 | **244** | 236 | 229 | 241 |
+| `find(filter).stream` (~100 docs) | 232 | 213 | **244** | 236 | 10 | 201 |
+| `updateOne` | **262** | 213 | 252 | 252 | 253 | 260 |
+| `count(filter)` | 245 | 207 | 241 | 239 | 245 | **249** |
 
 With a clean database on every trial, every column lands in the same band for every operation — the round trip
 dominates at this scale, and none of the six `RsBridge`/collection wrappers stands out. **Bold** is the highest cell
-in each row, but read it as the measured extreme rather than a ranking: run-to-run error is ±4–41%, far wider than
-the spread between the columns. The `kyo` and `zio` columns sit a few percent below the rest across the board, which
-is inside that error and not a finding.
+in each row, but read it as the measured extreme rather than a ranking: run-to-run error is ±2–31%, far wider than
+the spread between the columns. The `zio` column is the one that sits consistently below the rest — about
+14% under `cats` on every row — which is at the edge of that error rather than clearly outside it.
 
-The one real outlier is `mongo4cats-cats`'s `find(filter).stream` — **14** *ops/s* against its own `.all`'s
-**208** and **201** on its single-document ops, a **15×** gap that no round trip explains. It bridges through a
+The one real outlier is `mongo4cats-cats`'s `find(filter).stream` — **10** *ops/s* against its own `.all`'s
+**229** and **256** on its single-document ops, a **22×** gap that no round trip explains. It bridges through a
 hand-rolled `cats.effect.std.Queue`-backed `Subscriber` instead of `fs2.interop.reactivestreams`, which
 `mongo4s-cats` uses. Each `mongo4s` runtime uses its own interop — `zio-interop-reactivestreams`,
 `kyo-reactive-streams`, and a `PublisherIterator` of mongo4s's own for `rapid`. Note `mongo4cats-zio` does *not*
-share the problem (181 ops/s, level with its own `.all`), so this is one bridge rather than the library.
+share the problem (201 ops/s, level with its own `.all`), so this is one bridge rather than the library.
 
 `deleteOne` reads about half of the other single-document operations because the benchmark inserts a document first,
 so its number covers two round trips rather than one.
@@ -267,31 +281,31 @@ separate runs, same four stacks, two different questions:
 
 ```bash
 # how many operations per second
-sbt "benchmarks/Jmh/run -tu s .*RuntimeBenchmark\.cats.* .*RuntimeBenchmark\.mongo4catsCats.*"
+sbt "benchmarks/Jmh/run -tu s -f 3 .*RuntimeBenchmark\.cats.* .*RuntimeBenchmark\.mongo4catsCats.*"
 
 # how much garbage each operation generates
-sbt "benchmarks/Jmh/run -prof gc .*RuntimeBenchmark\.cats.* .*RuntimeBenchmark\.mongo4catsCats.*"
+sbt "benchmarks/Jmh/run -prof gc -f 2 .*RuntimeBenchmark\.cats.* .*RuntimeBenchmark\.mongo4catsCats.*"
 ```
 
 **Throughput — operations per second, higher is better**
 
 | Operation | mongo4s+medeia | mongo4s+bson-direct | mongo4cats+circe | mongo4cats+zio-json |
 | --- | ---: | ---: | ---: | ---: |
-| `insertOne` | **203** | 201 | 201 | 202 |
-| `insertMany` (10 docs) | **192** | 191 | 192 | 186 |
-| `findOneById` | 200 | 198 | **203** | 202 |
-| `findOneByFilter` | 199 | 197 | **205** | 197 |
-| `findAll` (~100 docs) | 199 | 197 | **208** | 195 |
-| `findStream` (~100 docs) | **193** | 191 | 14 | 14 |
-| `updateOne` | **202** | 199 | 200 | 200 |
-| `deleteOne`\* | 99 | **101** | 100 | 99 |
-| `count` | 199 | 196 | **202** | 200 |
+| `insertOne` | 253 | 251 | **256** | 253 |
+| `insertMany` (10 docs) | **224** | 217 | 219 | 221 |
+| `findOneById` | 250 | **255** | 254 | 253 |
+| `findOneByFilter` | 247 | 252 | **255** | 251 |
+| `findAll` (~100 docs) | **242** | 240 | 229 | 231 |
+| `findStream` (~100 docs) | 232 | **238** | 10 | 10 |
+| `updateOne` | 262 | **264** | 253 | 255 |
+| `deleteOne`\* | **128** | 123 | 123 | 125 |
+| `count` | 245 | 238 | **245** | 242 |
 
 Same finding as the [runtime table above](#runtime-overhead--real-mongodb-every-backend): every operation but
 `findStream` lands in the same band, inside the run-to-run error, so **bold** marks the measured extreme rather than
 a ranking — the round trip dominates regardless of codec. The one outlier is `mongo4cats`' `find(filter).stream`,
-**15×** _slower_ than its own single-document operations *and independent of codec*
-(13.8 ops/s for circe and 13.8 for zio-json — the same number) — which confirms it is the runtime's
+**25×** _slower_ than its own single-document operations *and independent of codec*
+(10.4 ops/s for circe and 10.2 for zio-json — the same number) — which confirms it is the runtime's
 `Queue`-backed `Subscriber` bridge rather than the codec, exactly as found earlier.
 
 On throughput the two `mongo4s` codecs are indistinguishable here, and so are they from `mongo4cats` on everything
@@ -302,25 +316,25 @@ actually visible, and it is the one to read.
 
 | Operation | mongo4s+medeia | mongo4s+bson-direct | mongo4cats+circe | mongo4cats+zio-json |
 | --- | ---: | ---: | ---: | ---: |
-| `insertOne` | 26.2 | **23.3** | 26.9 | 26.2 |
-| `insertMany` (10 docs) | 66.7 | **40.4** | 81.1 | 72.8 |
-| `findOneById` | 37.7 | **35.3** | 41.2 | 38.3 |
-| `findOneByFilter` | 37.5 | **35.2** | 41.0 | 38.2 |
-| `findAll` (~100 docs) | 326.6 | **157.8** | 935.5 | 642.6 |
-| `findStream` (~100 docs) | 375.9 | **210.3** | 2830.5 | 2566.3 |
-| `updateOne` | **23.5** | 23.6 | 24.1 | 23.9 |
-| `deleteOne`\* | 48.8 | **45.7** | 48.8 | 48.2 |
-| `count` | 33.2 | 33.2 | 33.0 | **32.9** |
+| `insertOne` | 25.7 | **22.8** | 26.4 | 25.9 |
+| `insertMany` (10 docs) | 67.1 | **39.3** | 79.4 | 72.2 |
+| `findOneById` | 37.2 | **35.1** | 40.6 | 37.9 |
+| `findOneByFilter` | 37.2 | **35.0** | 40.5 | 37.7 |
+| `findAll` (~100 docs) | 326.4 | **157.5** | 928.4 | 643.9 |
+| `findStream` (~100 docs) | 379.7 | **211.2** | 2850.6 | 2573.1 |
+| `updateOne` | 23.3 | **23.2** | 23.6 | 23.5 |
+| `deleteOne`\* | 47.8 | **45.3** | 48.1 | 47.6 |
+| `count` | 32.8 | 32.9 | 32.5 | **32.5** |
 
 Two things worth noting:
 
 * **`bson-direct` allocates less than `bson-medeia` wherever a document actually passes through the codec** — the
   AST-free advantage measured in isolation ([above](#ast-free-wire-codec--all-the-way-to-real-bytes)) survives
   end-to-end through a real driver round trip, not just in a codec microbenchmark. The gap tracks how many documents
-  a call encodes or decodes: **11%** for one, **39%** on `insertMany`, and **44–52%** on
+  a call encodes or decodes: **11%** for one, **41%** on `insertMany`, and **44–52%** on
   `findAll`/`findStream` — the more documents per call, the more the saved `BsonDocument` tree-walks compound. On
-  `updateOne` and `count` the two are level to three digits (23.53 against 23.57 *KB*, 33.25 against
-  33.20), which is the expected result rather than a surprise: neither operation encodes or decodes an entity,
+  `updateOne` and `count` the two are level to three digits (23.30 against 23.24 *KB*, 32.77 against
+  32.94), which is the expected result rather than a surprise: neither operation encodes or decodes an entity,
   so there is nothing for a codec to do differently.
 * **`mongo4s` now matches `mongo4cats` on single-document ops, and stays far lighter on bulk reads.** On
   `insertOne`/`updateOne`/`deleteOne`/`count`/`findOneById` all four configurations sit within a couple of percent

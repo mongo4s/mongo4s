@@ -307,7 +307,7 @@ with the index of the operation that produced it, and `duplicateKeys` is a filte
 shape.
 
 **`DuplicateKey` does not name the index, on purpose.** The server does report `keyPattern` and `keyValue`, but the
-driver's `WriteError.getDetails` comes back empty for a duplicate key — verified against MongoDB 7 — so the only
+driver's `WriteError.getDetails` comes back empty for a duplicate key — verified against MongoDB 7 and 8.2 — so the only
 remaining source is the human-readable message. Parsing it would produce a field that works until a server upgrade
 rewords the string, then silently returns nothing. The message stays reachable through `getMessage`.
 

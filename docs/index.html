@@ -1527,7 +1527,7 @@ given RsBridgeConfig = RsBridgeConfig(
     <p>
         Six JMH harnesses in <code>benchmarks/</code>, against mongo4cats as a reference point. Everything below was
         measured in one sitting on an <strong>Apple M4 Max</strong> (14 cores, 36 GB), macOS 26.6.2,
-        <strong>OpenJDK 25.0.4.1</strong>, Scala 3.9.0, JMH 1.37, with <code>mongo:7</code> in Docker on
+        <strong>OpenJDK 25.0.4.1</strong>, Scala 3.9.0, JMH 1.37, with <code>mongo:8.2</code> in Docker on
         <code>localhost:27018</code>. Directional ballparks from one laptop, not hardware-independent authorities.
     </p>
 
@@ -1738,8 +1738,8 @@ given RsBridgeConfig = RsBridgeConfig(
         measured from a shell <strong>inside the container</strong>, with no port mapping in the path:
     </p>
     <pre><code>empty loop  0.000 ms/op
-ping        2.40 ms/op → ~418 ops/s
-findOne     2.17 ms/op → ~462 ops/s</code></pre>
+ping        1.35–2.08 ms/op
+findOne     1.45–1.97 ms/op</code></pre>
     <p class="muted">
         An empty loop is free, so that 2.4 ms is the server round trip itself. mongo4s doing real work from the host
         lands around <strong>200 ops/s</strong> — roughly half the rate a bare shell gets for a ping in the same
@@ -1763,21 +1763,21 @@ findOne     2.17 ms/op → ~462 ops/s</code></pre>
             </tr>
             <tr>
                 <td>10</td>
-                <td class="num">194 ops/s</td>
-                <td class="num">199 ops/s</td>
-                <td class="num"><strong class="best">205 ops/s</strong></td>
+                <td class="num">262 ops/s</td>
+                <td class="num"><strong class="best">268 ops/s</strong></td>
+                <td class="num">258 ops/s</td>
             </tr>
             <tr>
                 <td>10000</td>
-                <td class="num"><strong class="best">67 ops/s</strong></td>
-                <td class="num">53 ops/s</td>
-                <td class="num">53 ops/s</td>
+                <td class="num"><strong class="best">69 ops/s</strong></td>
+                <td class="num">50 ops/s</td>
+                <td class="num">58 ops/s</td>
             </tr>
         </table>
     <p class="muted">
         Both rows are the point. At ten documents the three sit inside each other's error bars, because the round trip
         is everything and the codec is noise — the honest answer for most CRUD. At ten thousand the decode starts to
-        tell, and <code>aggregateDirect</code> is <strong>1.27×</strong> the bridged path. Pick it for cursors that
+        tell, and <code>aggregateDirect</code> is <strong>1.37×</strong> the bridged path. Pick it for cursors that
         return a lot; below that it is a wash and either call is fine.
     </p>
 
@@ -1788,64 +1788,66 @@ findOne     2.17 ms/op → ~462 ops/s</code></pre>
             </caption>
             <tr>
                 <th>Operation</th>
-                <th class="num">cats</th>
-                <th class="num">zio</th>
-                <th class="num">rapid</th>
-                <th class="num">kyo</th>
-                <th class="num">mongo4cats-cats</th>
-                <th class="num">mongo4cats-zio</th>
+                <th class="num">mongo4s+medeia</th>
+                <th class="num">mongo4s+bson-direct</th>
+                <th class="num">mongo4cats+circe</th>
+                <th class="num">mongo4cats+zio-json</th>
             </tr>
             <tr>
                 <td>insertOne</td>
-                <td class="num">203</td>
-                <td class="num">184</td>
-                <td class="num"><strong class="best">211</strong></td>
-                <td class="num"><span class="worst">167</span></td>
-                <td class="num">201</td>
-                <td class="num">185</td>
+                <td class="num">253</td>
+                <td class="num"><span class="worst">251</span></td>
+                <td class="num"><strong class="best">256</strong></td>
+                <td class="num">253</td>
             </tr>
             <tr>
-                <td>find(filter).all</td>
-                <td class="num">199</td>
-                <td class="num">186</td>
-                <td class="num">201</td>
-                <td class="num"><span class="worst">158</span></td>
-                <td class="num"><strong class="best">208</strong></td>
-                <td class="num">177</td>
+                <td>insertMany (10 docs)</td>
+                <td class="num"><strong class="best">224</strong></td>
+                <td class="num"><span class="worst">217</span></td>
+                <td class="num">219</td>
+                <td class="num">221</td>
             </tr>
             <tr>
-                <td>find(filter).stream</td>
-                <td class="num">193</td>
-                <td class="num">185</td>
-                <td class="num"><strong class="best">203</strong></td>
-                <td class="num">152</td>
-                <td class="num"><span class="worst">14</span></td>
-                <td class="num">181</td>
+                <td>findOneById</td>
+                <td class="num"><span class="worst">250</span></td>
+                <td class="num"><strong class="best">255</strong></td>
+                <td class="num">254</td>
+                <td class="num">253</td>
+            </tr>
+            <tr>
+                <td>findAll (~100 docs)</td>
+                <td class="num"><strong class="best">242</strong></td>
+                <td class="num">240</td>
+                <td class="num"><span class="worst">229</span></td>
+                <td class="num">231</td>
+            </tr>
+            <tr>
+                <td>findStream (~100 docs)</td>
+                <td class="num">232</td>
+                <td class="num"><strong class="best">238</strong></td>
+                <td class="num">10</td>
+                <td class="num"><span class="worst">10</span></td>
             </tr>
             <tr>
                 <td>updateOne</td>
-                <td class="num">202</td>
-                <td class="num">186</td>
-                <td class="num"><strong class="best">211</strong></td>
-                <td class="num"><span class="worst">162</span></td>
-                <td class="num">200</td>
-                <td class="num">184</td>
+                <td class="num">262</td>
+                <td class="num"><strong class="best">264</strong></td>
+                <td class="num"><span class="worst">253</span></td>
+                <td class="num">255</td>
             </tr>
             <tr>
-                <td>count(filter)</td>
-                <td class="num">199</td>
-                <td class="num">181</td>
-                <td class="num">200</td>
-                <td class="num"><span class="worst">160</span></td>
-                <td class="num"><strong class="best">202</strong></td>
-                <td class="num">180</td>
+                <td>count</td>
+                <td class="num">245</td>
+                <td class="num"><span class="worst">238</span></td>
+                <td class="num"><strong class="best">245</strong></td>
+                <td class="num">242</td>
             </tr>
         </table>
     <p class="muted">
         Every column lands in the same band for every operation — the round trip dominates and none of the six
         <code>RsBridge</code>/collection wrappers stands out. Run-to-run error is ±4–41%, far wider than the spread
         between the columns, so the highlighted cells mark the measured extreme rather than a ranking. The one real
-        outlier is mongo4cats-cats's <code>find(filter).stream</code>, a <strong>15×</strong> gap against its own
+        outlier is mongo4cats-cats's <code>find(filter).stream</code>, a <strong>22×</strong> gap against its own
         <code>.all</code> that no round trip explains: it bridges through a hand-rolled
         <code>cats.effect.std.Queue</code>-backed <code>Subscriber</code> instead of
         <code>fs2.interop.reactivestreams</code>, which mongo4s-cats uses. mongo4cats-zio does <em>not</em> share the
@@ -1931,59 +1933,59 @@ findOne     2.17 ms/op → ~462 ops/s</code></pre>
             </tr>
             <tr>
                 <td>insertOne</td>
-                <td class="num">26.2</td>
-                <td class="num"><strong class="best">23.3</strong></td>
-                <td class="num"><span class="worst">26.9</span></td>
-                <td class="num">26.2</td>
+                <td class="num">25.7</td>
+                <td class="num"><strong class="best">22.8</strong></td>
+                <td class="num"><span class="worst">26.4</span></td>
+                <td class="num">25.9</td>
             </tr>
             <tr>
                 <td>insertMany (10 docs)</td>
-                <td class="num">66.7</td>
-                <td class="num"><strong class="best">40.4</strong></td>
-                <td class="num"><span class="worst">81.1</span></td>
-                <td class="num">72.8</td>
+                <td class="num">67.1</td>
+                <td class="num"><strong class="best">39.3</strong></td>
+                <td class="num"><span class="worst">79.4</span></td>
+                <td class="num">72.2</td>
             </tr>
             <tr>
                 <td>findOneById</td>
-                <td class="num">37.7</td>
-                <td class="num"><strong class="best">35.3</strong></td>
-                <td class="num"><span class="worst">41.2</span></td>
-                <td class="num">38.3</td>
+                <td class="num">37.2</td>
+                <td class="num"><strong class="best">35.1</strong></td>
+                <td class="num"><span class="worst">40.6</span></td>
+                <td class="num">37.9</td>
             </tr>
             <tr>
                 <td>findAll (~100 docs)</td>
-                <td class="num">326.6</td>
-                <td class="num"><strong class="best">157.8</strong></td>
-                <td class="num"><span class="worst">935.5</span></td>
-                <td class="num">642.6</td>
+                <td class="num">326.4</td>
+                <td class="num"><strong class="best">157.5</strong></td>
+                <td class="num"><span class="worst">928.4</span></td>
+                <td class="num">643.9</td>
             </tr>
             <tr>
                 <td>findStream (~100 docs)</td>
-                <td class="num">375.9</td>
-                <td class="num"><strong class="best">210.3</strong></td>
-                <td class="num"><span class="worst">2830.5</span></td>
-                <td class="num">2566.3</td>
+                <td class="num">379.7</td>
+                <td class="num"><strong class="best">211.2</strong></td>
+                <td class="num"><span class="worst">2850.6</span></td>
+                <td class="num">2573.1</td>
             </tr>
             <tr>
                 <td>updateOne</td>
-                <td class="num"><strong class="best">23.5</strong></td>
-                <td class="num">23.6</td>
-                <td class="num"><span class="worst">24.1</span></td>
-                <td class="num">23.9</td>
+                <td class="num">23.3</td>
+                <td class="num"><strong class="best">23.2</strong></td>
+                <td class="num"><span class="worst">23.6</span></td>
+                <td class="num">23.5</td>
             </tr>
             <tr>
                 <td>count</td>
-                <td class="num"><span class="worst">33.2</span></td>
-                <td class="num">33.2</td>
-                <td class="num">33.0</td>
-                <td class="num"><strong class="best">32.9</strong></td>
+                <td class="num">32.8</td>
+                <td class="num"><span class="worst">32.9</span></td>
+                <td class="num">32.5</td>
+                <td class="num"><strong class="best">32.5</strong></td>
             </tr>
         </table>
     <p class="muted">
         <strong>bson-direct allocates less than bson-medeia wherever a document actually passes through the
         codec</strong> — the AST-free advantage measured in isolation above survives end-to-end through a real driver
         round trip. The gap tracks how many documents a call encodes or decodes: <strong>11%</strong> for one,
-        <strong>39%</strong> on <code>insertMany</code>, <strong>44–52%</strong> on
+        <strong>41%</strong> on <code>insertMany</code>, <strong>44–52%</strong> on
         <code>findAll</code>/<code>findStream</code>. On <code>updateOne</code> and <code>count</code> the two are
         level to three digits, the expected result rather than a surprise, since neither encodes or decodes an entity.
         On the bulk reads mongo4cats allocates up to <strong>13×</strong> more than either mongo4s config — its own

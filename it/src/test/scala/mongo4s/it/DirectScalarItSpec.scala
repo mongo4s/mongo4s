@@ -28,7 +28,7 @@ object DirectScalarItSpec:
 final class DirectScalarItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAfterAll:
   import DirectScalarItSpec.*
 
-  private val container = new MongoDBContainer("mongo:7")
+  private val container = new MongoDBContainer("mongo:8.2")
 
   override def beforeAll(): Unit = container.start()
   override def afterAll(): Unit  = container.stop()

@@ -21,7 +21,7 @@ import mongo4s.bson.BsonInstances.given
 
 final class ExplainItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAfterAll:
 
-  private val container = new MongoDBContainer("mongo:7")
+  private val container = new MongoDBContainer("mongo:8.2")
 
   override def beforeAll(): Unit = container.start()
   override def afterAll(): Unit  = container.stop()
@@ -158,9 +158,11 @@ final class ExplainItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAn
           optimised  <- collection
                           .aggregate[BsonDocument](Seq(Stage.matching(email.equalTo("a@b.c"))))
                           .explain()
+          // $facet is not eligible for the slot-based plan, so the server keeps it as a stages array.
+          // A $group is not a safe choice here: 8.2 pushes it into the query planner, where 7 did not.
           staged     <- collection
                           .aggregate[BsonDocument](
-                            Seq(Stage.groupBy(city)("n" -> mongo4s.operations.Accumulator.count[BsonDocument]))
+                            Seq(Stage.facet("byCity" -> List(Stage.groupBy(city)("n" -> mongo4s.operations.Accumulator.count[BsonDocument]))))
                           )
                           .explain()
         yield (optimised, staged)

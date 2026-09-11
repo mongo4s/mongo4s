@@ -44,7 +44,7 @@ object NamingItSpec:
 final class NamingItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAfterAll:
   import NamingItSpec.Person
 
-  private val container = new MongoDBContainer("mongo:7")
+  private val container = new MongoDBContainer("mongo:8.2")
 
   override def beforeAll(): Unit = container.start()
   override def afterAll(): Unit  = container.stop()

@@ -1596,10 +1596,10 @@ Six JMH harnesses in [`benchmarks/`](benchmarks), against `mongo4cats` as a refe
 `bson-direct`'s `WireCodec` writes and reads real BSON bytes **2.7–3.2×** faster than either `mongo4cats` codec and
 allocates up to **6.9×** less; against a real `MongoDB` every single-document operation lands inside run-to-run
 error for all six stacks, while bulk reads pull ahead — `mongo4cats` allocates **2.0–13×** more on
-`findAll`/`findStream`, and its `find(...).stream` runs at **14 ops/s** against `mongo4s`'s **193**.
+`findAll`/`findStream`, and its `find(...).stream` runs at **10 ops/s** against `mongo4s`'s **232**.
 
 Those server-backed rates are latency-bound on the machine they were measured on — `MongoDB` in Docker on macOS,
-where a bare `ping` inside the container already costs 2.4 ms. They compare stacks honestly; read them as ratios
+where a bare `ping` inside the container already costs over 2 ms. They compare stacks honestly; read them as ratios
 rather than as throughput a server can deliver.
 
 Every table, the methodology and the commands to reproduce them: **[BENCHMARKS.md](BENCHMARKS.md)**.

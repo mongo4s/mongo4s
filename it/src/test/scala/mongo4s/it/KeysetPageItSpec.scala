@@ -30,7 +30,7 @@ final class KeysetPageItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befor
   import KeysetPageItSpec.{Key, Reading}
   import KeysetPageItSpec.Reading.given
 
-  private val container = new MongoDBContainer("mongo:7")
+  private val container = new MongoDBContainer("mongo:8.2")
 
   override def beforeAll(): Unit = container.start()
   override def afterAll(): Unit  = container.stop()

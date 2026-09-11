@@ -16,7 +16,7 @@ object WatchFixture:
   val Hello: BsonDocument = BsonDocument().append("hello", BsonInt32(1))
 
   private lazy val container: MongoDBContainer =
-    val instance = new MongoDBContainer("mongo:7")
+    val instance = new MongoDBContainer("mongo:8.2")
     instance.start()
     instance
 

@@ -26,7 +26,7 @@ object OmitNoneFieldsItSpec:
 final class OmitNoneFieldsItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAfterAll:
   import OmitNoneFieldsItSpec.{Contact, NullsKept}
 
-  private val container = new MongoDBContainer("mongo:7")
+  private val container = new MongoDBContainer("mongo:8.2")
 
   override def beforeAll(): Unit = container.start()
   override def afterAll(): Unit  = container.stop()
