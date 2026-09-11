@@ -43,8 +43,8 @@ flowchart LR
 * [Runtime backends](#runtime-backends)
 * [Modules](#modules)
 * [Benchmarks](#benchmarks)
-* [Adopters](#adopters)
 * [Design notes](#design-notes)
+* [Adopters](#adopters)
 * [Changelog](CHANGELOG.md)
 * [Roadmap](ROADMAP.md)
 * [Contributing](#contributing)
@@ -1604,17 +1604,6 @@ rather than as throughput a server can deliver.
 
 Every table, the methodology and the commands to reproduce them: **[BENCHMARKS.md](BENCHMARKS.md)**.
 
-## Adopters
-
-<a href="https://betby.com">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="logos/betby.svg"/>
-    <img src="logos/betby-dark.svg" alt="Betby" height="56"/>
-  </picture>
-</a>
-
-Using mongo4s? Open a PR to add your logo.
-
 ## Design notes
 
 Four decisions the rest of the library follows from: **Scala 3 only**, so field selectors can be macros and codecs
@@ -1625,6 +1614,17 @@ or against an in-memory buffer.
 
 Each of those, the failure that motivated it, the sharp edges accepted along the way, and what was rejected:
 **[DESIGN.md](DESIGN.md)**.
+
+## Adopters
+
+<a href="https://betby.com">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="logos/betby.svg"/>
+    <img src="logos/betby-dark.svg" alt="Betby" height="56"/>
+  </picture>
+</a>
+
+Using mongo4s? Open a PR to add your logo.
 
 ## Contributing
 
