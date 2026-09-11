@@ -3,13 +3,33 @@ import com.typesafe.tools.mima.plugin.MimaKeys.mimaPreviousArtifacts
 
 lazy val binaryCompatibleWith = Set.empty[String]
 
+// Every module is built and published for one JDK. `mongo4s-kyo` forces the floor: kyo's `Frame` macro runs inside
+// the compiler and its class files target Java 25, so anything older cannot compile that module at all. Rather than
+// let four modules build and the fifth fail with `UnsupportedClassVersionError: class file version 69.0`, the build
+// refuses up front and says why.
+lazy val requiredJdk = 25
+
+lazy val checkedJdk: Int = {
+  val running = sys.props.getOrElse("java.specification.version", "unknown")
+  val major   = running.split('.').headOption.flatMap(_.toIntOption).getOrElse(0)
+
+  if major < requiredJdk then
+    sys.error(
+      s"mongo4s requires JDK $requiredJdk or newer; this build is running on JDK $running. " +
+        "mongo4s-kyo's class files target Java 25 and cannot be compiled by an older JDK. " +
+        "Point JAVA_HOME at a JDK 25 install (`cs java --jvm 25`, or `brew install openjdk@25`) and retry."
+    )
+
+  major
+}
+
 // Pinned rather than `future`, because on 3.9 `-source:future` means 3.10 semantics — a moving target under a
 // published library. CI overrides it in an advisory job
 // (`sbt 'set every sourceLevel := "future"; Test/compile'`), so a break in the next Scala release shows up there
 // instead of in the build everyone depends on.
 lazy val sourceLevel = settingKey[String]("Scala -source level the build compiles against")
 
-lazy val commonSettings = Seq(
+lazy val commonSettings = { val _ = checkedJdk; Seq(
   organization           := "org.mongo4s",
   organizationName       := "Mongo4s",
   homepage               := Some(uri("https://mongo4s.org/")),
@@ -61,7 +81,7 @@ lazy val commonSettings = Seq(
   ),
   credentials ++= Seq(Path.userHome / ".sbt" / "sonatype_credentials").filter(_.isFile).map(Credentials(_)),
   mimaPreviousArtifacts  := binaryCompatibleWith.map(organization.value %% moduleName.value % _),
-)
+) }
 
 lazy val bsonCore = project
   .in(file("bson/core"))

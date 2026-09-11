@@ -109,6 +109,11 @@ part of `2.0.0` below.
 - `RsBridgeConfig` is a `final class` with a private constructor and `withX` builders, and `RsBridgeConfig.Default`
   is now `RsBridgeConfig.default` — the same shape every other options type already had, and the last one that could
   not gain a field without a major. `bufferSize` must now be positive.
+- **`JDK 25` is now required to build**, and the build says so before compiling anything instead of failing on the
+  fifth module with `UnsupportedClassVersionError: class file version 69.0`. `mongo4s-kyo` sets the floor — kyo's
+  `Frame` macro runs inside the compiler and emits Java 25 class files — and the whole build follows it rather than
+  publishing artifacts compiled against different JDKs. This is a build-time requirement; the published artifacts
+  themselves are unaffected.
 - **`Scala 3.9 LTS` is now required**, and it is the only Scala version the build uses. `mongo4s-bson-calypso`,
   `mongo4s-kyo` and `mongo4s-rapid` were pinned to a fast-release `3.8` because their dependencies needed a
   compiler newer than `3.3 LTS`; they are now on the LTS line with every other module. It takes a major version

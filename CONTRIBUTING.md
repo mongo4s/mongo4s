@@ -19,8 +19,12 @@ skipping it.
 
 ## Building
 
-Tested against JDK 25 (LTS) — that's what CI uses. `Scala 3.9` itself needs only JDK 17, but anything
-touching `kyo` needs 25, so 25 is the one to reach for.
+**JDK 25 (LTS) is required**, and the build checks it before doing anything: on an older JDK it stops with a
+message naming the version it found rather than letting four modules compile and `mongo4s-kyo` fail with
+`UnsupportedClassVersionError: class file version 69.0`. `Scala 3.9` itself would run on JDK 17, but kyo's `Frame`
+macro runs inside the compiler and emits Java 25 class files, so the whole build follows the module with the
+highest floor rather than publishing artifacts built against different JDKs. `cs java --jvm 25` or
+`brew install openjdk@25` gets you one; CI uses the same.
 
 Publishing credentials live in `~/.sbt/sonatype_credentials`, outside the repository: one file for every project
 that publishes, out of reach of `git clean -xfd`, and with no ignore rule that has to be right. A checkout without

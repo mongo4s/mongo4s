@@ -427,4 +427,7 @@ not read forward.
 compatibility promise the other artifacts make.
 
 Compiling any module that touches kyo requires `JDK 25` — the `kyo.Frame` macro runs inside the compiler and its
-class files target `Java 25`, so this is a compile-time requirement, not just a runtime one.
+class files target `Java 25`, so this is a compile-time requirement, not just a runtime one. Since `3.0.0` the build
+enforces it for **every** module: it refuses to load on an older JDK, naming the version it found. One JDK across
+the build is deliberate — the alternative is publishing artifacts compiled against different JDKs, and a failure
+that only appears once the fifth module is reached.

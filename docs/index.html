@@ -1518,9 +1518,13 @@ given RsBridgeConfig = RsBridgeConfig(
                 module: <code>mongo4s-bson-calypso</code>, <code>mongo4s-kyo</code> and <code>mongo4s-rapid</code>,
                 which used to be pinned to a fast-release <code>3.8</code>, are on the LTS line with the rest.
                 <code>mongo4s-kyo</code> depends on a kyo release candidate and sits outside the binary compatibility
-                promise the other artifacts make until kyo reaches <code>1.0.0</code> final. Compiling any module that
-                touches kyo requires <strong>JDK 25</strong>: kyo's <code>Frame</code> macro runs inside the compiler
-                and its class files target Java 25, so this is a compile-time requirement, not just a runtime one.
+                promise the other artifacts make until kyo reaches <code>1.0.0</code> final. Compiling any module that touches kyo requires <strong>JDK 25</strong>: kyo's <code>Frame</code> macro runs
+                inside the compiler and its class files target Java 25. Since <code>3.0.0</code> the build enforces
+                that for <em>every</em> module and refuses to load on an older JDK, naming the version it found,
+                rather than letting four modules compile and the fifth fail with
+                <code>UnsupportedClassVersionError: class file version 69.0</code>. One JDK across the build is
+                deliberate — the alternative is publishing artifacts compiled against different JDKs. It is a
+                build-time requirement; the published artifacts are unaffected.
     </p>
 
     <h2 id="benchmarks">Benchmarks</h2>
