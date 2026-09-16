@@ -6,8 +6,52 @@
     <title>mongo4s — effect-agnostic MongoDB client for Scala 3</title>
     <meta name="description"
           content="Effect-agnostic MongoDB client and repository layer for Scala 3 — any runtime, any BSON codec, AST-free by default."/>
+    <link rel="canonical" href="https://mongo4s.org/"/>
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)"/>
+    <meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)"/>
+
+    <meta property="og:type" content="website"/>
+    <meta property="og:site_name" content="mongo4s"/>
+    <meta property="og:url" content="https://mongo4s.org/"/>
+    <meta property="og:title" content="mongo4s — effect-agnostic MongoDB client for Scala 3"/>
+    <meta property="og:description"
+          content="MongoDB client and repository layer for Scala 3 that works with cats-effect, ZIO, Kyo or rapid, and with any BSON codec. AST-free encoding by default."/>
+    <meta property="og:image" content="https://mongo4s.org/mongo4s.png"/>
+    <meta property="og:image:alt" content="mongo4s logo"/>
+
+    <meta name="twitter:card" content="summary_large_image"/>
+    <meta name="twitter:title" content="mongo4s — effect-agnostic MongoDB client for Scala 3"/>
+    <meta name="twitter:description"
+          content="MongoDB client and repository layer for Scala 3 that works with cats-effect, ZIO, Kyo or rapid, and with any BSON codec. AST-free encoding by default."/>
+    <meta name="twitter:image" content="https://mongo4s.org/mongo4s.png"/>
+
     <link rel="icon" type="image/png" sizes="64x64" href="favicon.png"/>
     <link rel="apple-touch-icon" href="apple-touch-icon.png"/>
+
+    <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "SoftwareSourceCode",
+            "name": "mongo4s",
+            "description": "Effect-agnostic MongoDB client and repository layer for Scala 3 — any runtime, any BSON codec, AST-free by default.",
+            "url": "https://mongo4s.org/",
+            "codeRepository": "https://github.com/mongo4s/mongo4s",
+            "programmingLanguage": {
+                "@type": "ComputerLanguage",
+                "name": "Scala",
+                "url": "https://www.scala-lang.org/"
+            },
+            "runtimePlatform": "JVM",
+            "license": "https://www.apache.org/licenses/LICENSE-2.0",
+            "applicationCategory": "DeveloperApplication",
+            "keywords": "MongoDB, Scala 3, cats-effect, ZIO, Kyo, rapid, fs2, BSON, database driver, repository",
+            "about": {
+                "@type": "SoftwareApplication",
+                "name": "MongoDB",
+                "applicationCategory": "DatabaseApplication"
+            }
+        }
+    </script>
     <style>
         :root {
             --bg: #ffffff;
@@ -18,6 +62,13 @@
             --border: #d0d7de;
             --good: #1a7f37;
             --bad: #cf222e;
+            --hl-keyword: #cf222e;
+            --hl-string: #0a3069;
+            --hl-comment: #6e7781;
+            --hl-number: #0550ae;
+            --hl-type: #953800;
+            --hl-func: #8250df;
+            --aside-bg: #f6f8fa80;
         }
 
         @media (prefers-color-scheme: dark) {
@@ -30,6 +81,13 @@
                 --border: #30363d;
                 --good: #3fb950;
                 --bad: #f85149;
+                --hl-keyword: #ff7b72;
+                --hl-string: #a5d6ff;
+                --hl-comment: #8b949e;
+                --hl-number: #79c0ff;
+                --hl-type: #ffa657;
+                --hl-func: #d2a8ff;
+                --aside-bg: #161b2280;
             }
         }
 
@@ -280,6 +338,191 @@
                 padding: 0 16px 64px;
             }
         }
+
+        /* long runs of inline code joined by slashes have no break opportunity
+           and used to push the whole page sideways on narrow screens */
+        .wrap p,
+        .wrap li,
+        .wrap td {
+            overflow-wrap: anywhere;
+        }
+
+        .hljs-keyword,
+        .hljs-literal,
+        .hljs-symbol {
+            color: var(--hl-keyword);
+        }
+
+        .hljs-string,
+        .hljs-meta .hljs-string {
+            color: var(--hl-string);
+        }
+
+        .hljs-comment,
+        .hljs-quote {
+            color: var(--hl-comment);
+            font-style: italic;
+        }
+
+        .hljs-number {
+            color: var(--hl-number);
+        }
+
+        .hljs-type,
+        .hljs-class .hljs-title,
+        .hljs-built_in,
+        .hljs-meta {
+            color: var(--hl-type);
+        }
+
+        .hljs-title,
+        .hljs-function .hljs-title,
+        .hljs-params {
+            color: var(--hl-func);
+        }
+
+        pre {
+            position: relative;
+        }
+
+        .copy {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            padding: 3px 9px;
+            font: inherit;
+            font-size: 0.72rem;
+            line-height: 1.5;
+            color: var(--muted);
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.12s ease;
+        }
+
+        pre:hover .copy,
+        .copy:focus-visible {
+            opacity: 1;
+        }
+
+        .copy:hover {
+            color: var(--fg);
+            border-color: var(--muted);
+        }
+
+        .copy.done {
+            opacity: 1;
+            color: var(--good);
+            border-color: var(--good);
+        }
+
+        .install {
+            margin: 28px 0 4px;
+        }
+
+        .install pre {
+            margin: 0;
+        }
+
+        .install-note {
+            margin: 8px 0 0;
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+
+        /* asides carry most of the sharp-edge warnings; give them an outline so
+           they stop reading as more body prose */
+        .wrap p.muted {
+            padding: 2px 0 2px 14px;
+            border-left: 3px solid var(--border);
+            background: var(--aside-bg);
+        }
+
+        .toc {
+            display: none;
+        }
+
+        .to-top {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            width: 40px;
+            height: 40px;
+            font-size: 1rem;
+            line-height: 1;
+            color: var(--muted);
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 50%;
+            cursor: pointer;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+        }
+
+        .to-top.on {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .to-top:hover {
+            color: var(--fg);
+            border-color: var(--muted);
+        }
+
+        @media (min-width: 1260px) {
+            .toc {
+                display: block;
+                position: fixed;
+                top: 0;
+                left: calc(50% - 410px - 214px);
+                width: 190px;
+                max-height: 100vh;
+                padding: 28px 0;
+                overflow-y: auto;
+                font-size: 0.83rem;
+                line-height: 1.45;
+                scrollbar-width: thin;
+            }
+
+            .toc-label {
+                margin: 0 0 10px;
+                font-size: 0.72rem;
+                font-weight: 600;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                color: var(--muted);
+            }
+
+            .toc a {
+                display: block;
+                padding: 3px 0 3px 10px;
+                color: var(--muted);
+                text-decoration: none;
+                border-left: 2px solid var(--border);
+            }
+
+            .toc a:hover {
+                color: var(--fg);
+            }
+
+            .toc a.sub {
+                padding-left: 22px;
+                font-size: 0.78rem;
+            }
+
+            /* display:block above would otherwise beat the UA's [hidden] rule */
+            .toc a[hidden] {
+                display: none;
+            }
+
+            .toc a.on {
+                color: var(--accent);
+                border-left-color: var(--accent);
+            }
+        }
     </style>
 </head>
 <body>
@@ -306,6 +549,13 @@
             <a href="https://central.sonatype.com/search?q=mongo4s">Maven Central</a>
             <a href="https://github.com/mongo4s/mongo4s/blob/main/LICENSE">Apache 2.0</a>
         </nav>
+
+        <div class="install">
+            <pre><code>libraryDependencies += "org.mongo4s" %% "mongo4s-cats" % "3.0.0"</code></pre>
+            <p class="install-note">On another runtime, swap the module: <code>mongo4s-zio</code>,
+                <code>mongo4s-kyo</code> or <code>mongo4s-rapid</code>. Codecs and repositories are separate
+                modules — see <a href="#start">Quick start</a>.</p>
+        </div>
     </header>
 
     <nav class="jump">
@@ -317,6 +567,7 @@
         <a href="#modules">Modules</a> ·
         <a href="#benchmarks">Benchmarks</a> ·
         <a href="#design">Design notes</a> ·
+        <a href="#adopters">Adopters</a> ·
         <a href="https://github.com/mongo4s/mongo4s/blob/main/CHANGELOG.md">Changelog</a> ·
         <a href="https://github.com/mongo4s/mongo4s/blob/main/ROADMAP.md">Roadmap</a>
     </nav>
@@ -375,7 +626,8 @@ object Main extends IOApp.Simple:
         <code>mongo4s-rapid</code> and the matching <code>*Instances.given</code> import to change runtime — the body
         of the <code>for</code> is identical. What changes is how you take the client: cats gives you a
         <code>Resource</code> to <code>.use</code>, ZIO a scoped <code>ZIO</code> and kyo a <code>Scope</code> effect,
-        and rapid takes the body as a function. <code>BsonEncoder</code>/<code>BsonDecoder</code> for built-in types (<code>String</code>, <code>Int</code>,
+        and rapid takes the body as a function. <code>BsonEncoder</code>/<code>BsonDecoder</code> for built-in types
+        (<code>String</code>, <code>Int</code>,
         <code>Option</code>, <code>List</code>, <code>Vector</code>, <code>Set</code>, <code>Seq</code>, …) resolve with
         no import at all.</p>
     <p class="muted">
@@ -428,9 +680,9 @@ collection.insertOne(other)      // still the client's default</code></pre>
         reflection — and gives you a typed path to build filters, updates, and sorts:
     </p>
     <pre><code>val adults = Field.of[User, Int](_.age).gte(18)
-val named = Field.of[User, String](_.name).equalTo("Jenna") && adults
+val named  = Field.of[User, String](_.name).equalTo("Jenna") && adults
 val setAge = Field.of[User, Int](_.age).set(27)
-val city = Field.of[Order, String](_.address.city).equalTo("Barcelona") // dotted paths from nested selectors</code></pre>
+val city   = Field.of[Order, String](_.address.city).equalTo("Barcelona") // dotted paths from nested selectors</code></pre>
     <p class="muted">
         Each segment is checked against the case class it is selected from, so <code>_.name.length</code> and
         <code>_.items.head.sku</code> are compile errors rather than paths that render fine and match nothing.
@@ -598,13 +850,36 @@ collection.insertOne(user).recoverWith {
             <th>Case</th>
             <th>Raised for</th>
         </tr>
-        <tr><td><code>DuplicateKey</code></td><td>a unique index violation</td></tr>
-        <tr><td><code>WriteConflict</code></td><td>two transactions touching the same document</td></tr>
-        <tr><td><code>ExecutionTimeout</code></td><td><code>maxTime</code> expired, or the server's own limit</td></tr>
-        <tr><td><code>Unauthorized</code></td><td>the credentials do not allow the operation</td></tr>
-        <tr><td><code>Unavailable</code></td><td>the socket failed, or no server could be selected</td></tr>
-        <tr><td><code>BulkWriteFailed</code></td><td>one bulk command, several failures &mdash; <code>failures</code> keeps them all, <code>duplicateKeys</code> filters</td></tr>
-        <tr><td><code>Failed</code></td><td>anything else the server reported, with its <code>code</code> intact</td></tr>
+        <tr>
+            <td><code>DuplicateKey</code></td>
+            <td>a unique index violation</td>
+        </tr>
+        <tr>
+            <td><code>WriteConflict</code></td>
+            <td>two transactions touching the same document</td>
+        </tr>
+        <tr>
+            <td><code>ExecutionTimeout</code></td>
+            <td><code>maxTime</code> expired, or the server's own limit</td>
+        </tr>
+        <tr>
+            <td><code>Unauthorized</code></td>
+            <td>the credentials do not allow the operation</td>
+        </tr>
+        <tr>
+            <td><code>Unavailable</code></td>
+            <td>the socket failed, or no server could be selected</td>
+        </tr>
+        <tr>
+            <td><code>BulkWriteFailed</code></td>
+            <td>one bulk command, several failures &mdash; <code>failures</code> keeps them all,
+                <code>duplicateKeys</code> filters
+            </td>
+        </tr>
+        <tr>
+            <td><code>Failed</code></td>
+            <td>anything else the server reported, with its <code>code</code> intact</td>
+        </tr>
     </table>
     <p class="muted">
         Every case carries <code>cause</code>, the driver's own exception, so nothing is lost &mdash; along with
@@ -678,8 +953,10 @@ yield ()</code></pre>
         Every <code>MongoClient</code>/<code>MongoDatabase</code>/<code>MongoCollection</code>/<code>Repository</code>
         method that reaches the server accepts the same <code>(using session: Option[ClientSession] = None)</code>, so a
         <code>BaseMongoRepository</code> call can join an existing transaction the same way a raw
-        <code>collection</code> call can. <code>MongoSession.startTransaction</code>/<code>commitTransaction</code>/<code>abortTransaction</code>
-        are there for the fully manual path, where you pass the session explicitly with <code>(using Some(session))</code>
+        <code>collection</code> call can.
+        <code>MongoSession.startTransaction</code>/<code>commitTransaction</code>/<code>abortTransaction</code>
+        are there for the fully manual path, where you pass the session explicitly with <code>(using
+        Some(session))</code>
         at each call site — nothing is automatic there, including the rollback. Transactions need a replica set or
         sharded cluster.
     </p>
@@ -735,7 +1012,8 @@ val byAge = Seq(
         with <code>Stage.raw(document)</code> as the escape hatch for anything else.
     </p>
     <p>
-        <code>$lookup</code> has two forms: <code>Stage.lookup</code> is the equality join, <code>Stage.lookupWith</code>
+        <code>$lookup</code> has two forms: <code>Stage.lookup</code> is the equality join,
+        <code>Stage.lookupWith</code>
         takes a sub-pipeline over the foreign collection with <code>let</code> binding values from the outer document.
         <code>Stage.graphLookup</code> walks a self-referencing hierarchy. Both take a second type parameter, because
         the sub-pipeline and the connect fields belong to the <strong>foreign</strong> collection rather than to
@@ -1042,12 +1320,13 @@ final case class Person(firstName: String, lastName: String) derives WireCodec /
         configurable: start from <code>WireCodecConfig.Default</code> (or <code>SnakeCase</code>) and chain
         <code>withFieldNaming</code>, <code>withDiscriminatorNaming</code>, <code>withEncodeEmptyCasesAsString</code>,
         <code>withOmitNoneFields</code> — the same shape <code>WatchOptions</code> uses, and the reason new derivation
-        options can be added in a minor release without breaking binary compatibility. <code>getDirectCollection</code> takes no <code>naming</code> of its own: the codec
-                is what writes the field names, so it is what decides how a query spells them, and a derived
-                <code>WireCodec</code> reports the <code>WireCodecConfig</code> it was built with.
-                <code>getCollection</code> still takes the parameter, because a <code>BsonDocumentCodec</code> from
-                medeia, calypso or zio-bson carries its own naming configuration mongo4s cannot read; there it still has
-                to match the codec.
+        options can be added in a minor release without breaking binary compatibility. <code>getDirectCollection</code>
+        takes no <code>naming</code> of its own: the codec
+        is what writes the field names, so it is what decides how a query spells them, and a derived
+        <code>WireCodec</code> reports the <code>WireCodecConfig</code> it was built with.
+        <code>getCollection</code> still takes the parameter, because a <code>BsonDocumentCodec</code> from
+        medeia, calypso or zio-bson carries its own naming configuration mongo4s cannot read; there it still has
+        to match the codec.
         <code>encodeEmptyCasesAsString = true</code> writes a parameterless case as a bare BSON string instead of a
         <code>{"_type": "..."}</code> document — only safe when nested inside another document, not at the root.
     </p>
@@ -1315,7 +1594,8 @@ users.getByFilter(adults, Page.first(100))  // same, as a stream</code></pre>
         <code>arrayFilters</code> throw <code>UnsupportedOperationException</code> naming what was asked for, rather
         than quietly answering wrong.
         Replace-based upserts — what <code>upsert</code>/<code>upsertMany</code> go through — insert on a miss the way
-        the server does; an <code>update</code>-based <code>UpdateOptions.upsert</code> that matches nothing throws instead of
+        the server does; an <code>update</code>-based <code>UpdateOptions.upsert</code> that matches nothing throws
+        instead of
         guessing what the operators would have built.
     </p>
 
@@ -1495,14 +1775,14 @@ given RsBridgeConfig = RsBridgeConfig(
     </ul>
     <p>
         <strong>3.0.0 is a breaking release.</strong> <code>WireCodec</code> no longer derives itself for
-                any case class it meets: a field whose type has no codec is a compile error naming the type, instead of a
-                codec derived behind your back. Driver exceptions no longer reach your code &mdash;
-                <code>MongoWriteException</code> and friends arrive as <code>MongoError</code>, with the driver's own
-                exception still reachable on <code>cause</code>. <code>Repository</code>'s condition methods now say what
-                they take (<code>findByField</code>, <code>updateByFilter</code>, <code>deleteByFilter</code>,
-                <code>getByFilter</code>), and its inserts return the entity's key instead of a raw
-                <code>BsonValue</code>. <code>Scala 3.9 LTS</code> is required. The compiler catches every change; none
-                is silent.
+        any case class it meets: a field whose type has no codec is a compile error naming the type, instead of a
+        codec derived behind your back. Driver exceptions no longer reach your code &mdash;
+        <code>MongoWriteException</code> and friends arrive as <code>MongoError</code>, with the driver's own
+        exception still reachable on <code>cause</code>. <code>Repository</code>'s condition methods now say what
+        they take (<code>findByField</code>, <code>updateByFilter</code>, <code>deleteByFilter</code>,
+        <code>getByFilter</code>), and its inserts return the entity's key instead of a raw
+        <code>BsonValue</code>. <code>Scala 3.9 LTS</code> is required. The compiler catches every change; none
+        is silent.
     </p>
     <p class="muted">
         The full 2.x → 3.0 migration guide, including the corrected behaviours, is in
@@ -1513,18 +1793,19 @@ given RsBridgeConfig = RsBridgeConfig(
     </p>
     <p class="muted">
         <code>3.0.0</code> moves the whole build onto <strong>Scala 3.9 LTS</strong> and drops
-                <code>3.3 LTS</code>. <code>TASTy</code> is not forward compatible, and that is a break MiMa cannot see,
-                which is why it takes a major rather than a minor. What it buys is one Scala version across every
-                module: <code>mongo4s-bson-calypso</code>, <code>mongo4s-kyo</code> and <code>mongo4s-rapid</code>,
-                which used to be pinned to a fast-release <code>3.8</code>, are on the LTS line with the rest.
-                <code>mongo4s-kyo</code> depends on a kyo release candidate and sits outside the binary compatibility
-                promise the other artifacts make until kyo reaches <code>1.0.0</code> final. Compiling any module that touches kyo requires <strong>JDK 25</strong>: kyo's <code>Frame</code> macro runs
-                inside the compiler and its class files target Java 25. Since <code>3.0.0</code> the build enforces
-                that for <em>every</em> module and refuses to load on an older JDK, naming the version it found,
-                rather than letting four modules compile and the fifth fail with
-                <code>UnsupportedClassVersionError: class file version 69.0</code>. One JDK across the build is
-                deliberate — the alternative is publishing artifacts compiled against different JDKs. It is a
-                build-time requirement; the published artifacts are unaffected.
+        <code>3.3 LTS</code>. <code>TASTy</code> is not forward compatible, and that is a break MiMa cannot see,
+        which is why it takes a major rather than a minor. What it buys is one Scala version across every
+        module: <code>mongo4s-bson-calypso</code>, <code>mongo4s-kyo</code> and <code>mongo4s-rapid</code>,
+        which used to be pinned to a fast-release <code>3.8</code>, are on the LTS line with the rest.
+        <code>mongo4s-kyo</code> depends on a kyo release candidate and sits outside the binary compatibility
+        promise the other artifacts make until kyo reaches <code>1.0.0</code> final. Compiling any module that touches
+        kyo requires <strong>JDK 25</strong>: kyo's <code>Frame</code> macro runs
+        inside the compiler and its class files target Java 25. Since <code>3.0.0</code> the build enforces
+        that for <em>every</em> module and refuses to load on an older JDK, naming the version it found,
+        rather than letting four modules compile and the fifth fail with
+        <code>UnsupportedClassVersionError: class file version 69.0</code>. One JDK across the build is
+        deliberate — the alternative is publishing artifacts compiled against different JDKs. It is a
+        build-time requirement; the published artifacts are unaffected.
     </p>
 
     <h2 id="benchmarks">Benchmarks</h2>
@@ -1536,46 +1817,46 @@ given RsBridgeConfig = RsBridgeConfig(
     </p>
 
     <h3>Codec backends — to <code>org.bson.BsonDocument</code></h3>
-        <table>
-            <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
-                Encode / decode straight to org.bson.BsonDocument
-            </caption>
-            <tr>
-                <th>Codec</th>
-                <th class="num">Encode ops/s</th>
-                <th class="num">Decode ops/s</th>
-            </tr>
-            <tr>
-                <td>mongo4s-bson-direct (via DocumentCodecBridge)</td>
-                <td class="num">~2.74M</td>
-                <td class="num">~2.07M</td>
-            </tr>
-            <tr>
-                <td>calypso (forProductN)</td>
-                <td class="num">~4.22M</td>
-                <td class="num">~3.67M</td>
-            </tr>
-            <tr>
-                <td>medeia (derives)</td>
-                <td class="num">~2.42M</td>
-                <td class="num">~2.72M</td>
-            </tr>
-            <tr>
-                <td>zio-bson (zio-schema derived)</td>
-                <td class="num">~1.31M</td>
-                <td class="num">~2.71M</td>
-            </tr>
-            <tr>
-                <td>mongo4cats-zio-json</td>
-                <td class="num">~1.25M</td>
-                <td class="num">~1.12M</td>
-            </tr>
-            <tr>
-                <td>mongo4cats-circe</td>
-                <td class="num">~1.21M</td>
-                <td class="num">~795k</td>
-            </tr>
-        </table>
+    <table>
+        <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
+            Encode / decode straight to org.bson.BsonDocument
+        </caption>
+        <tr>
+            <th>Codec</th>
+            <th class="num">Encode ops/s</th>
+            <th class="num">Decode ops/s</th>
+        </tr>
+        <tr>
+            <td>mongo4s-bson-direct (via DocumentCodecBridge)</td>
+            <td class="num">~2.74M</td>
+            <td class="num">~2.07M</td>
+        </tr>
+        <tr>
+            <td>calypso (forProductN)</td>
+            <td class="num">~4.22M</td>
+            <td class="num">~3.67M</td>
+        </tr>
+        <tr>
+            <td>medeia (derives)</td>
+            <td class="num">~2.42M</td>
+            <td class="num">~2.72M</td>
+        </tr>
+        <tr>
+            <td>zio-bson (zio-schema derived)</td>
+            <td class="num">~1.31M</td>
+            <td class="num">~2.71M</td>
+        </tr>
+        <tr>
+            <td>mongo4cats-zio-json</td>
+            <td class="num">~1.25M</td>
+            <td class="num">~1.12M</td>
+        </tr>
+        <tr>
+            <td>mongo4cats-circe</td>
+            <td class="num">~1.21M</td>
+            <td class="num">~795k</td>
+        </tr>
+    </table>
     <p class="muted">
         Every mongo4s codec bridge beats both mongo4cats codecs on decode, by <strong>1.8×</strong> at the narrowest
         (bson-direct against zio-json) and <strong>4.6×</strong> at the widest (calypso against circe) — the cost of
@@ -1591,96 +1872,96 @@ given RsBridgeConfig = RsBridgeConfig(
         <code>BsonDocument</code>. That is the trip the driver actually makes, and the only axis on which an AST-free
         codec can be compared to an AST-based one at all.
     </p>
-        <table>
-            <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
-                Encode — case class → BSON bytes
-            </caption>
-            <tr>
-                <th>Backend</th>
-                <th class="num">Throughput</th>
-                <th class="num">Alloc</th>
-            </tr>
-            <tr>
-                <td>hand-written, straight to the wire</td>
-                <td class="num">~2.48M ops/s</td>
-                <td class="num">1824 B/op</td>
-            </tr>
-            <tr>
-                <td><strong>WireCodec</strong></td>
-                <td class="num"><strong class="best">~2.08M ops/s</strong></td>
-                <td class="num">1880 B/op</td>
-            </tr>
-            <tr>
-                <td>calypso</td>
-                <td class="num">~1.42M ops/s</td>
-                <td class="num">3211 B/op</td>
-            </tr>
-            <tr>
-                <td>medeia</td>
-                <td class="num">~1.23M ops/s</td>
-                <td class="num">4592 B/op</td>
-            </tr>
-            <tr>
-                <td>zio-bson</td>
-                <td class="num">~866k ops/s</td>
-                <td class="num">4785 B/op</td>
-            </tr>
-            <tr>
-                <td>mongo4cats-circe</td>
-                <td class="num">~717k ops/s</td>
-                <td class="num">6411 B/op</td>
-            </tr>
-            <tr>
-                <td>mongo4cats-zio-json</td>
-                <td class="num">~651k ops/s</td>
-                <td class="num">5528 B/op</td>
-            </tr>
-        </table>
-        <table>
-            <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
-                Decode — BSON bytes → case class
-            </caption>
-            <tr>
-                <th>Backend</th>
-                <th class="num">Throughput</th>
-                <th class="num">Alloc</th>
-            </tr>
-            <tr>
-                <td><strong>WireCodec</strong></td>
-                <td class="num"><strong class="best">~1.60M ops/s</strong></td>
-                <td class="num">1248 B/op</td>
-            </tr>
-            <tr>
-                <td>hand-written, straight to the wire</td>
-                <td class="num">~1.55M ops/s</td>
-                <td class="num">1088 B/op</td>
-            </tr>
-            <tr>
-                <td>calypso</td>
-                <td class="num">~1.03M ops/s</td>
-                <td class="num">3183 B/op</td>
-            </tr>
-            <tr>
-                <td>medeia</td>
-                <td class="num">~954k ops/s</td>
-                <td class="num">2861 B/op</td>
-            </tr>
-            <tr>
-                <td>zio-bson</td>
-                <td class="num">~864k ops/s</td>
-                <td class="num">2840 B/op</td>
-            </tr>
-            <tr>
-                <td>mongo4cats-zio-json</td>
-                <td class="num">~599k ops/s</td>
-                <td class="num">6313 B/op</td>
-            </tr>
-            <tr>
-                <td>mongo4cats-circe</td>
-                <td class="num">~502k ops/s</td>
-                <td class="num">8552 B/op</td>
-            </tr>
-        </table>
+    <table>
+        <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
+            Encode — case class → BSON bytes
+        </caption>
+        <tr>
+            <th>Backend</th>
+            <th class="num">Throughput</th>
+            <th class="num">Alloc</th>
+        </tr>
+        <tr>
+            <td>hand-written, straight to the wire</td>
+            <td class="num">~2.48M ops/s</td>
+            <td class="num">1824 B/op</td>
+        </tr>
+        <tr>
+            <td><strong>WireCodec</strong></td>
+            <td class="num"><strong class="best">~2.08M ops/s</strong></td>
+            <td class="num">1880 B/op</td>
+        </tr>
+        <tr>
+            <td>calypso</td>
+            <td class="num">~1.42M ops/s</td>
+            <td class="num">3211 B/op</td>
+        </tr>
+        <tr>
+            <td>medeia</td>
+            <td class="num">~1.23M ops/s</td>
+            <td class="num">4592 B/op</td>
+        </tr>
+        <tr>
+            <td>zio-bson</td>
+            <td class="num">~866k ops/s</td>
+            <td class="num">4785 B/op</td>
+        </tr>
+        <tr>
+            <td>mongo4cats-circe</td>
+            <td class="num">~717k ops/s</td>
+            <td class="num">6411 B/op</td>
+        </tr>
+        <tr>
+            <td>mongo4cats-zio-json</td>
+            <td class="num">~651k ops/s</td>
+            <td class="num">5528 B/op</td>
+        </tr>
+    </table>
+    <table>
+        <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
+            Decode — BSON bytes → case class
+        </caption>
+        <tr>
+            <th>Backend</th>
+            <th class="num">Throughput</th>
+            <th class="num">Alloc</th>
+        </tr>
+        <tr>
+            <td><strong>WireCodec</strong></td>
+            <td class="num"><strong class="best">~1.60M ops/s</strong></td>
+            <td class="num">1248 B/op</td>
+        </tr>
+        <tr>
+            <td>hand-written, straight to the wire</td>
+            <td class="num">~1.55M ops/s</td>
+            <td class="num">1088 B/op</td>
+        </tr>
+        <tr>
+            <td>calypso</td>
+            <td class="num">~1.03M ops/s</td>
+            <td class="num">3183 B/op</td>
+        </tr>
+        <tr>
+            <td>medeia</td>
+            <td class="num">~954k ops/s</td>
+            <td class="num">2861 B/op</td>
+        </tr>
+        <tr>
+            <td>zio-bson</td>
+            <td class="num">~864k ops/s</td>
+            <td class="num">2840 B/op</td>
+        </tr>
+        <tr>
+            <td>mongo4cats-zio-json</td>
+            <td class="num">~599k ops/s</td>
+            <td class="num">6313 B/op</td>
+        </tr>
+        <tr>
+            <td>mongo4cats-circe</td>
+            <td class="num">~502k ops/s</td>
+            <td class="num">8552 B/op</td>
+        </tr>
+    </table>
     <p class="muted">
         <code>WireCodec</code> wins both directions against every AST backend — <strong>1.47×</strong> the best of
         them on encode (calypso) and <strong>1.68×</strong> on decode (medeia) — and allocates up to
@@ -1696,26 +1977,26 @@ given RsBridgeConfig = RsBridgeConfig(
         <code>BsonEncoder</code>/<code>BsonDecoder</code>, materializing one <code>org.bson.BsonValue</code> per
         field — the very allocation the path exists to avoid.
     </p>
-        <table>
-            <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
-                Seven fields, four of them ObjectId / UUID / Instant / BigDecimal
-            </caption>
-            <tr>
-                <th>Direction</th>
-                <th class="num">Native ScalarWireCodec</th>
-                <th class="num">Through the BsonValue bridge</th>
-            </tr>
-            <tr>
-                <td>Encode</td>
-                <td class="num"><strong class="best">~2.58M ops/s, 1768 B/op</strong></td>
-                <td class="num">~2.24M ops/s, 2064 B/op</td>
-            </tr>
-            <tr>
-                <td>Decode</td>
-                <td class="num"><strong class="best">~2.05M ops/s, 1248 B/op</strong></td>
-                <td class="num">~1.60M ops/s, 1736 B/op</td>
-            </tr>
-        </table>
+    <table>
+        <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
+            Seven fields, four of them ObjectId / UUID / Instant / BigDecimal
+        </caption>
+        <tr>
+            <th>Direction</th>
+            <th class="num">Native ScalarWireCodec</th>
+            <th class="num">Through the BsonValue bridge</th>
+        </tr>
+        <tr>
+            <td>Encode</td>
+            <td class="num"><strong class="best">~2.58M ops/s, 1768 B/op</strong></td>
+            <td class="num">~2.24M ops/s, 2064 B/op</td>
+        </tr>
+        <tr>
+            <td>Decode</td>
+            <td class="num"><strong class="best">~2.05M ops/s, 1248 B/op</strong></td>
+            <td class="num">~1.60M ops/s, 1736 B/op</td>
+        </tr>
+    </table>
     <p class="muted">
         Decode is where it shows: <strong>1.28×</strong> the throughput and <strong>28%</strong> less garbage, four
         fields out of seven. Both columns write byte-identical BSON — the bridge is not a different format, only a
@@ -1755,29 +2036,29 @@ findOne     1.45–1.97 ms/op</code></pre>
     </p>
 
     <h3>Aggregation through a cursor — real MongoDB</h3>
-        <table>
-            <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
-                Same $match pipeline, decoded three ways
-            </caption>
-            <tr>
-                <th>Documents returned</th>
-                <th class="num">aggregateDirect</th>
-                <th class="num">aggregate + bridge</th>
-                <th class="num">aggregate + medeia</th>
-            </tr>
-            <tr>
-                <td>10</td>
-                <td class="num">262 ops/s</td>
-                <td class="num"><strong class="best">268 ops/s</strong></td>
-                <td class="num">258 ops/s</td>
-            </tr>
-            <tr>
-                <td>10000</td>
-                <td class="num"><strong class="best">69 ops/s</strong></td>
-                <td class="num">50 ops/s</td>
-                <td class="num">58 ops/s</td>
-            </tr>
-        </table>
+    <table>
+        <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
+            Same $match pipeline, decoded three ways
+        </caption>
+        <tr>
+            <th>Documents returned</th>
+            <th class="num">aggregateDirect</th>
+            <th class="num">aggregate + bridge</th>
+            <th class="num">aggregate + medeia</th>
+        </tr>
+        <tr>
+            <td>10</td>
+            <td class="num">262 ops/s</td>
+            <td class="num"><strong class="best">268 ops/s</strong></td>
+            <td class="num">258 ops/s</td>
+        </tr>
+        <tr>
+            <td>10000</td>
+            <td class="num"><strong class="best">69 ops/s</strong></td>
+            <td class="num">50 ops/s</td>
+            <td class="num">58 ops/s</td>
+        </tr>
+    </table>
     <p class="muted">
         Both rows are the point. At ten documents the three sit inside each other's error bars, because the round trip
         is everything and the codec is noise — the honest answer for most CRUD. At ten thousand the decode starts to
@@ -1786,67 +2067,67 @@ findOne     1.45–1.97 ms/op</code></pre>
     </p>
 
     <h3 id="runtime-overhead">Runtime overhead — real MongoDB, every backend</h3>
-        <table>
-            <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
-                Throughput — operations per second, higher is better
-            </caption>
-            <tr>
-                <th>Operation</th>
-                <th class="num">mongo4s+medeia</th>
-                <th class="num">mongo4s+bson-direct</th>
-                <th class="num">mongo4cats+circe</th>
-                <th class="num">mongo4cats+zio-json</th>
-            </tr>
-            <tr>
-                <td>insertOne</td>
-                <td class="num">253</td>
-                <td class="num"><span class="worst">251</span></td>
-                <td class="num"><strong class="best">256</strong></td>
-                <td class="num">253</td>
-            </tr>
-            <tr>
-                <td>insertMany (10 docs)</td>
-                <td class="num"><strong class="best">224</strong></td>
-                <td class="num"><span class="worst">217</span></td>
-                <td class="num">219</td>
-                <td class="num">221</td>
-            </tr>
-            <tr>
-                <td>findOneById</td>
-                <td class="num"><span class="worst">250</span></td>
-                <td class="num"><strong class="best">255</strong></td>
-                <td class="num">254</td>
-                <td class="num">253</td>
-            </tr>
-            <tr>
-                <td>findAll (~100 docs)</td>
-                <td class="num"><strong class="best">242</strong></td>
-                <td class="num">240</td>
-                <td class="num"><span class="worst">229</span></td>
-                <td class="num">231</td>
-            </tr>
-            <tr>
-                <td>findStream (~100 docs)</td>
-                <td class="num">232</td>
-                <td class="num"><strong class="best">238</strong></td>
-                <td class="num">10</td>
-                <td class="num"><span class="worst">10</span></td>
-            </tr>
-            <tr>
-                <td>updateOne</td>
-                <td class="num">262</td>
-                <td class="num"><strong class="best">264</strong></td>
-                <td class="num"><span class="worst">253</span></td>
-                <td class="num">255</td>
-            </tr>
-            <tr>
-                <td>count</td>
-                <td class="num">245</td>
-                <td class="num"><span class="worst">238</span></td>
-                <td class="num"><strong class="best">245</strong></td>
-                <td class="num">242</td>
-            </tr>
-        </table>
+    <table>
+        <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
+            Throughput — operations per second, higher is better
+        </caption>
+        <tr>
+            <th>Operation</th>
+            <th class="num">mongo4s+medeia</th>
+            <th class="num">mongo4s+bson-direct</th>
+            <th class="num">mongo4cats+circe</th>
+            <th class="num">mongo4cats+zio-json</th>
+        </tr>
+        <tr>
+            <td>insertOne</td>
+            <td class="num">253</td>
+            <td class="num"><span class="worst">251</span></td>
+            <td class="num"><strong class="best">256</strong></td>
+            <td class="num">253</td>
+        </tr>
+        <tr>
+            <td>insertMany (10 docs)</td>
+            <td class="num"><strong class="best">224</strong></td>
+            <td class="num"><span class="worst">217</span></td>
+            <td class="num">219</td>
+            <td class="num">221</td>
+        </tr>
+        <tr>
+            <td>findOneById</td>
+            <td class="num"><span class="worst">250</span></td>
+            <td class="num"><strong class="best">255</strong></td>
+            <td class="num">254</td>
+            <td class="num">253</td>
+        </tr>
+        <tr>
+            <td>findAll (~100 docs)</td>
+            <td class="num"><strong class="best">242</strong></td>
+            <td class="num">240</td>
+            <td class="num"><span class="worst">229</span></td>
+            <td class="num">231</td>
+        </tr>
+        <tr>
+            <td>findStream (~100 docs)</td>
+            <td class="num">232</td>
+            <td class="num"><strong class="best">238</strong></td>
+            <td class="num">10</td>
+            <td class="num"><span class="worst">10</span></td>
+        </tr>
+        <tr>
+            <td>updateOne</td>
+            <td class="num">262</td>
+            <td class="num"><strong class="best">264</strong></td>
+            <td class="num"><span class="worst">253</span></td>
+            <td class="num">255</td>
+        </tr>
+        <tr>
+            <td>count</td>
+            <td class="num">245</td>
+            <td class="num"><span class="worst">238</span></td>
+            <td class="num"><strong class="best">245</strong></td>
+            <td class="num">242</td>
+        </tr>
+    </table>
     <p class="muted">
         Every column lands in the same band for every operation — the round trip dominates and none of the six
         <code>RsBridge</code>/collection wrappers stands out. Run-to-run error is ±4–41%, far wider than the spread
@@ -1859,135 +2140,136 @@ findOne     1.45–1.97 ms/op</code></pre>
     </p>
 
     <h3>Codec choice under real MongoDB — mongo4s vs mongo4cats</h3>
-        <table>
-            <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
-                Throughput — operations per second, higher is better
-            </caption>
-            <tr>
-                <th>Operation</th>
-                <th class="num">mongo4s+medeia</th>
-                <th class="num">mongo4s+bson-direct</th>
-                <th class="num">mongo4cats+circe</th>
-                <th class="num">mongo4cats+zio-json</th>
-            </tr>
-            <tr>
-                <td>insertOne</td>
-                <td class="num"><strong class="best">203</strong></td>
-                <td class="num"><span class="worst">201</span></td>
-                <td class="num">201</td>
-                <td class="num">202</td>
-            </tr>
-            <tr>
-                <td>insertMany (10 docs)</td>
-                <td class="num"><strong class="best">192</strong></td>
-                <td class="num">191</td>
-                <td class="num">192</td>
-                <td class="num"><span class="worst">186</span></td>
-            </tr>
-            <tr>
-                <td>findOneById</td>
-                <td class="num">200</td>
-                <td class="num"><span class="worst">198</span></td>
-                <td class="num"><strong class="best">203</strong></td>
-                <td class="num">202</td>
-            </tr>
-            <tr>
-                <td>findAll (~100 docs)</td>
-                <td class="num">199</td>
-                <td class="num">197</td>
-                <td class="num"><strong class="best">208</strong></td>
-                <td class="num"><span class="worst">195</span></td>
-            </tr>
-            <tr>
-                <td>findStream (~100 docs)</td>
-                <td class="num"><strong class="best">193</strong></td>
-                <td class="num">191</td>
-                <td class="num"><span class="worst">14</span></td>
-                <td class="num">14</td>
-            </tr>
-            <tr>
-                <td>updateOne</td>
-                <td class="num"><strong class="best">202</strong></td>
-                <td class="num"><span class="worst">199</span></td>
-                <td class="num">200</td>
-                <td class="num">200</td>
-            </tr>
-            <tr>
-                <td>count</td>
-                <td class="num">199</td>
-                <td class="num"><span class="worst">196</span></td>
-                <td class="num"><strong class="best">202</strong></td>
-                <td class="num">200</td>
-            </tr>
-        </table>
+    <table>
+        <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
+            Throughput — operations per second, higher is better
+        </caption>
+        <tr>
+            <th>Operation</th>
+            <th class="num">mongo4s+medeia</th>
+            <th class="num">mongo4s+bson-direct</th>
+            <th class="num">mongo4cats+circe</th>
+            <th class="num">mongo4cats+zio-json</th>
+        </tr>
+        <tr>
+            <td>insertOne</td>
+            <td class="num"><strong class="best">203</strong></td>
+            <td class="num"><span class="worst">201</span></td>
+            <td class="num">201</td>
+            <td class="num">202</td>
+        </tr>
+        <tr>
+            <td>insertMany (10 docs)</td>
+            <td class="num"><strong class="best">192</strong></td>
+            <td class="num">191</td>
+            <td class="num">192</td>
+            <td class="num"><span class="worst">186</span></td>
+        </tr>
+        <tr>
+            <td>findOneById</td>
+            <td class="num">200</td>
+            <td class="num"><span class="worst">198</span></td>
+            <td class="num"><strong class="best">203</strong></td>
+            <td class="num">202</td>
+        </tr>
+        <tr>
+            <td>findAll (~100 docs)</td>
+            <td class="num">199</td>
+            <td class="num">197</td>
+            <td class="num"><strong class="best">208</strong></td>
+            <td class="num"><span class="worst">195</span></td>
+        </tr>
+        <tr>
+            <td>findStream (~100 docs)</td>
+            <td class="num"><strong class="best">193</strong></td>
+            <td class="num">191</td>
+            <td class="num"><span class="worst">14</span></td>
+            <td class="num">14</td>
+        </tr>
+        <tr>
+            <td>updateOne</td>
+            <td class="num"><strong class="best">202</strong></td>
+            <td class="num"><span class="worst">199</span></td>
+            <td class="num">200</td>
+            <td class="num">200</td>
+        </tr>
+        <tr>
+            <td>count</td>
+            <td class="num">199</td>
+            <td class="num"><span class="worst">196</span></td>
+            <td class="num"><strong class="best">202</strong></td>
+            <td class="num">200</td>
+        </tr>
+    </table>
     <p class="muted">
         On throughput the two mongo4s codecs are indistinguishable here, and so are they from mongo4cats on
         everything but the stream: at ~200 ops/s a codec has nowhere to show. The allocation table is the one to read.
     </p>
-        <table>
-            <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
-                Memory allocated per call, in KB — lower is less garbage, not less work
-            </caption>
-            <tr>
-                <th>Operation</th>
-                <th class="num">mongo4s+medeia</th>
-                <th class="num">mongo4s+bson-direct</th>
-                <th class="num">mongo4cats+circe</th>
-                <th class="num">mongo4cats+zio-json</th>
-            </tr>
-            <tr>
-                <td>insertOne</td>
-                <td class="num">25.7</td>
-                <td class="num"><strong class="best">22.8</strong></td>
-                <td class="num"><span class="worst">26.4</span></td>
-                <td class="num">25.9</td>
-            </tr>
-            <tr>
-                <td>insertMany (10 docs)</td>
-                <td class="num">67.1</td>
-                <td class="num"><strong class="best">39.3</strong></td>
-                <td class="num"><span class="worst">79.4</span></td>
-                <td class="num">72.2</td>
-            </tr>
-            <tr>
-                <td>findOneById</td>
-                <td class="num">37.2</td>
-                <td class="num"><strong class="best">35.1</strong></td>
-                <td class="num"><span class="worst">40.6</span></td>
-                <td class="num">37.9</td>
-            </tr>
-            <tr>
-                <td>findAll (~100 docs)</td>
-                <td class="num">326.4</td>
-                <td class="num"><strong class="best">157.5</strong></td>
-                <td class="num"><span class="worst">928.4</span></td>
-                <td class="num">643.9</td>
-            </tr>
-            <tr>
-                <td>findStream (~100 docs)</td>
-                <td class="num">379.7</td>
-                <td class="num"><strong class="best">211.2</strong></td>
-                <td class="num"><span class="worst">2850.6</span></td>
-                <td class="num">2573.1</td>
-            </tr>
-            <tr>
-                <td>updateOne</td>
-                <td class="num">23.3</td>
-                <td class="num"><strong class="best">23.2</strong></td>
-                <td class="num"><span class="worst">23.6</span></td>
-                <td class="num">23.5</td>
-            </tr>
-            <tr>
-                <td>count</td>
-                <td class="num">32.8</td>
-                <td class="num"><span class="worst">32.9</span></td>
-                <td class="num">32.5</td>
-                <td class="num"><strong class="best">32.5</strong></td>
-            </tr>
-        </table>
+    <table>
+        <caption style="text-align:left; caption-side:top; font-size:0.85rem; color:var(--muted); margin-bottom:6px;">
+            Memory allocated per call, in KB — lower is less garbage, not less work
+        </caption>
+        <tr>
+            <th>Operation</th>
+            <th class="num">mongo4s+medeia</th>
+            <th class="num">mongo4s+bson-direct</th>
+            <th class="num">mongo4cats+circe</th>
+            <th class="num">mongo4cats+zio-json</th>
+        </tr>
+        <tr>
+            <td>insertOne</td>
+            <td class="num">25.7</td>
+            <td class="num"><strong class="best">22.8</strong></td>
+            <td class="num"><span class="worst">26.4</span></td>
+            <td class="num">25.9</td>
+        </tr>
+        <tr>
+            <td>insertMany (10 docs)</td>
+            <td class="num">67.1</td>
+            <td class="num"><strong class="best">39.3</strong></td>
+            <td class="num"><span class="worst">79.4</span></td>
+            <td class="num">72.2</td>
+        </tr>
+        <tr>
+            <td>findOneById</td>
+            <td class="num">37.2</td>
+            <td class="num"><strong class="best">35.1</strong></td>
+            <td class="num"><span class="worst">40.6</span></td>
+            <td class="num">37.9</td>
+        </tr>
+        <tr>
+            <td>findAll (~100 docs)</td>
+            <td class="num">326.4</td>
+            <td class="num"><strong class="best">157.5</strong></td>
+            <td class="num"><span class="worst">928.4</span></td>
+            <td class="num">643.9</td>
+        </tr>
+        <tr>
+            <td>findStream (~100 docs)</td>
+            <td class="num">379.7</td>
+            <td class="num"><strong class="best">211.2</strong></td>
+            <td class="num"><span class="worst">2850.6</span></td>
+            <td class="num">2573.1</td>
+        </tr>
+        <tr>
+            <td>updateOne</td>
+            <td class="num">23.3</td>
+            <td class="num"><strong class="best">23.2</strong></td>
+            <td class="num"><span class="worst">23.6</span></td>
+            <td class="num">23.5</td>
+        </tr>
+        <tr>
+            <td>count</td>
+            <td class="num">32.8</td>
+            <td class="num"><span class="worst">32.9</span></td>
+            <td class="num">32.5</td>
+            <td class="num"><strong class="best">32.5</strong></td>
+        </tr>
+    </table>
     <p class="muted">
         <strong>bson-direct allocates less than bson-medeia wherever a document actually passes through the
-        codec</strong> — the AST-free advantage measured in isolation above survives end-to-end through a real driver
+            codec</strong> — the AST-free advantage measured in isolation above survives end-to-end through a real
+        driver
         round trip. The gap tracks how many documents a call encodes or decodes: <strong>11%</strong> for one,
         <strong>41%</strong> on <code>insertMany</code>, <strong>44–52%</strong> on
         <code>findAll</code>/<code>findStream</code>. On <code>updateOne</code> and <code>count</code> the two are
@@ -2299,10 +2581,14 @@ findOne     1.45–1.97 ms/op</code></pre>
 
 
     <footer>
-        <div class="adopters">
+        <div class="adopters" id="adopters">
             <span class="adopters-label">Adopters</span>
             <a href="https://betby.com" title="Betby" aria-label="Betby">
-                <svg viewBox="0 0 51 29" width="48" height="27" fill="currentColor" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Betby"><path fill-rule="evenodd" clip-rule="evenodd" d="M31.456 0H39.4218C45.1408 0 49.43 2.65478 49.43 7.55591C49.43 10.52 47.3247 13.1491 44.5276 13.7554V14.3737C48.8149 14.8798 50.6556 17.705 50.6556 21.0322C50.6556 26.3417 47.3876 28.9965 38.6048 28.9965H36.3565V29H0V0.00167859H31.456V0ZM24.1915 5.06585C24.3009 4.91475 24.5031 4.85995 24.6752 4.93589C24.8465 5.01183 24.9416 5.19659 24.9004 5.37822L23.6803 11.9457L29.4112 11.9456C29.5595 11.9456 29.6959 12.027 29.7641 12.1585C29.8315 12.2892 29.8204 12.4466 29.734 12.5648L21.9455 23.5251C21.8377 23.6754 21.6331 23.7326 21.4618 23.6551C21.2897 23.5791 21.1953 23.3936 21.2366 23.212L22.4117 16.6802L16.7239 16.6428C16.5748 16.6428 16.4384 16.5598 16.371 16.4307C16.3028 16.2991 16.3155 16.1426 16.4011 16.0236L24.1915 5.06585Z"/></svg>
+                <svg viewBox="0 0 51 29" width="48" height="27" fill="currentColor" xmlns="http://www.w3.org/2000/svg"
+                     role="img" aria-label="Betby">
+                    <path fill-rule="evenodd" clip-rule="evenodd"
+                          d="M31.456 0H39.4218C45.1408 0 49.43 2.65478 49.43 7.55591C49.43 10.52 47.3247 13.1491 44.5276 13.7554V14.3737C48.8149 14.8798 50.6556 17.705 50.6556 21.0322C50.6556 26.3417 47.3876 28.9965 38.6048 28.9965H36.3565V29H0V0.00167859H31.456V0ZM24.1915 5.06585C24.3009 4.91475 24.5031 4.85995 24.6752 4.93589C24.8465 5.01183 24.9416 5.19659 24.9004 5.37822L23.6803 11.9457L29.4112 11.9456C29.5595 11.9456 29.6959 12.027 29.7641 12.1585C29.8315 12.2892 29.8204 12.4466 29.734 12.5648L21.9455 23.5251C21.8377 23.6754 21.6331 23.7326 21.4618 23.6551C21.2897 23.5791 21.1953 23.3936 21.2366 23.212L22.4117 16.6802L16.7239 16.6428C16.5748 16.6428 16.4384 16.5598 16.371 16.4307C16.3028 16.2991 16.3155 16.1426 16.4011 16.0236L24.1915 5.06585Z"/>
+                </svg>
             </a>
         </div>
         <p>
@@ -2313,5 +2599,127 @@ findOne     1.45–1.97 ms/op</code></pre>
     </footer>
 
 </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/scala.min.js"></script>
+<script>
+    (function () {
+        var blocks = [].slice.call(document.querySelectorAll('pre > code'));
+
+        if (window.hljs) {
+            blocks.forEach(function (el) {
+                if (/\bms\/op\b/.test(el.textContent)) return;
+                try {
+                    el.innerHTML = hljs.highlight(el.textContent, {language: 'scala'}).value;
+                } catch (e) {
+                }
+            });
+        }
+
+        blocks.forEach(function (code) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'copy';
+            btn.textContent = 'Copy';
+            btn.addEventListener('click', function () {
+                navigator.clipboard.writeText(code.textContent).then(function () {
+                    btn.textContent = 'Copied';
+                    btn.classList.add('done');
+                    setTimeout(function () {
+                        btn.textContent = 'Copy';
+                        btn.classList.remove('done');
+                    }, 1400);
+                });
+            });
+            code.parentNode.appendChild(btn);
+        });
+
+        var slug = function (s) {
+            return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        };
+
+        var heads = [].slice.call(document.querySelectorAll('.wrap h2, .wrap h3'));
+        heads.forEach(function (h) {
+            if (!h.id) h.id = slug(h.textContent) || 'section';
+        });
+
+        var toc = document.createElement('nav');
+        toc.className = 'toc';
+        toc.innerHTML = '<p class="toc-label">On this page</p>';
+
+        var groups = [];
+        heads.forEach(function (h) {
+            var a = document.createElement('a');
+            a.href = '#' + h.id;
+            a.textContent = h.textContent.trim();
+            if (h.tagName === 'H3') {
+                a.className = 'sub';
+                a.hidden = true;
+                if (groups.length) groups[groups.length - 1].subs.push(a);
+            } else {
+                groups.push({link: a, head: h, subs: []});
+            }
+            toc.appendChild(a);
+        });
+
+        var adopters = document.getElementById('adopters');
+        if (adopters) {
+            var a = document.createElement('a');
+            a.href = '#adopters';
+            a.textContent = 'Adopters';
+            toc.appendChild(a);
+            groups.push({link: a, head: adopters, subs: []});
+        }
+
+        document.body.appendChild(toc);
+
+        var top = document.createElement('button');
+        top.type = 'button';
+        top.className = 'to-top';
+        top.title = 'Back to top';
+        top.setAttribute('aria-label', 'Back to top');
+        top.textContent = '↑';
+        top.addEventListener('click', function () {
+            window.scrollTo({top: 0, behavior: 'smooth'});
+        });
+        document.body.appendChild(top);
+
+        var active = null;
+        var sync = function () {
+            var current = groups[0];
+            groups.forEach(function (g) {
+                if (g.head.getBoundingClientRect().top <= 120) current = g;
+            });
+
+            if (current !== active) {
+                if (active) {
+                    active.link.classList.remove('on');
+                    active.subs.forEach(function (s) {
+                        s.hidden = true;
+                    });
+                }
+                current.link.classList.add('on');
+                current.subs.forEach(function (s) {
+                    s.hidden = false;
+                });
+                active = current;
+            }
+
+            top.classList.toggle('on', window.scrollY > 900);
+        };
+
+        var queued = false;
+        window.addEventListener('scroll', function () {
+            if (queued) return;
+            queued = true;
+            requestAnimationFrame(function () {
+                queued = false;
+                sync();
+            });
+        }, {passive: true});
+
+        sync();
+    })();
+</script>
 </body>
 </html>
