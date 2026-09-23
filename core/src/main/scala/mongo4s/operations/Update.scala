@@ -46,6 +46,8 @@ enum Update[E](val key: String):
     if document.isEmpty
     then throw IllegalArgumentException("Update is empty — MongoDB rejects an update document with no operators")
 
+    Update.requireDisjoint(document)
+
     document
   end toBson
 
@@ -177,14 +179,53 @@ object Update:
 
   private def operator(target: BsonDocument, name: String, path: String, value: BsonValue): Unit =
     existingOperator(target, name) match
-      case Some(existing) => existing.put(path, value): Unit
+      case Some(existing) => put(existing, name, path, value)
       case None           => target.put(name, BsonDocument(path, value)): Unit
+
+  private def put(changes: BsonDocument, name: String, path: String, value: BsonValue): Unit =
+    if changes.containsKey(path)
+    then throw IllegalArgumentException(s"Update changes '$path' twice under $name — MongoDB keeps one change per path, so the first would be lost")
+
+    changes.put(path, value): Unit
+  end put
+
+  private def requireDisjoint(document: BsonDocument): Unit =
+    val touched  = scala.collection.mutable.Set.empty[String]
+    val enclosed = scala.collection.mutable.Map.empty[String, String]
+
+    def overlap(outer: String, inner: String): Nothing =
+      throw IllegalArgumentException(s"Update changes both '$outer' and '$inner' — MongoDB refuses overlapping paths as a conflict")
+
+    def touch(path: String): Unit =
+      val prefixes = path.split('.').inits.drop(1).filter(_.nonEmpty).map(_.mkString(".")).toList
+
+      prefixes.find(touched.contains).foreach(overlap(_, path))
+      enclosed.get(path).foreach(overlap(path, _))
+
+      if !touched.add(path)
+      then throw IllegalArgumentException(s"Update changes '$path' under two operators — MongoDB refuses that as a conflict")
+
+      prefixes.foreach(prefix => enclosed.getOrElseUpdate(prefix, path): Unit)
+    end touch
+
+    document.forEach { (name, changes) =>
+      changes match
+        case paths: BsonDocument =>
+          paths.forEach { (path, value) =>
+            touch(path)
+            if name == RenameKey && value.isString then touch(value.asString.getValue)
+          }
+        case _                   => ()
+    }
+  end requireDisjoint
+
+  private val RenameKey = "$rename"
 
   private def mergeOperator(target: BsonDocument, name: String, value: BsonValue): Unit =
     (existingOperator(target, name), value) match
       case (None, incoming: BsonDocument)           => target.put(name, incoming.clone()): Unit
       case (None, other)                            => target.put(name, other): Unit
-      case (Some(existing), incoming: BsonDocument) => incoming.forEach((path, v) => existing.put(path, v): Unit)
+      case (Some(existing), incoming: BsonDocument) => incoming.forEach((path, v) => put(existing, name, path, v))
       case (Some(_), other)                         =>
         throw IllegalArgumentException(
           s"Cannot merge operator '$name': already present as a document, but the raw update supplies $other"

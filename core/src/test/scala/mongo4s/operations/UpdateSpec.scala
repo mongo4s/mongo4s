@@ -91,6 +91,36 @@ final class UpdateSpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "an update that changes one path twice" should {
+    "be refused rather than keep only the last change, as one operator document would" in {
+      val thrown = the[IllegalArgumentException] thrownBy json(Update.inc(ageField, 1).and(Update.inc(ageField, 2)))
+      thrown.getMessage should include("'age' twice")
+    }
+
+    "be refused when a raw update repeats a path a typed one already changes" in {
+      val raw = Update.Raw[Person](BsonDocument("$set", BsonDocument("name", BsonString("eve"))))
+      an[IllegalArgumentException] should be thrownBy json(Update.set(nameField, "bob").and(raw))
+    }
+  }
+
+  "an update whose paths overlap across operators" should {
+    "be refused, as the server refuses it" in {
+      the[IllegalArgumentException] thrownBy json(Update.set(nameField, "bob").and(Update.unset(nameField))) should have message
+        "Update changes 'name' under two operators — MongoDB refuses that as a conflict"
+
+      an[IllegalArgumentException] should be thrownBy json(Update.unset(notesField).and(Update.set(notesField / "0" / "rank", 1)))
+      an[IllegalArgumentException] should be thrownBy json(Update.set(notesField / "0" / "rank", 1).and(Update.unset(notesField)))
+      an[IllegalArgumentException] should be thrownBy json(Update.rename(nameField, Field.of[Person, String](_.name)).and(Update.set(nameField, "x")))
+    }
+
+    "still accept paths that only share a prefix of their spelling" in {
+      val rank  = Field.stored[Person, Int]("notes.rank")
+      val ranks = Field.stored[Person, Int]("notes_rank")
+
+      json(Update.set(rank, 1).and(Update.set(ranks, 2))) shouldBe """{"$set": {"notes.rank": 1, "notes_rank": 2}}"""
+    }
+  }
+
   "an empty update" should {
     "fail with a message naming the problem" in {
       val thrown = the[IllegalArgumentException] thrownBy json(Update.combine())
