@@ -264,6 +264,38 @@ final class FakeFidelityParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matcher
       }
     }
 
+    "agree on what a unique index refuses, on insert and on update, and on the name it is given" in {
+      val emailF = Field.stored[BsonDocument, String]("email")
+      val seed   = List(keyed("a").head.append("email", BsonString("x@y")), keyed("b").head.append("email", BsonString("z@y")))
+
+      agree("unique_index", seed) { collection =>
+        for
+          name     <- collection.createIndex(Index.ascending(emailF).withUnique)
+          inserted <- collection.insertOne(keyed("c").head.append("email", BsonString("x@y"))).attempt
+          updated  <- collection.updateOne(emailF.equalTo("z@y"), Update.set(emailF, "x@y")).attempt
+          stored   <- collection.count()
+        yield (name, inserted.left.toOption.map(_.getClass.getSimpleName), updated.left.toOption.map(_.getClass.getSimpleName), stored)
+      }
+    }
+
+    "agree that a sparse unique index lets documents without the field through" in {
+      agree("sparse_unique", keyed("a")) { collection =>
+        for
+          _      <- collection.createIndex(Index.ascending(Field.stored[BsonDocument, String]("email")).withUnique.withSparse)
+          _      <- collection.insertOne(keyed("b").head)
+          stored <- collection.count()
+        yield stored
+      }
+    }
+
+    "agree on refusing to build a unique index over documents that already break it" in {
+      val seed = List(keyed("a").head.append("email", BsonString("x@y")), keyed("b").head.append("email", BsonString("x@y")))
+
+      agree("unique_over_duplicates", seed) {
+        _.createIndex(Index.ascending(Field.stored[BsonDocument, String]("email")).withUnique).attempt.map(_.left.toOption.map(_.getClass.getSimpleName))
+      }
+    }
+
     "agree that a replacement without an _id keeps the one it replaced" in {
       agree("replace_keeps_id", keyed("a").map(_.append("name", BsonString("old")))) { collection =>
         for

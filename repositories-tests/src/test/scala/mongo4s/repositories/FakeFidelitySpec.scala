@@ -293,6 +293,50 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "a unique index" should {
+    val emailF = Field.stored[BsonDocument, String]("email")
+
+    def withEmail(id: String, email: String): BsonDocument = keyed(id).append("email", BsonString(email))
+
+    "refuse a second document with the same key, whether inserted or updated into it" in {
+      val c = fake(withEmail("a", "x@y"), withEmail("b", "z@y"))
+      c.createIndex(Index.ascending(emailF).withUnique).unsafeRunSync()
+
+      intercept[mongo4s.MongoError.DuplicateKey](c.insertOne(withEmail("c", "x@y")).unsafeRunSync())
+      intercept[mongo4s.MongoError.DuplicateKey](c.updateOne(emailF.equalTo("z@y"), Update.set(emailF, "x@y")).unsafeRunSync())
+      c.count().unsafeRunSync() shouldBe 2
+    }
+
+    "let documents without the field through when it is sparse, and police only what its partial filter selects" in {
+      val sparse  = fake(keyed("a"))
+      val partial = fake(withEmail("a", "x@y").append("active", BsonBoolean(false)))
+
+      sparse.createIndex(Index.ascending(emailF).withUnique.withSparse).unsafeRunSync()
+      sparse.insertOne(keyed("b")).unsafeRunSync()
+
+      partial.createIndex(Index.ascending(emailF).withUnique.where(Field.stored[BsonDocument, Boolean]("active").equalTo(true))).unsafeRunSync()
+      partial.insertOne(withEmail("b", "x@y").append("active", BsonBoolean(true))).unsafeRunSync()
+
+      (sparse.count().unsafeRunSync(), partial.count().unsafeRunSync()) shouldBe (2L, 2L)
+    }
+
+    "refuse to be created over documents that already break it" in {
+      val c = fake(withEmail("a", "x@y"), withEmail("b", "x@y"))
+
+      intercept[mongo4s.MongoError.DuplicateKey](c.createIndex(Index.ascending(emailF).withUnique).unsafeRunSync())
+    }
+
+    "be named the way the server names it, so it can be dropped by that name" in {
+      val c    = fake(withEmail("a", "x@y"))
+      val name = c.createIndex(Index.ascending(emailF).withUnique).unsafeRunSync()
+
+      name shouldBe "email_1"
+      c.dropIndex(name).unsafeRunSync()
+      c.insertOne(withEmail("b", "x@y")).unsafeRunSync()
+      c.count().unsafeRunSync() shouldBe 2
+    }
+  }
+
   "a bulk write that meets a duplicate _id" should {
     "stop there when ordered, and report the command by its position" in {
       val c      = fake(keyed("a"))

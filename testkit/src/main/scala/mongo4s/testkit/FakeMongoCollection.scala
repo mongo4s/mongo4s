@@ -120,7 +120,7 @@ final class FakeMongoCollection[F[*], S[*], E](
       throw MongoError.DuplicateKey(
         MongoWriteException(WriteError(11000, s"E11000 duplicate key error: _id $id", BsonDocument()), ServerAddress(), java.util.Collections.emptyList())
       )
-    else stamped
+    else checked(stamped, None)
   end identified
 
   def find(filter: Filter[E])(using session: Option[ClientSession]): FindQuery[F, S, E] = FakeFindQuery(filter)
@@ -132,7 +132,7 @@ final class FakeMongoCollection[F[*], S[*], E](
       matching(filter).headOption match
         case Some(existing)         =>
           val replaced = replacing(existing, codec.encodeDocument(replacement))
-          storage(storage.indexOf(existing)) = replaced
+          storage(storage.indexOf(existing)) = checked(replaced, Some(existing))
           UpdateResult(matchedCount = 1, modifiedCount = 1, upsertedId = None)
         case None if options.upsert =>
           val encoded = identified(codec.encodeDocument(replacement))
@@ -149,7 +149,7 @@ final class FakeMongoCollection[F[*], S[*], E](
       matching(filter).headOption match
         case Some(existing)         =>
           val updated = applyUpdate(existing, update)
-          storage(storage.indexOf(existing)) = updated
+          storage(storage.indexOf(existing)) = checked(updated, Some(existing))
           UpdateResult(matchedCount = 1, modifiedCount = modifiedBy(existing, updated), upsertedId = None)
         case None if options.upsert =>
           throw UnsupportedOperationException("FakeMongoCollection: updateOne with upsert is not simulated")
@@ -164,7 +164,7 @@ final class FakeMongoCollection[F[*], S[*], E](
       val matches  = matching(filter)
       val modified = matches.map { doc =>
         val updated = applyUpdate(doc, update)
-        storage(storage.indexOf(doc)) = updated
+        storage(storage.indexOf(doc)) = checked(updated, Some(doc))
         modifiedBy(doc, updated)
       }
       if matches.isEmpty && options.upsert then throw UnsupportedOperationException("FakeMongoCollection: updateMany with upsert is not simulated")
@@ -182,7 +182,7 @@ final class FakeMongoCollection[F[*], S[*], E](
         case None                   => None
         case Some(existing)         =>
           val updated = applyUpdate(existing, update)
-          storage(storage.indexOf(existing)) = updated
+          storage(storage.indexOf(existing)) = checked(updated, Some(existing))
           decodeProjected(if options.returnUpdated then updated else existing, options.projection)
     }
 
@@ -195,7 +195,7 @@ final class FakeMongoCollection[F[*], S[*], E](
         case None                   => None
         case Some(existing)         =>
           val encoded = replacing(existing, codec.encodeDocument(replacement))
-          storage(storage.indexOf(existing)) = encoded
+          storage(storage.indexOf(existing)) = checked(encoded, Some(existing))
           decodeProjected(if options.returnUpdated then encoded else existing, options.projection)
     }
 
@@ -255,7 +255,7 @@ final class FakeMongoCollection[F[*], S[*], E](
           matching(filter).headOption match
             case Some(existing)         =>
               val replaced = replacing(existing, codec.encodeDocument(value))
-              storage(storage.indexOf(existing)) = replaced
+              storage(storage.indexOf(existing)) = checked(replaced, Some(existing))
               matched += 1
               modified += 1
             case None if options.upsert =>
@@ -267,7 +267,7 @@ final class FakeMongoCollection[F[*], S[*], E](
           requireDefaultUpdateOptions(options, "bulkWrite UpdateOne")
           matching(filter).headOption.foreach { doc =>
             val updated = applyUpdate(doc, update)
-            storage(storage.indexOf(doc)) = updated
+            storage(storage.indexOf(doc)) = checked(updated, Some(doc))
             matched += 1
             modified += modifiedBy(doc, updated)
           }
@@ -275,7 +275,7 @@ final class FakeMongoCollection[F[*], S[*], E](
           requireDefaultUpdateOptions(options, "bulkWrite UpdateMany")
           matching(filter).foreach { doc =>
             val updated = applyUpdate(doc, update)
-            storage(storage.indexOf(doc)) = updated
+            storage(storage.indexOf(doc)) = checked(updated, Some(doc))
             matched += 1
             modified += modifiedBy(doc, updated)
           }
@@ -311,9 +311,61 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   def createIndex(index: Index[E])(using session: Option[ClientSession]): F[String] =
     F.delay {
+      if index.unique && index.collation.nonEmpty
+      then throw UnsupportedOperationException("FakeMongoCollection: a unique index with a collation is not simulated")
+
+      if index.unique
+      then storage.toList.foreach(document => requireUnique(index, document, Some(document)))
+
       createdIndexes += index
-      index.name.getOrElse(index.keysToBson(naming).keySet.asScala.mkString("_"))
+      indexName(index)
     }
+
+  private def indexName(index: Index[E]): String =
+    index.name.getOrElse {
+      index
+        .keysToBson(naming)
+        .entrySet
+        .asScala
+        .map { entry =>
+          val direction = entry.getValue
+          s"${entry.getKey}_${if direction.isNumber then direction.asNumber.intValue.toString else direction.asString.getValue}"
+        }
+        .mkString("_")
+    }
+
+  private def checked(candidate: BsonDocument, replaced: Option[BsonDocument]): BsonDocument =
+    createdIndexes.filter(_.unique).foreach(requireUnique(_, candidate, replaced))
+    candidate
+
+  private def requireUnique(index: Index[E], candidate: BsonDocument, replaced: Option[BsonDocument]): Unit =
+    uniqueKey(index, candidate).foreach { key =>
+      val clash = storage.exists { other =>
+        !replaced.exists(_ eq other) && uniqueKey(index, other).exists(_.corresponds(key)(BsonOrdering.same))
+      }
+
+      if clash
+      then
+        throw MongoError.DuplicateKey(
+          MongoWriteException(
+            WriteError(11000, s"E11000 duplicate key error index: ${indexName(index)} dup key: ${key.mkString(", ")}", BsonDocument()),
+            ServerAddress(),
+            java.util.Collections.emptyList(),
+          )
+        )
+    }
+
+  private def uniqueKey(index: Index[E], document: BsonDocument): Option[List[BsonValue]] =
+    val values = index.keys.map((path, _) => at(document, path))
+
+    if index.sparse && values.forall(_.isEmpty)
+    then None
+    else if index.partialFilter.exists(filter => !matches(document, filter))
+    then None
+    else if values.exists(_.exists(_.isArray))
+    then throw UnsupportedOperationException("FakeMongoCollection: a unique index over an array field is not simulated")
+    else Some(values.map(_.getOrElse(BsonNull.VALUE)))
+  end uniqueKey
 
   def listIndexes(using session: Option[ClientSession]): F[List[BsonDocument]] =
     F.delay {
@@ -322,7 +374,7 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   def dropIndex(indexName: String)(using session: Option[ClientSession]): F[Unit] =
     F.delay {
-      createdIndexes.filterInPlace(_.name.forall(_ != indexName))
+      createdIndexes.filterInPlace(index => this.indexName(index) != indexName)
     }
 
   def drop(using session: Option[ClientSession]): F[Unit] = F.delay { storage.clear(); createdIndexes.clear() }
