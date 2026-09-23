@@ -245,6 +245,30 @@ final class FakeFidelityParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matcher
       }
     }
 
+    "agree that a replacement without an _id keeps the one it replaced" in {
+      agree("replace_keeps_id", keyed("a").map(_.append("name", BsonString("old")))) { collection =>
+        for
+          _      <- collection.replaceOne(nameF.equalTo("old"), BsonDocument("name", BsonString("new")))
+          stored <- collection.find().all
+        yield stored
+      }
+    }
+
+    "agree on refusing a replacement that changes the _id" in {
+      agree("replace_changes_id", keyed("a").map(_.append("name", BsonString("old")))) { collection =>
+        collection.replaceOne(nameF.equalTo("old"), keyed("b").head.append("name", BsonString("new"))).attempt.map {
+          case Left(failed: MongoError) => Some(failed.code)
+          case _                        => None
+        }
+      }
+    }
+
+    "agree that an update changing nothing matched but did not modify" in {
+      agree("noop_update", keyed("a").map(_.append("name", BsonString("same")))) { collection =>
+        collection.updateOne(nameF.equalTo("same"), Update.set(nameF, "same")).map(result => (result.matchedCount, result.modifiedCount))
+      }
+    }
+
     "agree on how an insertMany reports a duplicate _id inside it, and on what it kept" in {
       agree("insert_many_duplicate", Nil) { collection =>
         for

@@ -3,6 +3,7 @@ package mongo4s.testkit
 import scala.collection.mutable
 
 import com.mongodb.bulk.BulkWriteError
+import com.mongodb.client.model.Collation
 import org.bson.{BsonArray, BsonDateTime, BsonDocument, BsonDouble, BsonInt32, BsonInt64, BsonNull, BsonObjectId, BsonValue}
 import com.mongodb.{ExplainVerbosity, MongoBulkWriteException, MongoWriteException, ReadConcern, ReadPreference, ServerAddress, WriteConcern, WriteError}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
@@ -41,6 +42,7 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   private def requireDefaultUpdateOptions(options: UpdateOptions, operation: String): Unit =
     requireNoArrayFilters(options.arrayFilters, operation)
+    requireNoCollation(options.collation, operation)
 
     if options.upsert
     then throw UnsupportedOperationException(s"FakeMongoCollection: $operation with upsert is not simulated")
@@ -48,6 +50,33 @@ final class FakeMongoCollection[F[*], S[*], E](
   private def requireNoArrayFilters(arrayFilters: Seq[Filter[?]], operation: String): Unit =
     if arrayFilters.nonEmpty
     then throw UnsupportedOperationException(s"FakeMongoCollection: $operation with arrayFilters is not simulated")
+
+  private def requireNoCollation(collation: Option[Collation], operation: String): Unit =
+    if collation.nonEmpty
+    then throw UnsupportedOperationException(s"FakeMongoCollection: $operation with a collation is not simulated")
+
+  private def refuseCollation: Nothing =
+    throw UnsupportedOperationException("FakeMongoCollection: a collation changes what matches and how it sorts, so it is not simulated")
+
+  private def modifiedBy(before: BsonDocument, after: BsonDocument): Long =
+    if before == after then 0L else 1L
+
+  private def replacing(existing: BsonDocument, replacement: BsonDocument): BsonDocument =
+    (Option(existing.get(BsonField.Id)), Option(replacement.get(BsonField.Id))) match
+      case (Some(id), None)                       =>
+        val kept = BsonDocument(BsonField.Id, id)
+        kept.putAll(replacement)
+        kept
+      case (Some(id), Some(other)) if id != other =>
+        throw MongoError.translate(
+          MongoWriteException(
+            WriteError(66, s"After applying the update, the (immutable) field '_id' was found to have been altered to _id: $other", BsonDocument()),
+            ServerAddress(),
+            java.util.Collections.emptyList(),
+          )
+        )
+      case _                                      => replacement
+  end replacing
 
   def insertOne(document: E)(using session: Option[ClientSession]): F[InsertOneResult] =
     F.delay {
@@ -98,9 +127,12 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   def replaceOne(filter: Filter[E], replacement: E, options: ReplaceOptions)(using session: Option[ClientSession]): F[UpdateResult] =
     F.delay {
+      requireNoCollation(options.collation, "replaceOne")
+
       matching(filter).headOption match
         case Some(existing)         =>
-          storage(storage.indexOf(existing)) = codec.encodeDocument(replacement)
+          val replaced = replacing(existing, codec.encodeDocument(replacement))
+          storage(storage.indexOf(existing)) = replaced
           UpdateResult(matchedCount = 1, modifiedCount = 1, upsertedId = None)
         case None if options.upsert =>
           val encoded = identified(codec.encodeDocument(replacement))
@@ -112,11 +144,13 @@ final class FakeMongoCollection[F[*], S[*], E](
   def updateOne(filter: Filter[E], update: Update[E], options: UpdateOptions)(using session: Option[ClientSession]): F[UpdateResult] =
     F.delay {
       requireNoArrayFilters(options.arrayFilters, "updateOne")
+      requireNoCollation(options.collation, "updateOne")
 
       matching(filter).headOption match
         case Some(existing)         =>
-          storage(storage.indexOf(existing)) = applyUpdate(existing, update)
-          UpdateResult(matchedCount = 1, modifiedCount = 1, upsertedId = None)
+          val updated = applyUpdate(existing, update)
+          storage(storage.indexOf(existing)) = updated
+          UpdateResult(matchedCount = 1, modifiedCount = modifiedBy(existing, updated), upsertedId = None)
         case None if options.upsert =>
           throw UnsupportedOperationException("FakeMongoCollection: updateOne with upsert is not simulated")
         case None                   => UpdateResult.none
@@ -125,11 +159,16 @@ final class FakeMongoCollection[F[*], S[*], E](
   def updateMany(filter: Filter[E], update: Update[E], options: UpdateOptions)(using session: Option[ClientSession]): F[UpdateResult] =
     F.delay {
       requireNoArrayFilters(options.arrayFilters, "updateMany")
+      requireNoCollation(options.collation, "updateMany")
 
-      val matches = matching(filter)
-      matches.foreach(doc => storage(storage.indexOf(doc)) = applyUpdate(doc, update))
+      val matches  = matching(filter)
+      val modified = matches.map { doc =>
+        val updated = applyUpdate(doc, update)
+        storage(storage.indexOf(doc)) = updated
+        modifiedBy(doc, updated)
+      }
       if matches.isEmpty && options.upsert then throw UnsupportedOperationException("FakeMongoCollection: updateMany with upsert is not simulated")
-      UpdateResult(matchedCount = matches.size.toLong, modifiedCount = matches.size.toLong, upsertedId = None)
+      UpdateResult(matchedCount = matches.size.toLong, modifiedCount = modified.sum, upsertedId = None)
     }
 
   def findOneAndUpdate(filter: Filter[E], update: Update[E], options: FindOneAndUpdateOptions[E])(using
@@ -155,7 +194,7 @@ final class FakeMongoCollection[F[*], S[*], E](
         case None if options.upsert => throw UnsupportedOperationException("FakeMongoCollection: findOneAndReplace with upsert is not simulated")
         case None                   => None
         case Some(existing)         =>
-          val encoded = codec.encodeDocument(replacement)
+          val encoded = replacing(existing, codec.encodeDocument(replacement))
           storage(storage.indexOf(existing)) = encoded
           decodeProjected(if options.returnUpdated then encoded else existing, options.projection)
     }
@@ -170,6 +209,8 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   def deleteOne(filter: Filter[E], options: DeleteOptions)(using session: Option[ClientSession]): F[DeleteResult] =
     F.delay {
+      requireNoCollation(options.collation, "deleteOne")
+
       matching(filter).headOption match
         case Some(existing) => storage -= existing; DeleteResult(1)
         case None           => DeleteResult.none
@@ -177,6 +218,8 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   def deleteMany(filter: Filter[E], options: DeleteOptions)(using session: Option[ClientSession]): F[DeleteResult] =
     F.delay {
+      requireNoCollation(options.collation, "deleteMany")
+
       val matches = matching(filter)
       storage --= matches
       DeleteResult(matches.size.toLong)
@@ -184,6 +227,8 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   def count(filter: Filter[E], options: CountOptions)(using session: Option[ClientSession]): F[Long] =
     F.delay {
+      requireNoCollation(options.collation, "count")
+
       val matches = matching(filter).size.toLong
       val skipped = options.skip.fold(matches)(skip => math.max(0L, matches - skip))
       options.limit.fold(skipped)(limit => math.min(skipped, limit.toLong))
@@ -206,9 +251,11 @@ final class FakeMongoCollection[F[*], S[*], E](
           storage += identified(codec.encodeDocument(document))
           inserted += 1
         case (WriteCommand.ReplaceOne(filter, value, options), i)  =>
+          requireNoCollation(options.collation, "bulkWrite ReplaceOne")
           matching(filter).headOption match
             case Some(existing)         =>
-              storage(storage.indexOf(existing)) = codec.encodeDocument(value)
+              val replaced = replacing(existing, codec.encodeDocument(value))
+              storage(storage.indexOf(existing)) = replaced
               matched += 1
               modified += 1
             case None if options.upsert =>
@@ -219,16 +266,18 @@ final class FakeMongoCollection[F[*], S[*], E](
         case (WriteCommand.UpdateOne(filter, update, options), _)  =>
           requireDefaultUpdateOptions(options, "bulkWrite UpdateOne")
           matching(filter).headOption.foreach { doc =>
-            storage(storage.indexOf(doc)) = applyUpdate(doc, update)
+            val updated = applyUpdate(doc, update)
+            storage(storage.indexOf(doc)) = updated
             matched += 1
-            modified += 1
+            modified += modifiedBy(doc, updated)
           }
         case (WriteCommand.UpdateMany(filter, update, options), _) =>
           requireDefaultUpdateOptions(options, "bulkWrite UpdateMany")
           matching(filter).foreach { doc =>
-            storage(storage.indexOf(doc)) = applyUpdate(doc, update)
+            val updated = applyUpdate(doc, update)
+            storage(storage.indexOf(doc)) = updated
             matched += 1
-            modified += 1
+            modified += modifiedBy(doc, updated)
           }
         case (WriteCommand.DeleteOne(filter), _)                   =>
           matching(filter).headOption.foreach { doc => storage -= doc; deleted += 1 }
@@ -654,7 +703,7 @@ final class FakeMongoCollection[F[*], S[*], E](
       decoder: mongo4s.bson.BsonDecoder[B],
   ) extends DistinctQuery[F, S, B]:
 
-    def collation(value: com.mongodb.client.model.Collation): DistinctQuery[F, S, B]        = this
+    def collation(value: com.mongodb.client.model.Collation): DistinctQuery[F, S, B]        = refuseCollation
     def maxTime(duration: scala.concurrent.duration.FiniteDuration): DistinctQuery[F, S, B] = this
     def batchSize(n: Int): DistinctQuery[F, S, B]                                           = this
 
@@ -677,7 +726,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     def allowDiskUse(allow: Boolean): AggregateQuery[F, S, B] = this
 
     def hint(keys: BsonDocument): AggregateQuery[F, S, B]                                    = this
-    def collation(value: com.mongodb.client.model.Collation): AggregateQuery[F, S, B]        = this
+    def collation(value: com.mongodb.client.model.Collation): AggregateQuery[F, S, B]        = refuseCollation
     def maxTime(duration: scala.concurrent.duration.FiniteDuration): AggregateQuery[F, S, B] = this
     def batchSize(n: Int): AggregateQuery[F, S, B]                                           = this
     def comment(value: String): AggregateQuery[F, S, B]                                      = this
@@ -715,7 +764,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     def limit(n: Int): FindQuery[F, S, E]                = FakeFindQuery(filter, projection, ordering, skipped, Some(n))
 
     def hint(keys: BsonDocument): FindQuery[F, S, E]                                    = this
-    def collation(value: com.mongodb.client.model.Collation): FindQuery[F, S, E]        = this
+    def collation(value: com.mongodb.client.model.Collation): FindQuery[F, S, E]        = refuseCollation
     def maxTime(duration: scala.concurrent.duration.FiniteDuration): FindQuery[F, S, E] = this
     def batchSize(n: Int): FindQuery[F, S, E]                                           = this
     def comment(value: String): FindQuery[F, S, E]                                      = this

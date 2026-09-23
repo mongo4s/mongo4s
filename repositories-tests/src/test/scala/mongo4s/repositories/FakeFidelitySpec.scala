@@ -235,6 +235,45 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "a replacement" should {
+    "keep the _id of the document it replaces when it carries none of its own" in {
+      val c = fake(keyed("a").append("name", BsonString("old")))
+
+      c.replaceOne(nameF.equalTo("old"), BsonDocument("name", BsonString("new"))).unsafeRunSync()
+
+      c.find().all.unsafeRunSync() shouldBe List(keyed("a").append("name", BsonString("new")))
+    }
+
+    "refuse to change the _id of the document it replaces" in {
+      val c = fake(keyed("a").append("name", BsonString("old")))
+
+      intercept[mongo4s.MongoError.Failed] {
+        c.replaceOne(nameF.equalTo("old"), keyed("b").append("name", BsonString("new"))).unsafeRunSync()
+      }.code shouldBe 66
+    }
+  }
+
+  "an update that changes nothing" should {
+    "count as matched but not modified" in {
+      val c = fake(keyed("a").append("name", BsonString("same")))
+
+      val result = c.updateOne(nameF.equalTo("same"), Update.set(nameF, "same")).unsafeRunSync()
+
+      (result.matchedCount, result.modifiedCount) shouldBe (1L, 0L)
+    }
+  }
+
+  "a collation" should {
+    "be refused by name rather than ignored, since it changes what matches" in {
+      val c         = fake(keyed("a"))
+      val collation = com.mongodb.client.model.Collation.builder().locale("en").build()
+
+      intercept[UnsupportedOperationException](c.find().collation(collation))
+      intercept[UnsupportedOperationException](c.updateOne(Filter.all, Update.set(nameF, "x"), UpdateOptions.default.withCollation(collation)).unsafeRunSync())
+      intercept[UnsupportedOperationException](c.deleteMany(Filter.all, DeleteOptions.default.withCollation(collation)).unsafeRunSync())
+    }
+  }
+
   "a bulk write that meets a duplicate _id" should {
     "stop there when ordered, and report the command by its position" in {
       val c      = fake(keyed("a"))
