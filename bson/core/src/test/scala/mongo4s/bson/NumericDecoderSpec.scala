@@ -70,6 +70,11 @@ final class NumericDecoderSpec extends AnyWordSpec, Matchers:
       BsonDecoder[BigDecimal].decode(BsonDecimal128(Decimal128.NEGATIVE_INFINITY)).isLeft shouldBe true
     }
 
+    "report a non-finite Double as an error rather than throwing" in {
+      BsonDecoder[BigDecimal].decode(BsonDouble(Double.NaN)).isLeft shouldBe true
+      BsonDecoder[BigDecimal].decode(BsonDouble(Double.PositiveInfinity)).isLeft shouldBe true
+    }
+
     "read a negative zero as plain zero, since BigDecimal has no signed zero" in {
       BsonDecoder[BigDecimal].decode(BsonDecimal128(Decimal128.NEGATIVE_ZERO)) shouldBe Right(BigDecimal(0))
     }

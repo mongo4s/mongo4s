@@ -25,6 +25,11 @@ trait DefaultBsonDecoderInstances:
       try Right(BigDecimal(decimal.bigDecimalValue))
       catch case _: ArithmeticException => Right(BigDecimal(0))
 
+  private def bigDecimalOf(double: Double, target: String): Either[BsonError, BigDecimal] =
+    if double.isNaN || double.isInfinite
+    then Left(BsonError.InvalidValue(s"$double has no decimal value and cannot be read as $target"))
+    else Right(BigDecimal(double))
+
   private def wholeDecimal(decimal: BigDecimal, target: String): Either[BsonError, Long] =
     if !decimal.isWhole
     then Left(BsonError.InvalidValue(s"$decimal is not a whole number and cannot be read as $target"))
@@ -81,7 +86,7 @@ trait DefaultBsonDecoderInstances:
     else if value.isInt64
     then Right(BigDecimal(value.asInt64.getValue))
     else if value.isDouble
-    then Right(BigDecimal(value.asDouble.getValue))
+    then bigDecimalOf(value.asDouble.getValue, "BigDecimal")
     else Left(BsonError.typeMismatch(BsonTypeName.Decimal, value))
 
   given BsonDecoder[Instant] = value =>
