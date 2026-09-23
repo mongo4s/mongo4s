@@ -1,6 +1,7 @@
 package mongo4s.rapid
 
 import scala.util.{Failure, Success}
+import scala.concurrent.duration.FiniteDuration
 
 import rapid.Task
 
@@ -17,6 +18,8 @@ trait TaskToEffectInstance:
     def handleErrorWith[A](fa: Task[A])(f: Throwable => Task[A]): Task[A] = fa.handleError(f)
 
     override def suspend[A](fa: => Task[A]): Task[A] = Task.pure(()).flatMap(_ => fa)
+
+    override def sleep(duration: FiniteDuration): Task[Unit] = Task.sleep(duration)
 
     def guaranteeCase[A](fa: Task[A])(finalizer: ExitCase => Task[Unit]): Task[A] =
       fa.attempt.flatMap { outcome =>

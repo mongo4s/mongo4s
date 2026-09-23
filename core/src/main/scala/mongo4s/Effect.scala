@@ -28,6 +28,8 @@ trait Effect[F[*]]:
 
   def monotonic: F[FiniteDuration] = delay(FiniteDuration(System.nanoTime(), TimeUnit.NANOSECONDS))
 
+  def sleep(duration: FiniteDuration): F[Unit] = delay(TimeUnit.NANOSECONDS.sleep(duration.toNanos))
+
   def suspend[A](fa: => F[A]): F[A] = flatMap(delay(()))(_ => fa)
   def unit: F[Unit]                 = pure(())
   def void[A](fa: F[A]): F[Unit]    = map(fa)(_ => ())

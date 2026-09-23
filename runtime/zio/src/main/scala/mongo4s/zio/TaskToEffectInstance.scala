@@ -4,7 +4,7 @@ import java.util.concurrent.TimeUnit
 
 import scala.concurrent.duration.FiniteDuration
 
-import zio.{Cause, Clock, Exit, Task, ZIO}
+import zio.{Cause, Clock, Duration, Exit, Task, ZIO}
 
 import mongo4s.{Effect, ExitCase}
 
@@ -19,6 +19,8 @@ trait TaskToEffectInstance:
     override def suspend[A](fa: => Task[A]): Task[A] = ZIO.suspendSucceed(fa)
 
     override def monotonic: Task[FiniteDuration] = Clock.nanoTime.map(FiniteDuration(_, TimeUnit.NANOSECONDS))
+
+    override def sleep(duration: FiniteDuration): Task[Unit] = ZIO.sleep(Duration.fromScala(duration))
 
     def handleErrorWith[A](fa: Task[A])(f: Throwable => Task[A]): Task[A] =
       fa.catchAllCause: cause =>

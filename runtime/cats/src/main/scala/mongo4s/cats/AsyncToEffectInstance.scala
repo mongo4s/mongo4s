@@ -20,6 +20,8 @@ trait AsyncToEffectInstance:
 
     override def monotonic: F[FiniteDuration] = F.monotonic
 
+    override def sleep(duration: FiniteDuration): F[Unit] = F.sleep(duration)
+
     def guaranteeCase[A](fa: F[A])(finalizer: ExitCase => F[Unit]): F[A] =
       F.guaranteeCase(fa)(outcome => runFinalizer(AsyncToEffectInstance.exitCaseOf(outcome), finalizer))
 

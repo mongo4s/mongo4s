@@ -7,6 +7,8 @@ import org.scalatest.matchers.should.Matchers
 
 import mongo4s.{Effect, ExitCase}
 
+import scala.concurrent.duration.given
+
 trait EffectBackendSpec[F[*]] extends AnyWordSpec, Matchers:
 
   protected def effectInstance: Effect[F]
@@ -58,6 +60,14 @@ trait EffectBackendSpec[F[*]] extends AnyWordSpec, Matchers:
 
       run(effect) shouldBe 1
       built.get shouldBe 1
+    }
+  }
+
+  "sleep" should {
+    "wait at least as long as it was asked to, measured on the runtime's own clock" in {
+      val elapsed = F.flatMap(F.monotonic)(start => F.flatMap(F.sleep(50.millis))(_ => F.map(F.monotonic)(_ - start)))
+
+      run(elapsed) should be >= 50.millis
     }
   }
 

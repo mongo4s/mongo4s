@@ -1,6 +1,7 @@
 package mongo4s.kyo
 
 import scala.compiletime.asMatchable
+import scala.concurrent.duration.FiniteDuration
 
 import kyo.*
 
@@ -17,6 +18,8 @@ trait KyoEffectInstance:
     def handleErrorWith[A](fa: KIO[A])(f: Throwable => KIO[A]): KIO[A] = Abort.recover[Throwable](f, f)(fa)
 
     override def suspend[A](fa: => KIO[A]): KIO[A] = Sync.defer(fa)
+
+    override def sleep(duration: FiniteDuration): KIO[Unit] = Async.sleep(Duration.fromScala(duration))
 
     def guaranteeCase[A](fa: KIO[A])(finalizer: ExitCase => KIO[Unit]): KIO[A] =
       val abnormal: KIO[A] = Scope.run(
