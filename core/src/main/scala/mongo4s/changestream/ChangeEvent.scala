@@ -7,6 +7,8 @@ import mongo4s.bson.BsonError
 
 final case class ChangeEvent[A](
     operationType: OperationType,
+    namespace: Option[Namespace],
+    destination: Option[Namespace],
     documentKey: Option[BsonDocument],
     fullDocument: Option[A],
     fullDocumentBeforeChange: Option[A],
@@ -27,6 +29,8 @@ object ChangeEvent:
       before <- sequence(Option(document.getFullDocumentBeforeChange).map(decode))
     yield ChangeEvent(
       operationType = document.getOperationType,
+      namespace = Namespace.fromDriver(document.getNamespaceDocument),
+      destination = Namespace.fromDriver(document.getDestinationNamespaceDocument),
       documentKey = Option(document.getDocumentKey),
       fullDocument = full,
       fullDocumentBeforeChange = before,

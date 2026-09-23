@@ -31,13 +31,15 @@ object ChangeEventSpec:
       updateDescription: UpdateDescription = null,
       wallTime: BsonDateTime = null,
       splitEvent: SplitEvent = null,
+      namespace: BsonDocument = null,
+      destination: BsonDocument = null,
   ): ChangeStreamDocument[BsonDocument] =
     ChangeStreamDocument[BsonDocument](
       operationType,
       BsonDocument("_data", BsonString("resume-token")),
+      namespace,
       null,
-      null,
-      null,
+      destination,
       fullDocument,
       fullDocumentBeforeChange,
       documentKey,
@@ -65,6 +67,8 @@ final class ChangeEventSpec extends AnyWordSpec, Matchers:
       result shouldBe Right(
         ChangeEvent(
           operationType = OperationType.INSERT,
+          namespace = None,
+          destination = None,
           documentKey = Some(BsonDocument("_id", BsonString("1"))),
           fullDocument = Some(Person("bob", 30)),
           fullDocumentBeforeChange = None,
@@ -89,6 +93,8 @@ final class ChangeEventSpec extends AnyWordSpec, Matchers:
       result shouldBe Right(
         ChangeEvent(
           operationType = OperationType.UPDATE,
+          namespace = None,
+          destination = None,
           documentKey = Some(BsonDocument("_id", BsonString("1"))),
           fullDocument = Some(Person("bob", 31)),
           fullDocumentBeforeChange = None,
@@ -110,6 +116,8 @@ final class ChangeEventSpec extends AnyWordSpec, Matchers:
       result shouldBe Right(
         ChangeEvent(
           operationType = OperationType.DELETE,
+          namespace = None,
+          destination = None,
           documentKey = Some(BsonDocument("_id", BsonString("1"))),
           fullDocument = None,
           fullDocumentBeforeChange = None,
@@ -135,6 +143,25 @@ final class ChangeEventSpec extends AnyWordSpec, Matchers:
       result.map(_.wallTime) shouldBe Right(Some(BsonDateTime(1700000000000L)))
       result.map(_.splitEvent.map(_.getFragment)) shouldBe Right(Some(1))
       result.map(_.splitEvent.map(_.getOf)) shouldBe Right(Some(3))
+    }
+
+    "name the collection an event happened in, and where a rename moved it to" in {
+      val document = changeStreamDocument(
+        operationType = "rename",
+        namespace = BsonDocument("db", BsonString("shop")).append("coll", BsonString("orders")),
+        destination = BsonDocument("db", BsonString("shop")).append("coll", BsonString("archive")),
+      )
+
+      val result = ChangeEvent.fromDriver(document, decodePerson)
+
+      result.map(_.namespace) shouldBe Right(Some(Namespace("shop", Some("orders"))))
+      result.map(_.destination) shouldBe Right(Some(Namespace("shop", Some("archive"))))
+    }
+
+    "name only the database for an event about the whole database" in {
+      val document = changeStreamDocument(operationType = "dropDatabase", namespace = BsonDocument("db", BsonString("shop")))
+
+      ChangeEvent.fromDriver(document, decodePerson).map(_.namespace) shouldBe Right(Some(Namespace("shop", None)))
     }
 
     "surface a decode failure on a malformed full document" in {

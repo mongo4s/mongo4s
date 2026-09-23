@@ -11,7 +11,7 @@ import com.mongodb.client.model.changestream.OperationType
 import mongo4s.bson.*
 import mongo4s.cats.CatsStream
 import mongo4s.operations.Stage
-import mongo4s.changestream.WatchOptions
+import mongo4s.changestream.{Namespace, WatchOptions}
 import mongo4s.{MongoClient, RsBridge}
 
 import scala.concurrent.duration.given
@@ -47,6 +47,7 @@ final class ScopeWatchItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers:
       program.timeout(30.seconds).asserting { events =>
         events.map(_.operationType) shouldBe List(OperationType.INSERT, OperationType.INSERT)
         events.flatMap(_.fullDocument).map(_.getString("name").getValue) shouldBe List("bob", "alice")
+        events.flatMap(_.namespace) shouldBe List(Namespace("scope_watch_db", Some("left")), Namespace("scope_watch_db", Some("right")))
       }
     }
 
