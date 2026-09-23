@@ -1,5 +1,7 @@
 package mongo4s.operations
 
+import scala.concurrent.duration.Duration
+
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -74,6 +76,10 @@ final class IndexSpec extends AnyWordSpec, Matchers:
 
     "accept a TTL of whole seconds" in {
       Index.ascending(ageField).expiringAfter(30.days).expireAfter shouldBe Some(30.days)
+    }
+
+    "expire a document at the time its indexed field holds, which is a TTL of zero asked for on purpose" in {
+      Index.ascending(ageField).expiringAtFieldTime.expireAfter shouldBe Some(Duration.Zero)
     }
 
     "reject a TTL that would truncate to zero seconds" in {

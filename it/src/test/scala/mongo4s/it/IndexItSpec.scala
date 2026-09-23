@@ -89,6 +89,17 @@ final class IndexItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndA
       program.asserting(_ shouldBe Some(7200L))
     }
 
+    "create a TTL index that expires each document at the time its field holds" in {
+      val program =
+        for
+          people  <- collection("ttl_at_field_time")
+          _       <- people.createIndex(Index.ascending(ageField).named("due").expiringAtFieldTime)
+          indexes <- people.listIndexes
+        yield byName(indexes).get("due").map(_.getNumber("expireAfterSeconds").longValue)
+
+      program.asserting(_ shouldBe Some(0L))
+    }
+
     "create a sparse index" in {
       val program =
         for

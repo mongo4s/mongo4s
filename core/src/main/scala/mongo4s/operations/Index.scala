@@ -1,6 +1,6 @@
 package mongo4s.operations
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 import com.mongodb.client.model.Collation
 import org.bson.{BsonDocument, BsonValue, BsonInt32, BsonString}
@@ -45,6 +45,8 @@ final class Index[E] private (
     )
     copy(expireAfter = Some(duration))
   end expiringAfter
+
+  def expiringAtFieldTime: Index[E] = copy(expireAfter = Some(Duration.Zero))
 
   def keysToBson(naming: FieldNaming): BsonDocument =
     keys.reverse.distinctBy(_._1).reverse.foldLeft(BsonDocument()) { (document, entry) =>
