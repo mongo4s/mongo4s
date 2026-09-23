@@ -69,6 +69,8 @@ object WireSumDerivation:
       throw BsonError.DecodingFailure(BsonError.Custom(s"Unknown subtype discriminator: $tag"))
 
     new WireCodec[A]:
+      override def fieldNaming: mongo4s.bson.FieldNaming = naming
+
       def encode(writer: BsonWriter, value: A): Unit =
         val ordinal = mirror.ordinal(value)
 

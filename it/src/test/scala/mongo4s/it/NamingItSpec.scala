@@ -22,6 +22,12 @@ object NamingItSpec:
 
   final case class Person(firstName: String, age: Int) derives WireCodec
 
+  final case class Checked(firstName: String, age: Int)
+
+  object Checked:
+    given WireCodec[Checked] =
+      WireCodec.derived[Checked].iemap(checked => Either.cond(checked.age >= 0, checked, "age cannot be negative"))(identity)
+
   final case class Legacy(givenName: String)
 
   object Legacy:
@@ -98,6 +104,19 @@ final class NamingItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAnd
         keys shouldBe Some(List("given-name"))
         found shouldBe List(NamingItSpec.Legacy("bob"))
       }
+    }
+
+    "keep the derived spelling when the codec is wrapped in iemap to validate what it reads" in {
+      val program =
+        for
+          client     <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database   <- client.getDatabase("naming_it")
+          collection <- database.getDirectCollection[NamingItSpec.Checked]("checked")
+          _          <- collection.insertOne(NamingItSpec.Checked("bob", 30))
+          found      <- collection.find(Field.of[NamingItSpec.Checked, String](_.firstName).equalTo("bob")).all
+        yield found
+
+      program.timeout(30.seconds).asserting(_ shouldBe List(NamingItSpec.Checked("bob", 30)))
     }
 
   }

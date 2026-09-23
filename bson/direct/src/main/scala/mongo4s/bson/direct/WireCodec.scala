@@ -13,10 +13,19 @@ trait WireCodec[A] extends WireEncoder[A] with WireDecoder[A]:
   def spellsAs(naming: mongo4s.bson.FieldNaming): Boolean = true
 
   def imap[B](f: A => B)(g: B => A): WireCodec[B] =
-    WireCodec.from(contramap(g), map(f))
+    mapped(contramap(g), map(f))
 
   def iemap[B](f: A => Either[String, B])(g: B => A): WireCodec[B] =
-    WireCodec.from(contramap(g), emap(f))
+    mapped(contramap(g), emap(f))
+
+  private def mapped[B](encoder: WireEncoder[B], decoder: WireDecoder[B]): WireCodec[B] =
+    new WireCodec[B]:
+      def encode(writer: BsonWriter, value: B): Unit                   = encoder.encode(writer, value)
+      def decode(reader: BsonReader): B                                = decoder.decode(reader)
+      override def isAbsent(value: B): Boolean                         = encoder.isAbsent(value)
+      override def defaultOnMissing: Option[B]                         = decoder.defaultOnMissing
+      override def fieldNaming: mongo4s.bson.FieldNaming               = WireCodec.this.fieldNaming
+      override def spellsAs(naming: mongo4s.bson.FieldNaming): Boolean = WireCodec.this.spellsAs(naming)
 
 object WireCodec extends WireCodecLowPriorityDerivation, WireIterableLowPriorityInstances, WireCollectionInstances:
   inline def apply[A](using instance: WireCodec[A]): WireCodec[A] = instance

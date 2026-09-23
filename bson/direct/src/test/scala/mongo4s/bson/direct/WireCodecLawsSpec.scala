@@ -7,6 +7,8 @@ import org.bson.BsonDocument
 
 import mongo4s.bson.BsonError
 
+import scala.jdk.CollectionConverters.given
+
 object WireCodecLawsSpec:
 
   final case class MappedName(value: Option[String])
@@ -27,6 +29,14 @@ object WireCodecLawsSpec:
   final case class Mapped(name: MappedName) derives WireCodec
   final case class Validated(name: ValidatedName) derives WireCodec
   final case class Required(name: RequiredName) derives WireCodec
+
+  object Snake:
+    given WireCodecConfig = WireCodecConfig.SnakeCase
+
+    final case class Person(firstName: String) derives WireCodec
+
+    enum Event derives WireCodec:
+      case Created(firstName: String)
 
 final class WireCodecLawsSpec extends AnyWordSpec, Matchers:
   import WireCodecLawsSpec.*
@@ -55,3 +65,23 @@ final class WireCodecLawsSpec extends AnyWordSpec, Matchers:
       decode[Required](encode(Required(RequiredName("Ada")))) shouldBe Right(Required(RequiredName("Ada")))
     }
   }
+
+  "the naming a codec reports" should {
+    "be the spelling it writes, for a product, a sum, and a product mapped with imap or iemap" in {
+      val person    = WireCodec[Snake.Person]
+      val event     = WireCodec[Snake.Event]
+      val mapped    = person.imap[Snake.Person](identity)(identity)
+      val validated = person.iemap[Snake.Person](Right(_))(identity)
+
+      List(person, mapped, validated).foreach { codec =>
+        codec.fieldNaming("firstName") shouldBe "first_name"
+        written(Snake.Person("Ada"))(using codec) shouldBe List("first_name")
+      }
+
+      event.fieldNaming("firstName") shouldBe "first_name"
+      written[Snake.Event](Snake.Event.Created("Ada")) shouldBe List("first_name")
+    }
+  }
+
+  private def written[A: WireCodec](value: A): List[String] =
+    encode(value).keySet.asScala.toList.filterNot(_ == WireSumDerivation.DiscriminatorField)
