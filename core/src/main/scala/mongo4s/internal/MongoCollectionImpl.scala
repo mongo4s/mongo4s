@@ -1,5 +1,7 @@
 package mongo4s.internal
 
+import scala.annotation.unused
+
 import org.bson.BsonDocument
 import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
 import com.mongodb.client.model.{ReplaceOneModel, UpdateManyModel, UpdateOneModel, WriteModel}
@@ -10,7 +12,7 @@ import mongo4s.results.*
 import mongo4s.operations.*
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.queries.{AggregateQuery, DistinctQuery, FindQuery}
-import mongo4s.{Effect, Field, MongoCollection, RsBridge, Streamable}
+import mongo4s.{DistinctOf, Effect, Field, MongoCollection, RsBridge, Streamable}
 import mongo4s.bson.{BsonDecoder, BsonDocumentCodec, DecodeResult, FieldNaming, BsonDocumentDecoder}
 
 import scala.jdk.CollectionConverters.given
@@ -231,9 +233,10 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       session = session,
     )
 
-  def distinct[B](field: Field[A, B], filter: Filter[A])(using
+  def distinct[C, B](field: Field[A, C], filter: Filter[A])(using
       session: Option[ClientSession],
   )(using
+      @unused values: DistinctOf[C, B],
       decoder: BsonDecoder[B],
   ): DistinctQuery[F, S, B] =
     DistinctQueryImpl(

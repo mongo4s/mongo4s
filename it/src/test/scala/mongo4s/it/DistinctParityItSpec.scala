@@ -98,6 +98,17 @@ final class DistinctParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, B
         }
     }
 
+    "answer with the elements' type when the field is typed as the array it is" in {
+      val typed = Field.stored[BsonDocument, List[String]]("labels")
+
+      parity[String]("typed_array", _.distinct(typed).all)
+        .timeout(30.seconds)
+        .asserting { (fromServer, fromFake) =>
+          fromFake shouldBe fromServer
+          fromFake shouldBe List("a", "b", "c")
+        }
+    }
+
     "apply the filter before collecting the values" in {
       parity[String]("filtered", _.distinct(city, age.gt(28)).all)
         .timeout(30.seconds)

@@ -1,5 +1,6 @@
 package mongo4s.testkit
 
+import scala.annotation.unused
 import scala.collection.mutable
 
 import com.mongodb.bulk.BulkWriteError
@@ -10,7 +11,7 @@ import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSM
 
 import mongo4s.operations.*
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
-import mongo4s.{Effect, Field, FieldPath, MongoCollection, MongoError, RsBridge, Streamable}
+import mongo4s.{DistinctOf, Effect, Field, FieldPath, MongoCollection, MongoError, RsBridge, Streamable}
 import mongo4s.bson.{BsonDocumentCodec, BsonDocumentDecoder, BsonField, DecodeResult, FieldNaming}
 import mongo4s.queries.{AggregateQuery, DecodeAttempts, DistinctQuery, FindQuery, SelectQuery}
 import mongo4s.results.{BulkWriteResult, DeleteResult, InsertManyResult, InsertOneResult, UpdateResult}
@@ -312,10 +313,11 @@ final class FakeMongoCollection[F[*], S[*], E](
   def aggregate[B](pipeline: Seq[Stage[E]])(using session: Option[ClientSession])(using decoderB: BsonDocumentDecoder[B]): AggregateQuery[F, S, B] =
     FakeAggregateQuery(pipeline.toList, decoderB)
 
-  def distinct[B](field: Field[E, B], filter: Filter[E])(using
+  def distinct[C, B](field: Field[E, C], filter: Filter[E])(using
       session: Option[ClientSession]
   )(using
-      decoder: mongo4s.bson.BsonDecoder[B]
+      @unused values: DistinctOf[C, B],
+      decoder: mongo4s.bson.BsonDecoder[B],
   ): DistinctQuery[F, S, B] =
     FakeDistinctQuery(field.path, filter, decoder)
 

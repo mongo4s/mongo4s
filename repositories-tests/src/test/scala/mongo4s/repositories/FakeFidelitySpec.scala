@@ -204,6 +204,14 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "distinct over a field typed as an array" should {
+    "answer with the elements' type, since the server answers with the elements" in {
+      val values: List[String] = fake(BsonDocument("tags", arr("a", "b")), BsonDocument("tags", arr("b", "c"))).distinct(tagsF).all.unsafeRunSync()
+
+      values shouldBe List("a", "b", "c")
+    }
+  }
+
   "a stream from the fake" should {
     "read the collection when it runs, not when it is built, as a cursor would" in {
       val c      = fake()

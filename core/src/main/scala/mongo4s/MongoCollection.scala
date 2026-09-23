@@ -89,9 +89,10 @@ trait MongoCollection[F[*], S[*], A]:
   ): AggregateQuery[F, S, B] =
     aggregate[B](pipeline)(using session)(using DocumentCodecBridge.toDocumentCodec[B](using codec))
 
-  def distinct[B](field: Field[A, B], filter: Filter[A] = Filter.all)(using
+  def distinct[C, B](field: Field[A, C], filter: Filter[A] = Filter.all)(using
       session: Option[ClientSession] = None,
   )(using
+      DistinctOf[C, B],
       BsonDecoder[B],
   ): DistinctQuery[F, S, B]
 
