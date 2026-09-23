@@ -20,12 +20,7 @@ final class TransactionOptions private (
   def withReadPreference(value: ReadPreference): TransactionOptions = copy(readPreference = Some(value))
 
   def withMaxCommitTime(value: FiniteDuration): TransactionOptions =
-    require(
-      value.toMillis > 0,
-      s"maxCommitTime must be at least one millisecond — MongoDB takes it in whole milliseconds, and $value would truncate to 0, which the driver refuses",
-    )
-    copy(maxCommitTime = Some(value))
-  end withMaxCommitTime
+    copy(maxCommitTime = Some(TimeLimit.millis(value, "maxCommitTime", "which the driver refuses")))
 
   def withRetryTimeout(value: FiniteDuration): TransactionOptions = copy(retryTimeout = Some(value))
 

@@ -5,7 +5,7 @@ import scala.concurrent.duration.FiniteDuration
 import org.bson.{BsonDocument, BsonTimestamp}
 import com.mongodb.client.model.changestream.{FullDocument, FullDocumentBeforeChange}
 
-import mongo4s.operations.Stage
+import mongo4s.operations.{Stage, TimeLimit}
 
 final class WatchOptions[E] private (
     val pipeline: Seq[Stage[E]],
@@ -37,11 +37,7 @@ final class WatchOptions[E] private (
     copy(startAtOperationTime = Some(time), resumeAfter = None, startAfter = None)
 
   def withMaxAwaitTime(value: FiniteDuration): WatchOptions[E] =
-    require(
-      value.toMillis > 0,
-      s"maxAwaitTime must be at least one millisecond — MongoDB takes it in whole milliseconds, and $value would truncate to 0",
-    )
-    copy(maxAwaitTime = Some(value))
+    copy(maxAwaitTime = Some(TimeLimit.millis(value, "maxAwaitTime", "which it reads as the server default")))
 
   def withBatchSize(value: Int): WatchOptions[E] =
     copy(batchSize = Some(value))
