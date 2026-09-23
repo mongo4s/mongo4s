@@ -10,8 +10,6 @@ import org.bson.{BsonReader, BsonWriter}
 trait WireCodec[A] extends WireEncoder[A] with WireDecoder[A]:
   def fieldNaming: mongo4s.bson.FieldNaming = mongo4s.bson.FieldNaming.identity
 
-  def spellsAs(naming: mongo4s.bson.FieldNaming): Boolean = true
-
   def imap[B](f: A => B)(g: B => A): WireCodec[B] =
     mapped(contramap(g), map(f))
 
@@ -20,12 +18,11 @@ trait WireCodec[A] extends WireEncoder[A] with WireDecoder[A]:
 
   private def mapped[B](encoder: WireEncoder[B], decoder: WireDecoder[B]): WireCodec[B] =
     new WireCodec[B]:
-      def encode(writer: BsonWriter, value: B): Unit                   = encoder.encode(writer, value)
-      def decode(reader: BsonReader): B                                = decoder.decode(reader)
-      override def isAbsent(value: B): Boolean                         = encoder.isAbsent(value)
-      override def defaultOnMissing: Option[B]                         = decoder.defaultOnMissing
-      override def fieldNaming: mongo4s.bson.FieldNaming               = WireCodec.this.fieldNaming
-      override def spellsAs(naming: mongo4s.bson.FieldNaming): Boolean = WireCodec.this.spellsAs(naming)
+      def encode(writer: BsonWriter, value: B): Unit     = encoder.encode(writer, value)
+      def decode(reader: BsonReader): B                  = decoder.decode(reader)
+      override def isAbsent(value: B): Boolean           = encoder.isAbsent(value)
+      override def defaultOnMissing: Option[B]           = decoder.defaultOnMissing
+      override def fieldNaming: mongo4s.bson.FieldNaming = WireCodec.this.fieldNaming
 
 object WireCodec extends WireCodecLowPriorityDerivation, WireIterableLowPriorityInstances, WireCollectionInstances:
   inline def apply[A](using instance: WireCodec[A]): WireCodec[A] = instance
