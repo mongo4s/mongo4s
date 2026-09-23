@@ -1,16 +1,10 @@
 package mongo4s.internal
 
-import java.util.concurrent.TimeUnit
-
 import org.bson.BsonDocument
 import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
-import com.mongodb.client.model.{BulkWriteOptions, DeleteManyModel, DeleteOneModel, IndexOptions, InsertOneModel}
-import com.mongodb.client.model.{CountOptions as DriverCountOptions, DeleteOptions as DriverDeleteOptions}
-import com.mongodb.client.model.{FindOneAndDeleteOptions as DriverFindOneAndDeleteOptions, ReturnDocument}
-import com.mongodb.client.model.{FindOneAndReplaceOptions as DriverFindOneAndReplaceOptions, FindOneAndUpdateOptions as DriverFindOneAndUpdateOptions}
 import com.mongodb.client.model.{ReplaceOneModel, UpdateManyModel, UpdateOneModel, WriteModel}
-import com.mongodb.client.model.{ReplaceOptions as DriverReplaceOptions, UpdateOptions as DriverUpdateOptions}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
+import com.mongodb.client.model.{BulkWriteOptions, DeleteManyModel, DeleteOneModel, InsertOneModel}
 
 import mongo4s.results.*
 import mongo4s.operations.*
@@ -77,7 +71,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       options: ReplaceOptions,
   )(using session: Option[ClientSession]): F[UpdateResult] =
     F.suspend {
-      val driverOptions = driverReplace(options)
+      val driverOptions = DriverOptions.replace(options)
 
       val publisher = session match
         case Some(s) => underlying.replaceOne(s, filter.toBson(naming), codec.encodeDocument(replacement), driverOptions)
@@ -88,7 +82,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
 
   def updateOne(filter: Filter[A], update: Update[A], options: UpdateOptions)(using session: Option[ClientSession]): F[UpdateResult] =
     F.suspend {
-      val driverOptions = driverUpdate(options)
+      val driverOptions = DriverOptions.update(options, naming)
 
       val publisher = session match
         case Some(s) => underlying.updateOne(s, filter.toBson(naming), update.toBson(naming), driverOptions)
@@ -103,7 +97,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       options: UpdateOptions,
   )(using session: Option[ClientSession]): F[UpdateResult] =
     F.suspend {
-      val driverOptions = driverUpdate(options)
+      val driverOptions = DriverOptions.update(options, naming)
 
       val publisher = session match
         case Some(s) => underlying.updateMany(s, filter.toBson(naming), update.toBson(naming), driverOptions)
@@ -116,7 +110,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       session: Option[ClientSession],
   ): F[DeleteResult] =
     F.suspend {
-      val driverOptions = driverDelete(options)
+      val driverOptions = DriverOptions.delete(options)
 
       val publisher = session match
         case Some(s) => underlying.deleteOne(s, filter.toBson(naming), driverOptions)
@@ -131,7 +125,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       session: Option[ClientSession],
   ): F[DeleteResult] =
     F.suspend {
-      val driverOptions = driverDelete(options)
+      val driverOptions = DriverOptions.delete(options)
 
       val publisher = session match
         case Some(s) => underlying.deleteMany(s, filter.toBson(naming), driverOptions)
@@ -150,7 +144,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       session: Option[ClientSession],
   ): F[Option[A]] =
     F.suspend {
-      val driverOptions = driverFindOneAndUpdate(options)
+      val driverOptions = DriverOptions.findOneAndUpdate(options, naming)
 
       val publisher = session match
         case Some(s) => underlying.findOneAndUpdate(s, filter.toBson(naming), update.toBson(naming), driverOptions)
@@ -167,7 +161,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       session: Option[ClientSession],
   ): F[Option[A]] =
     F.suspend {
-      val driverOptions = driverFindOneAndReplace(options)
+      val driverOptions = DriverOptions.findOneAndReplace(options, naming)
 
       val encoded = codec.encodeDocument(replacement)
 
@@ -182,7 +176,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       session: Option[ClientSession],
   ): F[Option[A]] =
     F.suspend {
-      val driverOptions = driverFindOneAndDelete(options)
+      val driverOptions = DriverOptions.findOneAndDelete(options, naming)
 
       val publisher = session match
         case Some(s) => underlying.findOneAndDelete(s, filter.toBson(naming), driverOptions)
@@ -196,7 +190,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
   ): F[Long] =
     F.suspend {
       val bson          = filter.toBson(naming)
-      val driverOptions = driverCount(options)
+      val driverOptions = DriverOptions.count(options)
 
       val publisher = session match
         case Some(s) => underlying.countDocuments(s, bson, driverOptions)
@@ -252,13 +246,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
 
   def createIndex(index: Index[A])(using session: Option[ClientSession]): F[String] =
     F.suspend {
-      val options = IndexOptions().unique(index.unique).sparse(index.sparse).hidden(index.hidden)
-
-      index.name.foreach(options.name)
-      index.expireAfter.foreach(duration => options.expireAfter(duration.toSeconds, TimeUnit.SECONDS))
-      index.partialFilter.foreach(filter => options.partialFilterExpression(filter.toBson(naming)))
-      index.collation.foreach(options.collation)
-      index.wildcardProjection.foreach(options.wildcardProjection)
+      val options = DriverOptions.index(index, naming)
 
       val keys = index.keysToBson(naming)
 
@@ -352,89 +340,10 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       session = session,
     )
 
-  private def driverUpdate(options: UpdateOptions): DriverUpdateOptions =
-    val driverOptions = DriverUpdateOptions().upsert(options.upsert)
-
-    if options.arrayFilters.nonEmpty
-    then driverOptions.arrayFilters(options.arrayFilters.map(_.toBson(naming)).asJava): Unit
-
-    options.collation.foreach(value => driverOptions.collation(value))
-    options.hint.foreach(value => driverOptions.hint(value))
-    options.comment.foreach(value => driverOptions.comment(value))
-    options.bypassDocumentValidation.foreach(value => driverOptions.bypassDocumentValidation(value))
-
-    driverOptions
-  end driverUpdate
-
-  private def driverReplace(options: ReplaceOptions): DriverReplaceOptions =
-    val driverOptions = DriverReplaceOptions().upsert(options.upsert)
-
-    options.collation.foreach(value => driverOptions.collation(value))
-    options.hint.foreach(value => driverOptions.hint(value))
-    options.comment.foreach(value => driverOptions.comment(value))
-    options.bypassDocumentValidation.foreach(value => driverOptions.bypassDocumentValidation(value))
-
-    driverOptions
-  end driverReplace
-
-  private def driverDelete(options: DeleteOptions): DriverDeleteOptions =
-    val driverOptions = DriverDeleteOptions()
-
-    options.collation.foreach(value => driverOptions.collation(value))
-    options.hint.foreach(value => driverOptions.hint(value))
-    options.comment.foreach(value => driverOptions.comment(value))
-
-    driverOptions
-  end driverDelete
-
-  private def driverCount(options: CountOptions): DriverCountOptions =
-    val driverOptions = DriverCountOptions()
-
-    options.collation.foreach(value => driverOptions.collation(value))
-    options.hint.foreach(value => driverOptions.hint(value))
-    options.limit.foreach(value => driverOptions.limit(value))
-    options.skip.foreach(value => driverOptions.skip(value))
-    options.maxTime.foreach(value => driverOptions.maxTime(value.toMillis, TimeUnit.MILLISECONDS))
-
-    driverOptions
-  end driverCount
-
-  private def driverFindOneAndUpdate(options: FindOneAndUpdateOptions[A]): DriverFindOneAndUpdateOptions =
-    val driverOptions = DriverFindOneAndUpdateOptions()
-      .upsert(options.upsert)
-      .returnDocument(if options.returnUpdated then ReturnDocument.AFTER else ReturnDocument.BEFORE)
-
-    if !options.sort.isEmpty then driverOptions.sort(options.sort.toBson(naming)): Unit
-    if !options.projection.isEmpty then driverOptions.projection(options.projection.toBson(naming)): Unit
-    if options.arrayFilters.nonEmpty then driverOptions.arrayFilters(options.arrayFilters.map(_.toBson(naming)).asJava): Unit
-
-    driverOptions
-  end driverFindOneAndUpdate
-
-  private def driverFindOneAndReplace(options: FindOneAndReplaceOptions[A]): DriverFindOneAndReplaceOptions =
-    val driverOptions = DriverFindOneAndReplaceOptions()
-      .upsert(options.upsert)
-      .returnDocument(if options.returnUpdated then ReturnDocument.AFTER else ReturnDocument.BEFORE)
-
-    if !options.sort.isEmpty then driverOptions.sort(options.sort.toBson(naming)): Unit
-    if !options.projection.isEmpty then driverOptions.projection(options.projection.toBson(naming)): Unit
-
-    driverOptions
-  end driverFindOneAndReplace
-
-  private def driverFindOneAndDelete(options: FindOneAndDeleteOptions[A]): DriverFindOneAndDeleteOptions =
-    val driverOptions = DriverFindOneAndDeleteOptions()
-
-    if !options.sort.isEmpty then driverOptions.sort(options.sort.toBson(naming)): Unit
-    if !options.projection.isEmpty then driverOptions.projection(options.projection.toBson(naming)): Unit
-
-    driverOptions
-  end driverFindOneAndDelete
-
   private def toModel(command: WriteCommand[A]): WriteModel[BsonDocument] = command match
     case WriteCommand.InsertOne(document)                 => InsertOneModel(codec.encodeDocument(document))
-    case WriteCommand.ReplaceOne(filter, value, options)  => ReplaceOneModel(filter.toBson(naming), codec.encodeDocument(value), driverReplace(options))
-    case WriteCommand.UpdateOne(filter, update, options)  => UpdateOneModel(filter.toBson(naming), update.toBson(naming), driverUpdate(options))
-    case WriteCommand.UpdateMany(filter, update, options) => UpdateManyModel(filter.toBson(naming), update.toBson(naming), driverUpdate(options))
+    case WriteCommand.ReplaceOne(filter, value, options)  => ReplaceOneModel(filter.toBson(naming), codec.encodeDocument(value), DriverOptions.replace(options))
+    case WriteCommand.UpdateOne(filter, update, options)  => UpdateOneModel(filter.toBson(naming), update.toBson(naming), DriverOptions.update(options, naming))
+    case WriteCommand.UpdateMany(filter, update, options) => UpdateManyModel(filter.toBson(naming), update.toBson(naming), DriverOptions.update(options, naming))
     case WriteCommand.DeleteOne(filter)                   => DeleteOneModel(filter.toBson(naming))
     case WriteCommand.DeleteMany(filter)                  => DeleteManyModel(filter.toBson(naming))
