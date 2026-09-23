@@ -83,5 +83,15 @@ final class WireCodecLawsSpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "a codec bridged to a document codec" should {
+    "report an ordinary decoding error as a Left, but let an interruption through rather than swallow it" in {
+      val broken      = WireCodec.instance[String]((writer, value) => writer.writeString(value), _ => throw IllegalStateException("broken"))
+      val interrupted = WireCodec.instance[String]((writer, value) => writer.writeString(value), _ => throw InterruptedException("stop"))
+
+      DocumentCodecBridge.toDocumentCodec[String](using broken).decodeDocument(BsonDocument()).isLeft shouldBe true
+      intercept[InterruptedException](DocumentCodecBridge.toDocumentCodec[String](using interrupted).decodeDocument(BsonDocument()))
+    }
+  }
+
   private def written[A: WireCodec](value: A): List[String] =
     encode(value).keySet.asScala.toList.filterNot(_ == WireSumDerivation.DiscriminatorField)

@@ -1,5 +1,7 @@
 package mongo4s.bson.direct
 
+import scala.util.control.NonFatal
+
 import org.bson.{BsonDocument, BsonDocumentReader, BsonDocumentWriter}
 
 import mongo4s.bson.{BsonDocumentCodec, BsonError}
@@ -14,5 +16,5 @@ object DocumentCodecBridge:
       },
       document =>
         try Right(codec.decode(BsonDocumentReader(document)))
-        catch case error: Throwable => Left(BsonError.fromThrowable(error)),
+        catch case NonFatal(error) => Left(BsonError.fromThrowable(error)),
     )
