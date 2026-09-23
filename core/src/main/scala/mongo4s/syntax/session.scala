@@ -43,7 +43,7 @@ trait session:
 
       def attempt(until: Option[FiniteDuration]): F[A] =
         F.flatMap(MongoSession.startTransaction[F](session, options)) { _ =>
-          val bodyThenCommit = F.flatMap(fa)(a => F.map(commit(until))(_ => a))
+          val bodyThenCommit = F.flatMap(F.suspend(fa))(a => F.map(commit(until))(_ => a))
 
           F.guaranteeCase(bodyThenCommit) {
             case ExitCase.Succeeded      => F.unit

@@ -170,6 +170,18 @@ trait TransactionBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
     }
   }
 
+  "a transaction body" should {
+    "be aborted when it throws while being built, before it has returned an F" in {
+      val boom = IllegalArgumentException("thrown while building the body")
+      val fake = FakeSession()
+
+      runAttempt(fake.session.withTransaction[F, S, Int](throw boom)) shouldBe Left(boom)
+
+      fake.started.get shouldBe 1
+      fake.aborts.get shouldBe 1
+    }
+  }
+
   "Effect.monotonic" should {
     "not go backwards" in {
       val first  = run(F.monotonic)
