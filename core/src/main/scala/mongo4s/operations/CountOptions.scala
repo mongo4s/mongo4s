@@ -16,9 +16,9 @@ final class CountOptions private (
 
   def withHint(value: BsonDocument): CountOptions = copy(hint = Some(value))
 
-  def withLimit(value: Int): CountOptions = copy(limit = Some(value))
+  def withLimit(value: Int): CountOptions = copy(limit = Some(Bounds.atLeastOne(value, "limit", Bounds.NoLimit)))
 
-  def withSkip(value: Int): CountOptions = copy(skip = Some(value))
+  def withSkip(value: Int): CountOptions = copy(skip = Some(Bounds.notNegative(value, "skip")))
 
   def withMaxTime(value: FiniteDuration): CountOptions = copy(maxTime = Some(TimeLimit.millis(value, "maxTime")))
 

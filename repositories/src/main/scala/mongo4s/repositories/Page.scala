@@ -1,12 +1,15 @@
 package mongo4s.repositories
 
-import mongo4s.operations.Sort
+import mongo4s.operations.{Bounds, Sort}
 
 final case class Page[E](
     sort: Sort[E] = Sort.empty[E],
     skip: Option[Int] = None,
     limit: Option[Int] = None,
 ):
+  skip.foreach(Bounds.notNegative(_, "skip"))
+  limit.foreach(Bounds.atLeastOne(_, "limit", Bounds.NoLimit))
+
   def sortedBy(value: Sort[E]): Page[E] = copy(sort = value)
   def skipping(n: Int): Page[E]         = copy(skip = Some(n))
   def taking(n: Int): Page[E]           = copy(limit = Some(n))

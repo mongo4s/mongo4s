@@ -204,6 +204,16 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "a limit or a skip that MongoDB would read differently" should {
+    "be refused by a find on the fake as on the real collection, and by a repository page" in {
+      val c = fake(keyed("a"))
+
+      an[IllegalArgumentException] should be thrownBy c.find().limit(0)
+      an[IllegalArgumentException] should be thrownBy c.find().skip(-1)
+      an[IllegalArgumentException] should be thrownBy mongo4s.repositories.Page[BsonDocument](limit = Some(0))
+    }
+  }
+
   "distinct over a field typed as an array" should {
     "answer with the elements' type, since the server answers with the elements" in {
       val values: List[String] = fake(BsonDocument("tags", arr("a", "b")), BsonDocument("tags", arr("b", "c"))).distinct(tagsF).all.unsafeRunSync()

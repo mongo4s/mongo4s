@@ -829,8 +829,8 @@ final class FakeMongoCollection[F[*], S[*], E](
     def filter(other: Filter[E]): FindQuery[F, S, E]     = FakeFindQuery(Filter.and(filter, other), projection, ordering, skipped, limited)
     def sort(value: Sort[E]): FindQuery[F, S, E]         = FakeFindQuery(filter, projection, value, skipped, limited)
     def projection(p: Projection[E]): FindQuery[F, S, E] = FakeFindQuery(filter, p, ordering, skipped, limited)
-    def skip(n: Int): FindQuery[F, S, E]                 = FakeFindQuery(filter, projection, ordering, Some(n), limited)
-    def limit(n: Int): FindQuery[F, S, E]                = FakeFindQuery(filter, projection, ordering, skipped, Some(n))
+    def skip(n: Int): FindQuery[F, S, E]                 = FakeFindQuery(filter, projection, ordering, Some(Bounds.notNegative(n, "skip")), limited)
+    def limit(n: Int): FindQuery[F, S, E]                = FakeFindQuery(filter, projection, ordering, skipped, Some(Bounds.atLeastOne(n, "limit", Bounds.NoLimit)))
 
     def hint(keys: BsonDocument): FindQuery[F, S, E]                                    = this
     def collation(value: com.mongodb.client.model.Collation): FindQuery[F, S, E]        = refuseCollation

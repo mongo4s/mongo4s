@@ -9,7 +9,7 @@ import com.mongodb.client.model.Collation
 import com.mongodb.reactivestreams.client.{ClientSession, FindPublisher, MongoCollection as RSMongoCollection}
 
 import mongo4s.{RsBridge, Streamable}
-import mongo4s.operations.{Filter, Projection, Sort}
+import mongo4s.operations.{Bounds, Filter, Projection, Sort}
 import mongo4s.queries.{DecodeAttempts, FindQuery, SelectQuery}
 import mongo4s.bson.{BsonDocumentCodec, BsonDocumentDecoder, DecodeResult, FieldNaming}
 
@@ -31,8 +31,8 @@ private[mongo4s] final class DirectFindQueryImpl[F[*], S[*], A](
   def filter(value: Filter[A]): FindQuery[F, S, A]         = copy(filter = Filter.and(filter, value))
   def sort(value: Sort[A]): FindQuery[F, S, A]             = copy(sort = value)
   def projection(value: Projection[A]): FindQuery[F, S, A] = copy(projection = value)
-  def skip(n: Int): FindQuery[F, S, A]                     = copy(skip = Some(n))
-  def limit(n: Int): FindQuery[F, S, A]                    = copy(limit = Some(n))
+  def skip(n: Int): FindQuery[F, S, A]                     = copy(skip = Some(Bounds.notNegative(n, "skip")))
+  def limit(n: Int): FindQuery[F, S, A]                    = copy(limit = Some(Bounds.atLeastOne(n, "limit", Bounds.NoLimit)))
 
   def hint(keys: BsonDocument): FindQuery[F, S, A]          = copy(options = options.withHint(keys))
   def collation(value: Collation): FindQuery[F, S, A]       = copy(options = options.withCollation(value))

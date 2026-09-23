@@ -7,7 +7,7 @@ import scala.concurrent.duration.FiniteDuration
 import org.bson.BsonDocument
 import com.mongodb.client.model.Collation
 
-import mongo4s.operations.TimeLimit
+import mongo4s.operations.{Bounds, TimeLimit}
 
 private[mongo4s] final case class QueryOptions(
     hint: Option[BsonDocument] = None,
@@ -19,7 +19,7 @@ private[mongo4s] final case class QueryOptions(
   def withHint(keys: BsonDocument): QueryOptions       = copy(hint = Some(keys))
   def withCollation(value: Collation): QueryOptions    = copy(collation = Some(value))
   def withMaxTime(value: FiniteDuration): QueryOptions = copy(maxTime = Some(TimeLimit.millis(value, "maxTime")))
-  def withBatchSize(value: Int): QueryOptions          = copy(batchSize = Some(value))
+  def withBatchSize(value: Int): QueryOptions          = copy(batchSize = Some(Bounds.atLeastOne(value, "batchSize", Bounds.NoBatching)))
   def withComment(value: String): QueryOptions         = copy(comment = Some(value))
 
   def maxTimeMillis: Option[Long] = maxTime.map(_.toMillis)

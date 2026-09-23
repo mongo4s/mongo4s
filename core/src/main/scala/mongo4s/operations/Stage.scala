@@ -189,8 +189,8 @@ object Stage:
   def matching[E](filter: Filter[E]): Stage[E]        = MatchStage(filter)
   def project[E](projection: Projection[E]): Stage[E] = ProjectStage(projection)
   def sortBy[E](sort: Sort[E]): Stage[E]              = SortStage(sort)
-  def limit[E](n: Int): Stage[E]                      = Limit(n)
-  def skip[E](n: Int): Stage[E]                       = Skip(n)
+  def limit[E](n: Int): Stage[E]                      = Limit(Bounds.atLeastOne(n, "$limit", "which MongoDB refuses"))
+  def skip[E](n: Int): Stage[E]                       = Skip(Bounds.notNegative(n, "$skip"))
   def count[E](fieldName: String): Stage[E]           = Count(fieldName)
 
   def unwind[E, A](field: Field[E, A], preserveNullAndEmptyArrays: Boolean = false): Stage[E] =
@@ -226,7 +226,7 @@ object Stage:
 
   def replaceRoot[E, A](field: Field[E, A]): Stage[E] = ReplaceRoot(field.path)
 
-  def sample[E](size: Int): Stage[E]             = Sample(size)
+  def sample[E](size: Int): Stage[E]             = Sample(Bounds.atLeastOne(size, "$sample size", "which MongoDB refuses"))
   def unionWith[E](collection: String): Stage[E] = UnionWith(collection)
 
   def facet[E](facets: (String, List[Stage[E]])*): Stage[E] = Facet(facets.toList)
