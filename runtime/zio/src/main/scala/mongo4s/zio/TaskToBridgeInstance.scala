@@ -18,10 +18,10 @@ trait TaskToBridgeInstance:
         case Some(d) => task.timeoutFail(RsBridgeError.Timeout(d))(Duration.fromScala(d))
         case None    => task
 
-    private def sourceOf[A](publisher: => Publisher[A]): ZStream[Any, Throwable, A] =
+    private def sourceOf[A](publisher: => Publisher[A], bufferSize: Int = config.bufferSize): ZStream[Any, Throwable, A] =
       ZStream.unwrap(
         ZIO.attempt(RsBridgeSupport.translating(publisher)).map { publisher =>
-          publisherToStream(publisher).toZIOStream(config.bufferSize)
+          publisherToStream(publisher).toZIOStream(bufferSize)
         }
       )
 
@@ -48,7 +48,7 @@ trait TaskToBridgeInstance:
       )
 
     private def probe[A](publisher: => Publisher[A]): Task[List[A]] =
-      sourceOf(publisher).take(RsBridgeSupport.SingleResultProbe).runCollect.map(_.toList)
+      sourceOf(publisher, RsBridgeSupport.SingleResultProbe).take(RsBridgeSupport.SingleResultProbe).runCollect.map(_.toList)
 
     def stream[A](publisher: => Publisher[A])(using Streamable[ZioStream, A]): ZStream[Any, Throwable, A] =
       sourceOf(publisher)

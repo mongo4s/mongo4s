@@ -37,7 +37,10 @@ trait TaskToBridgeInstance:
         case Left(error) => Task.error(error)
 
     def stream[A](publisher: => Publisher[A])(using Streamable[RapidStream, A]): Stream[A] =
-      Stream.fromIteratorManaged[A](Task(PublisherIterator(RsBridgeSupport.translating(publisher), config.bufferSize))) {
+      iterated(publisher, config.bufferSize, Long.MaxValue)
+
+    private def iterated[A](publisher: => Publisher[A], bufferSize: Int, limit: Long): Stream[A] =
+      Stream.fromIteratorManaged[A](Task(PublisherIterator(RsBridgeSupport.translating(publisher), bufferSize, limit))) {
         case iterator: PublisherIterator[?] => Task(iterator.cancel())
         case _                              => Task.pure(())
       }
@@ -63,6 +66,6 @@ trait TaskToBridgeInstance:
       )
 
     private def probe[A](publisher: => Publisher[A]): Task[List[A]] =
-      stream(publisher).take(RsBridgeSupport.SingleResultProbe).toList
+      iterated(publisher, RsBridgeSupport.SingleResultProbe, RsBridgeSupport.SingleResultProbe.toLong).toList
 
 object TaskToBridgeInstance extends TaskToBridgeInstance

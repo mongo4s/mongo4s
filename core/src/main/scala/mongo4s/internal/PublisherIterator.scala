@@ -10,9 +10,11 @@ import org.reactivestreams.{Publisher, Subscriber, Subscription}
 private[mongo4s] final class PublisherIterator[A](
     publisher: Publisher[A],
     bufferSize: Int,
+    limit: Long = Long.MaxValue,
 ) extends Iterator[A]:
 
   private val capacity = math.max(1, bufferSize)
+  private val demand   = math.min(capacity.toLong, limit)
 
   private val queue = ArrayBlockingQueue[Try[Option[A]]](capacity + 1)
 
@@ -22,6 +24,8 @@ private[mongo4s] final class PublisherIterator[A](
 
   private var pending   = Option.empty[A]
   private var exhausted = false
+  private var requested = demand
+  private var taken     = 0L
 
   publisher.subscribe {
     new Subscriber[A]:
@@ -29,7 +33,7 @@ private[mongo4s] final class PublisherIterator[A](
         subscriptionRef.set(subscription)
         if cancelled.get
         then subscription.cancel()
-        else subscription.request(capacity.toLong)
+        else subscription.request(demand)
       end onSubscribe
 
       def onNext(value: A): Unit =
@@ -62,13 +66,21 @@ private[mongo4s] final class PublisherIterator[A](
     then true
     else if exhausted
     then false
+    else if taken >= limit
+    then
+      exhausted = true
+      cancel()
+      false
     else
       queue.take() match
         case Success(Some(value)) =>
           pending = Some(value)
+          taken += 1
           val subscription = subscriptionRef.get
-          if subscription ne null
-          then subscription.request(1L)
+          if (subscription ne null) && requested < limit
+          then
+            requested += 1
+            subscription.request(1L)
           true
 
         case Success(None) =>

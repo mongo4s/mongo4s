@@ -148,6 +148,13 @@ trait RsBridgeBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers, TimeLimits:
     "return the first element for a non-empty publisher" in {
       run(bridge.option(RecordingPublisher(List(7, 8)))) shouldBe Some(7)
     }
+
+    "pull the two elements it needs from a cursor, not a buffer's worth" in {
+      val cursor = RecordingPublisher((1 to 1000).toList)
+
+      run(bridge.option(cursor)) shouldBe Some(1)
+      cursor.delivered.get should be <= 4
+    }
   }
 
   "unit" should {
