@@ -14,6 +14,7 @@ import mongo4s.bson.BsonError
 object EitherWireCodecSpec:
   final case class Foo(x: Int) derives WireCodec
   final case class Bar(y: String) derives WireCodec
+  final case class Tagged(_type: String) derives WireCodec
 
 final class EitherWireCodecSpec extends AnyWordSpec, Matchers:
   import EitherWireCodecSpec.*
@@ -76,5 +77,10 @@ final class EitherWireCodecSpec extends AnyWordSpec, Matchers:
       intercept[IllegalArgumentException] {
         summon[WireCodec[Either[Foo, Foo]]]
       }
+    }
+
+    "refuse a branch that declares a field of its own colliding with the discriminator, which would overwrite it" in {
+      val thrown = the[IllegalArgumentException] thrownBy summon[WireCodec[Either[Tagged, Int]]]
+      thrown.getMessage should include("collides with the branch discriminator")
     }
   }

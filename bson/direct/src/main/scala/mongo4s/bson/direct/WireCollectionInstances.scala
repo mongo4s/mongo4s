@@ -147,6 +147,18 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
       s"Either's two branches must have distinguishable type names to derive a WireCodec — both were '$nameA'",
     )
 
+    refuseCollision(nameA, codecA)
+    refuseCollision(nameB, codecB)
+
+    private def refuseCollision(name: String, codec: WireCodec[?]): Unit =
+      codec match
+        case fields: FieldCodec[?] =>
+          require(
+            !fields.fieldNames.contains(WireSumDerivation.DiscriminatorField),
+            s"Either's '$name' branch declares a field named '${WireSumDerivation.DiscriminatorField}', which collides with the branch discriminator",
+          )
+        case _                     => ()
+
     private def writeBranch[T](writer: BsonWriter, tag: String, value: T, codec: WireCodec[T]): Unit =
       writer.writeStartDocument()
       writer.writeName(WireSumDerivation.DiscriminatorField)
