@@ -13,7 +13,7 @@ import mongo4s.bson.direct.WireCodec
 import mongo4s.cats.CatsStream
 import mongo4s.operations.{Index, WriteCommand}
 import mongo4s.repositories.BaseMongoRepository
-import mongo4s.{Field, MongoClient, PrimaryKey}
+import mongo4s.{Field, MongoClient, MongoError, PrimaryKey}
 
 import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
@@ -91,6 +91,38 @@ final class RepositoryBulkItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, B
         val (failed, present) = result
         failed shouldBe true
         present shouldBe 3L
+      }
+    }
+
+    "report a failure in a later batch by its position in the whole write, with what the earlier batches wrote" in {
+      val program =
+        for
+          repo   <- repository("ordered_positions")
+          _      <- repo.insertOne(Person("dup", "clash@x"))
+          failed <- repo.bulkWrite(inserts("a", "b") ++ Seq(WriteCommand.InsertOne(Person("c", "clash@x"))) ++ inserts("d")).attempt
+        yield failed
+
+      program.timeout(30.seconds).asserting {
+        case Left(failed: MongoError.BulkWriteFailed) =>
+          failed.failures.map(_.index) shouldBe List(2)
+          failed.result.insertedCount shouldBe 2
+        case other                                    => fail(s"expected a BulkWriteFailed, got $other")
+      }
+    }
+
+    "report an insertMany failure in a later batch by the entity's position in the whole list" in {
+      val program =
+        for
+          repo   <- repository("insert_many_positions")
+          _      <- repo.insertOne(Person("dup", "clash@x"))
+          failed <- repo.insertMany(List(Person("a", "a@x"), Person("b", "b@x"), Person("c", "c@x"), Person("d", "clash@x"))).attempt
+        yield failed
+
+      program.timeout(30.seconds).asserting {
+        case Left(failed: MongoError.BulkWriteFailed) =>
+          failed.failures.map(_.index) shouldBe List(3)
+          failed.result.insertedCount shouldBe 3
+        case other                                    => fail(s"expected a BulkWriteFailed, got $other")
       }
     }
   }

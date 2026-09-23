@@ -5,11 +5,12 @@ import org.scalatest.matchers.should.Matchers
 import cats.effect.testing.scalatest.AsyncIOSpec
 
 import cats.effect.IO
+import org.bson.{BsonDocument, BsonString}
 
-import mongo4s.Field
 import mongo4s.cats.CatsStream
 import mongo4s.testkit.FakeRepository
-import mongo4s.operations.{Filter, FindOneAndUpdateOptions, Projection, Update, WriteCommand}
+import mongo4s.{Field, MongoError, PrimaryKey}
+import mongo4s.operations.{Filter, FindOneAndUpdateOptions, Projection, ReplaceOptions, Update, WriteCommand}
 
 import mongo4s.bson.BsonInstances.given
 import mongo4s.cats.CatsInstances.given
@@ -27,6 +28,58 @@ final class BatchingSpec extends AsyncWordSpec, AsyncIOSpec, Matchers:
     FakeRepository[IO, S, Person, String](list => fs2.Stream.emits(list), batchSize, projection)
 
   private def people(n: Int): List[Person] = (1 to n).toList.map(i => Person(i.toString, s"p$i", 20 + i))
+
+  private given PrimaryKey[BsonDocument, String] = PrimaryKey.storedId(_.getString("_id").getValue)
+
+  private def keyed(ids: String*): List[BsonDocument] = ids.toList.map(id => BsonDocument("_id", BsonString(id)))
+
+  private def documents(batchSize: Int): FakeRepository[IO, S, BsonDocument, String] =
+    FakeRepository[IO, S, BsonDocument, String](list => fs2.Stream.emits(list), batchSize)
+
+  "a batch that fails after earlier batches were written" should {
+    "report the failing command by its position in the whole bulk write, with what the earlier batches wrote" in {
+      val repository = documents(batchSize = 2)
+
+      repository.bulkWrite(keyed("a", "b", "a").map(WriteCommand.InsertOne(_))).attempt.asserting {
+        case Left(failed: MongoError.BulkWriteFailed) =>
+          failed.failures.map(_.index) shouldBe List(2)
+          failed.result.insertedCount shouldBe 2
+        case other                                    => fail(s"expected a BulkWriteFailed, got $other")
+      }
+    }
+
+    "report the failing entity of an insertMany by its position in the whole list" in {
+      val repository = documents(batchSize = 2)
+
+      repository.insertMany(keyed("a", "b", "c", "d", "a")).attempt.asserting {
+        case Left(failed: MongoError.BulkWriteFailed) =>
+          failed.failures.map(_.index) shouldBe List(4)
+          failed.result.insertedCount shouldBe 4
+        case other                                    => fail(s"expected a BulkWriteFailed, got $other")
+      }
+    }
+
+    "keep the upserted ids of the batches that went through" in {
+      val repository = documents(batchSize = 2)
+
+      repository.fake.insertOne(BsonDocument("_id", BsonString("z"))) *>
+        repository
+          .bulkWrite(
+            List(
+              WriteCommand.ReplaceOne(Field.stored[BsonDocument, String]("_id").equalTo("a"), keyed("a").head, ReplaceOptions.upsert),
+              WriteCommand.ReplaceOne(Field.stored[BsonDocument, String]("_id").equalTo("b"), keyed("b").head, ReplaceOptions.upsert),
+              WriteCommand.InsertOne(keyed("z").head),
+            )
+          )
+          .attempt
+          .asserting {
+            case Left(failed: MongoError.BulkWriteFailed) =>
+              failed.result.upsertedIds.keySet shouldBe Set(0, 1)
+              failed.failures.map(_.index) shouldBe List(2)
+            case other                                    => fail(s"expected a BulkWriteFailed, got $other")
+          }
+    }
+  }
 
   "upsertMany across batches" should {
     "report one upserted id per entity, keyed by its position in the whole list" in {

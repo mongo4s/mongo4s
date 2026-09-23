@@ -3,6 +3,7 @@ package mongo4s
 import scala.util.control.NoStackTrace
 import scala.jdk.CollectionConverters.given
 
+import com.mongodb.bulk.BulkWriteError
 import com.mongodb.{
   ErrorCategory,
   MongoBulkWriteException,
@@ -39,6 +40,13 @@ object MongoError:
     def duplicateKeys: List[BulkFailure] = failures.filter(_.isDuplicateKey)
 
     def result: BulkWriteResult = BulkWriteResult.fromDriver(cause.getWriteResult)
+
+    private[mongo4s] def after(offset: Int, before: BulkWriteResult): BulkWriteFailed =
+      val written = BulkWriteResult.combine(List(before, result.shiftUpsertedIds(offset)))
+      val errors  = cause.getWriteErrors.asScala.toList.map(e => BulkWriteError(e.getCode, e.getMessage, e.getDetails, e.getIndex + offset))
+
+      bulkWriteFailed(MongoBulkWriteException(written.toDriver, errors.asJava, cause.getWriteConcernError, cause.getServerAddress, cause.getErrorLabels))
+    end after
 
   final case class BulkFailure(index: Int, code: Int, message: String):
     def isDuplicateKey: Boolean = ErrorCategory.fromErrorCode(code) == ErrorCategory.DUPLICATE_KEY

@@ -6,7 +6,7 @@ import com.mongodb.reactivestreams.client.ClientSession
 import mongo4s.operations.*
 import mongo4s.bson.{BsonDocumentCodec, BsonEncoder, FieldNaming}
 import mongo4s.results.{BulkWriteResult, DeleteResult, UpdateResult}
-import mongo4s.{Effect, Field, MongoCollection, MongoDatabase, PrimaryKey, Streamable, WithId}
+import mongo4s.{Effect, Field, MongoCollection, MongoDatabase, MongoError, PrimaryKey, Streamable, WithId}
 
 open class BaseMongoRepository[F[*], S[*], E, K](
     protected val collection: MongoCollection[F, S, E],
@@ -71,7 +71,12 @@ open class BaseMongoRepository[F[*], S[*], E, K](
     F.map(collection.insertOne(entity)(using session))(_ => pk.key(entity))
 
   def insertMany(entities: List[E])(using session: Option[ClientSession]): F[List[K]] =
-    batched(entities)(chunk => F.map(collection.insertMany(chunk)(using session))(_ => chunk.map(pk.key)))
+    val inserted = batchedResults(entities) { chunk =>
+      F.map(collection.insertMany(chunk)(using session))(_ => BulkWriteResult.none.copy(insertedCount = chunk.size.toLong))
+    }
+
+    F.map(inserted)(_ => entities.map(pk.key))
+  end insertMany
 
   def upsert(entity: E)(using session: Option[ClientSession]): F[UpdateResult] =
     collection.replaceOne(pk.eqFilter(pk.key(entity)), entity, ReplaceOptions.upsert)(using session)
@@ -156,14 +161,21 @@ open class BaseMongoRepository[F[*], S[*], E, K](
     Effect.flatTraverse(values.grouped(batchSize).toList)(chunk => F.map(f(chunk))(List(_)))
 
   protected def batchedResults[A](values: List[A])(f: List[A] => F[BulkWriteResult]): F[BulkWriteResult] =
-    val chunks  = values.grouped(batchSize).toList
-    val offsets = chunks.scanLeft(0)(_ + _.size)
+    def step(chunks: List[List[A]], offset: Int, done: BulkWriteResult): F[BulkWriteResult] =
+      chunks match
+        case Nil           => F.pure(done)
+        case chunk :: rest =>
+          val written = F.handleErrorWith(f(chunk)) { error =>
+            MongoError.translate(error) match
+              case failed: MongoError.BulkWriteFailed => F.raiseError(failed.after(offset, done))
+              case _                                  => F.raiseError(error)
+          }
 
-    F.map {
-      Effect.flatTraverse(chunks.zip(offsets)) { (chunk, offset) =>
-        F.map(f(chunk))(result => List(result.shiftUpsertedIds(offset)))
-      }
-    }(BulkWriteResult.combine)
+          F.flatMap(written) { result =>
+            step(rest, offset + chunk.size, BulkWriteResult.combine(List(done, result.shiftUpsertedIds(offset))))
+          }
+
+    step(values.grouped(batchSize).toList, 0, BulkWriteResult.none)
   end batchedResults
 
 object BaseMongoRepository:
