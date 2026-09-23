@@ -25,7 +25,7 @@ final class BatchingSpec extends AsyncWordSpec, AsyncIOSpec, Matchers:
       batchSize: Int,
       projection: Projection[Person] = Projection.empty[Person],
   ): FakeRepository[IO, S, Person, String] =
-    FakeRepository[IO, S, Person, String](list => fs2.Stream.emits(list), batchSize, projection)
+    FakeRepository[IO, S, Person, String](batchSize, projection)
 
   private def people(n: Int): List[Person] = (1 to n).toList.map(i => Person(i.toString, s"p$i", 20 + i))
 
@@ -34,7 +34,7 @@ final class BatchingSpec extends AsyncWordSpec, AsyncIOSpec, Matchers:
   private def keyed(ids: String*): List[BsonDocument] = ids.toList.map(id => BsonDocument("_id", BsonString(id)))
 
   private def documents(batchSize: Int): FakeRepository[IO, S, BsonDocument, String] =
-    FakeRepository[IO, S, BsonDocument, String](list => fs2.Stream.emits(list), batchSize)
+    FakeRepository[IO, S, BsonDocument, String](batchSize)
 
   "a batch that fails after earlier batches were written" should {
     "report the failing command by its position in the whole bulk write, with what the earlier batches wrote" in {

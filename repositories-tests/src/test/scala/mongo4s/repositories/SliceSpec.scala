@@ -48,7 +48,7 @@ final class SliceSpec extends AnyWordSpec, Matchers:
   private val thread = Thread("1", List("a", "b", "c", "d", "e"))
 
   private def collection: FakeMongoCollection[IO, S, Thread] =
-    val fake = FakeMongoCollection[IO, S, Thread](summon[BsonDocumentCodec[Thread]], _ => fs2.Stream.empty)
+    val fake = FakeMongoCollection[IO, S, Thread](summon[BsonDocumentCodec[Thread]])
     fake.insertMany(List(thread, Thread("2", List("x", "y")))).unsafeRunSync()
     fake
 

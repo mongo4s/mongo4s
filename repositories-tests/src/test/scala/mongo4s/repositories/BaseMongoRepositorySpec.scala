@@ -47,7 +47,7 @@ final class BaseMongoRepositorySpec extends AsyncWordSpec, AsyncIOSpec, Matchers
   type S[A] = CatsStream[IO][A]
 
   private def repo(batchSize: Int = 500): FakeRepository[IO, S, Person, String] =
-    FakeRepository[IO, S, Person, String](list => fs2.Stream.emits(list), batchSize)
+    FakeRepository[IO, S, Person, String](batchSize)
 
   "findOne" should {
     "return the entity matching the key" in {

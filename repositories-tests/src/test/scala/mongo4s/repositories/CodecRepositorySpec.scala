@@ -52,7 +52,7 @@ final class CodecRepositorySpec extends AnyWordSpec, Matchers:
   type S[A] = CatsStream[IO][A]
 
   private def repoFor(codec: BsonDocumentCodec[Person]): (FakeMongoCollection[IO, S, Person], BaseMongoRepository[IO, S, Person, String]) =
-    val collection = FakeMongoCollection[IO, S, Person](codec, list => fs2.Stream.emits(list).covary[IO])
+    val collection = FakeMongoCollection[IO, S, Person](codec)
     (collection, BaseMongoRepository(collection))
 
   List("medeia" -> medeiaCodec, "calypso" -> calypsoCodec, "zio-bson" -> zioBsonCodec).foreach { (codecName, codec) =>

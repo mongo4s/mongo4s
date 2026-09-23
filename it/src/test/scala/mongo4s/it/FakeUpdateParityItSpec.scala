@@ -56,7 +56,7 @@ final class FakeUpdateParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers,
     yield collection
 
   private def fake: IO[Coll] =
-    val collection = FakeMongoCollection[IO, S, BsonDocument](summon[BsonDocumentCodec[BsonDocument]], _ => fs2.Stream.empty)
+    val collection = FakeMongoCollection[IO, S, BsonDocument](summon[BsonDocumentCodec[BsonDocument]])
     collection.insertOne(seed.clone()).as(collection)
 
   private def without(document: BsonDocument, keys: String*): BsonDocument =

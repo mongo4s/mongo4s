@@ -1,10 +1,9 @@
 package mongo4s.repositories
 
-import zio.stream.ZStream
 import zio.{Runtime, Task, Unsafe}
 
 import mongo4s.zio.ZioStream
-import mongo4s.{Effect, Streamable}
+import mongo4s.{Effect, RsBridge, Streamable}
 
 import mongo4s.zio.ZioInstances.given
 
@@ -18,5 +17,4 @@ final class ZioRepositoryBackendSpec extends RepositoryBackendSpec[Task, ZioStre
   protected def drain(stream: ZioStream[RepositoryBackendSpec.Person]): List[RepositoryBackendSpec.Person] =
     run(stream.runCollect.map(_.toList))
 
-  protected def emitStream(values: List[RepositoryBackendSpec.Person]): ZioStream[RepositoryBackendSpec.Person] =
-    ZStream.fromIterable(values)
+  protected def bridgeInstance: RsBridge[Task, ZioStream] = summon

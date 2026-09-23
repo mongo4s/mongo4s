@@ -10,7 +10,7 @@ import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSM
 
 import mongo4s.operations.*
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
-import mongo4s.{Effect, Field, FieldPath, MongoCollection, MongoError, Streamable}
+import mongo4s.{Effect, Field, FieldPath, MongoCollection, MongoError, RsBridge, Streamable}
 import mongo4s.bson.{BsonDocumentCodec, BsonDocumentDecoder, BsonField, DecodeResult, FieldNaming}
 import mongo4s.queries.{AggregateQuery, DecodeAttempts, DistinctQuery, FindQuery, SelectQuery}
 import mongo4s.results.{BulkWriteResult, DeleteResult, InsertManyResult, InsertOneResult, UpdateResult}
@@ -19,12 +19,9 @@ import scala.jdk.CollectionConverters.given
 
 final class FakeMongoCollection[F[*], S[*], E](
     val codec: BsonDocumentCodec[E],
-    emit: List[E] => S[E],
-    emitAttempts: List[DecodeResult[E]] => S[DecodeResult[E]] = (_: List[DecodeResult[E]]) =>
-      throw UnsupportedOperationException("FakeMongoCollection: pass emitAttempts to stream decode attempts"),
     val name: String = "fake",
     val naming: FieldNaming = FieldNaming.identity,
-)(using F: Effect[F])
+)(using F: Effect[F], rs: RsBridge[F, S])
     extends MongoCollection[F, S, E]:
 
   private val storage        = mutable.ArrayBuffer.empty[BsonDocument]
@@ -776,13 +773,13 @@ final class FakeMongoCollection[F[*], S[*], E](
     def all: F[List[B]]     = F.delay(decoded)
 
     def stream(using Streamable[S, B]): S[B] =
-      throw UnsupportedOperationException("FakeMongoCollection: streaming distinct values needs an emitter for their type")
+      rs.stream(DeferredPublisher(() => decoded))
 
     def attempting: DecodeAttempts[F, S, B] = new DecodeAttempts[F, S, B]:
       def all: F[List[DecodeResult[B]]] = F.delay(distinctValues(path, filter).map(decoder.decode))
 
       def stream(using Streamable[S, DecodeResult[B]]): S[DecodeResult[B]] =
-        throw UnsupportedOperationException("FakeMongoCollection: streaming distinct values needs an emitter for their type")
+        rs.stream(DeferredPublisher(() => distinctValues(path, filter).map(decoder.decode)))
 
     private def decoded: List[B] =
       distinctValues(path, filter).map(decoder.decode(_).fold(error => throw error.toThrowable, identity))
@@ -803,13 +800,13 @@ final class FakeMongoCollection[F[*], S[*], E](
     def all: F[List[B]]     = F.delay(decoded)
 
     def stream(using Streamable[S, B]): S[B] =
-      throw UnsupportedOperationException("FakeMongoCollection: streaming an aggregation needs an emitter for its output type")
+      rs.stream(DeferredPublisher(() => decoded))
 
     def attempting: DecodeAttempts[F, S, B] = new DecodeAttempts[F, S, B]:
       def all: F[List[DecodeResult[B]]] = F.delay(runPipeline(stages).map(decoderB.decodeDocument))
 
       def stream(using Streamable[S, DecodeResult[B]]): S[DecodeResult[B]] =
-        throw UnsupportedOperationException("FakeMongoCollection: streaming an aggregation needs an emitter for its output type")
+        rs.stream(DeferredPublisher(() => runPipeline(stages).map(decoderB.decodeDocument)))
 
     private def decoded: List[B] =
       runPipeline(stages).map(decoderB.decodeDocument(_).fold(error => throw error.toThrowable, identity))
@@ -839,7 +836,7 @@ final class FakeMongoCollection[F[*], S[*], E](
 
     def first: F[Option[E]]                  = F.delay(results.headOption)
     def all: F[List[E]]                      = F.delay(results)
-    def stream(using Streamable[S, E]): S[E] = emit(results)
+    def stream(using Streamable[S, E]): S[E] = rs.stream(DeferredPublisher(() => results))
 
     def selecting[B](selected: Projection[E], decoder: FieldNaming => BsonDocumentDecoder[B]): SelectQuery[F, S, B] =
       val decode            = decoder(naming).decodeDocument
@@ -850,13 +847,13 @@ final class FakeMongoCollection[F[*], S[*], E](
         def all: F[List[B]]     = F.delay(selectedDocuments().map(orThrow))
 
         def stream(using Streamable[S, B]): S[B] =
-          throw UnsupportedOperationException("FakeMongoCollection: streaming a selection needs an emitter for its element type")
+          rs.stream(DeferredPublisher(() => selectedDocuments().map(orThrow)))
 
         def attempting: DecodeAttempts[F, S, B] = new DecodeAttempts[F, S, B]:
           def all: F[List[DecodeResult[B]]] = F.delay(selectedDocuments())
 
           def stream(using Streamable[S, DecodeResult[B]]): S[DecodeResult[B]] =
-            throw UnsupportedOperationException("FakeMongoCollection: streaming a selection needs an emitter for its element type")
+            rs.stream(DeferredPublisher(selectedDocuments))
     end selecting
 
     private def orThrow[B](result: DecodeResult[B]): B = result.fold(error => throw error.toThrowable, identity)
@@ -864,7 +861,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     def attempting: DecodeAttempts[F, S, E] = new DecodeAttempts[F, S, E]:
       def all: F[List[DecodeResult[E]]] = F.delay(documents.map(codec.decodeDocument))
 
-      def stream(using Streamable[S, DecodeResult[E]]): S[DecodeResult[E]] = emitAttempts(documents.map(codec.decodeDocument))
+      def stream(using Streamable[S, DecodeResult[E]]): S[DecodeResult[E]] = rs.stream(DeferredPublisher(() => documents.map(codec.decodeDocument)))
 
     private def sourceDocuments: List[BsonDocument] =
       val ordered =

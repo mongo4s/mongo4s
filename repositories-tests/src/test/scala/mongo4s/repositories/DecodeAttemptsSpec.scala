@@ -27,11 +27,7 @@ final class DecodeAttemptsSpec extends AsyncWordSpec, AsyncIOSpec, Matchers:
       .append("age", BsonString("not-a-number"))
 
   private def withOneCorruptDocument: IO[FakeMongoCollection[IO, S, Person]] =
-    val fake = FakeMongoCollection[IO, S, Person](
-      summon[BsonDocumentCodec[Person]],
-      values => fs2.Stream.emits(values).covary[IO],
-      values => fs2.Stream.emits(values).covary[IO],
-    )
+    val fake = FakeMongoCollection[IO, S, Person](summon[BsonDocumentCodec[Person]])
 
     for
       _ <- fake.insertOne(Person("1", "alice", 30))

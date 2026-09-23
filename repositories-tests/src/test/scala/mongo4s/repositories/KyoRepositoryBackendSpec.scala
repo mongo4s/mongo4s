@@ -1,9 +1,9 @@
 package mongo4s.repositories
 
-import kyo.{AllowUnsafe, Duration as KyoDuration, KyoApp, Stream, Sync as KyoSync}
+import kyo.{AllowUnsafe, Duration as KyoDuration, KyoApp, Sync as KyoSync}
 
 import mongo4s.kyo.{KIO, KStream}
-import mongo4s.{Effect, Streamable}
+import mongo4s.{Effect, RsBridge, Streamable}
 
 import scala.concurrent.duration.given
 import mongo4s.kyo.KyoInstances.given
@@ -20,4 +20,4 @@ final class KyoRepositoryBackendSpec extends RepositoryBackendSpec[KIO, KStream]
 
   protected def drain(stream: KStream[RepositoryBackendSpec.Person]): List[RepositoryBackendSpec.Person] = run(stream.run).toList
 
-  protected def emitStream(values: List[RepositoryBackendSpec.Person]): KStream[RepositoryBackendSpec.Person] = Stream.init(values)
+  protected def bridgeInstance: RsBridge[KIO, KStream] = summon

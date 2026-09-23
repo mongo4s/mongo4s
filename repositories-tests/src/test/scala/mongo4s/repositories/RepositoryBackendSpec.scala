@@ -8,7 +8,7 @@ import org.bson.{BsonDocument, BsonInt32, BsonString}
 import mongo4s.bson.*
 import mongo4s.testkit.FakeMongoCollection
 import mongo4s.operations.{Update, WriteCommand}
-import mongo4s.{Effect, Field, PrimaryKey, Streamable}
+import mongo4s.{Effect, Field, PrimaryKey, RsBridge, Streamable}
 
 import mongo4s.bson.BsonInstances.given
 
@@ -45,15 +45,16 @@ trait RepositoryBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
   protected def run[A](fa: F[A]): A
 
   protected def drain(stream: S[Person]): List[Person]
-  protected def emitStream(values: List[Person]): S[Person]
+  protected def bridgeInstance: RsBridge[F, S]
 
   protected def streamable: Streamable[S, Person]
 
   protected def supportsStreaming: Boolean = true
 
   private def repo(batchSize: Int = 500): (FakeMongoCollection[F, S, Person], BaseMongoRepository[F, S, Person, String]) =
-    given Effect[F] = effectInstance
-    val collection  = FakeMongoCollection[F, S, Person](summon[BsonDocumentCodec[Person]], emitStream)
+    given Effect[F]      = effectInstance
+    given RsBridge[F, S] = bridgeInstance
+    val collection       = FakeMongoCollection[F, S, Person](summon[BsonDocumentCodec[Person]])
     (collection, BaseMongoRepository(collection, batchSize))
 
   "findOne" should {

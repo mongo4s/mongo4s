@@ -58,7 +58,7 @@ final class FakeFidelityParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matcher
     yield collection
 
   private def fake(seed: List[BsonDocument]): IO[Coll] =
-    val collection = FakeMongoCollection[IO, S, BsonDocument](summon[BsonDocumentCodec[BsonDocument]], _ => fs2.Stream.empty)
+    val collection = FakeMongoCollection[IO, S, BsonDocument](summon[BsonDocumentCodec[BsonDocument]])
     collection.insertMany(seed.map(_.clone())).as(collection)
 
   private def parity[A](name: String, seed: List[BsonDocument])(read: Coll => IO[A]): IO[(A, A)] =

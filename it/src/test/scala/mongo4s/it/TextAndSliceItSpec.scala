@@ -77,7 +77,7 @@ final class TextAndSliceItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Bef
   "$slice" should {
 
     def seededFake: IO[FakeMongoCollection[IO, S, BsonDocument]] =
-      val fake = FakeMongoCollection[IO, S, BsonDocument](summon[BsonDocumentCodec[BsonDocument]], _ => fs2.Stream.empty)
+      val fake = FakeMongoCollection[IO, S, BsonDocument](summon[BsonDocumentCodec[BsonDocument]])
       fake.insertOne(thread("t", 5)).as(fake)
 
     def parity(name: String, projection: Projection[BsonDocument]): IO[(List[String], List[String])] =

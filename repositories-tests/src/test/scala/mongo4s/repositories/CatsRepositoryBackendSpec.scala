@@ -3,7 +3,7 @@ package mongo4s.repositories
 import cats.effect.IO
 
 import mongo4s.cats.CatsStream
-import mongo4s.{Effect, Streamable}
+import mongo4s.{Effect, RsBridge, Streamable}
 
 import cats.effect.unsafe.implicits.given
 import mongo4s.cats.CatsInstances.given
@@ -18,5 +18,4 @@ final class CatsRepositoryBackendSpec extends RepositoryBackendSpec[IO, CatsStre
   protected def drain(stream: CatsStream[IO][RepositoryBackendSpec.Person]): List[RepositoryBackendSpec.Person] =
     stream.compile.toList.unsafeRunSync()
 
-  protected def emitStream(values: List[RepositoryBackendSpec.Person]): CatsStream[IO][RepositoryBackendSpec.Person] =
-    fs2.Stream.emits(values).covary[IO]
+  protected def bridgeInstance: RsBridge[IO, CatsStream[IO]] = summon

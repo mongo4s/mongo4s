@@ -1,9 +1,9 @@
 package mongo4s.repositories
 
-import rapid.{Stream, Task}
+import rapid.Task
 
 import mongo4s.rapid.RapidStream
-import mongo4s.{Effect, Streamable}
+import mongo4s.{Effect, RsBridge, Streamable}
 
 import mongo4s.rapid.RapidInstances.given
 
@@ -16,4 +16,4 @@ final class RapidRepositoryBackendSpec extends RepositoryBackendSpec[Task, Rapid
 
   protected def drain(stream: RapidStream[RepositoryBackendSpec.Person]): List[RepositoryBackendSpec.Person] = stream.toList.sync()
 
-  protected def emitStream(values: List[RepositoryBackendSpec.Person]): RapidStream[RepositoryBackendSpec.Person] = Stream.emits(values)
+  protected def bridgeInstance: RsBridge[Task, RapidStream] = summon

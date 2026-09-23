@@ -57,7 +57,7 @@ final class AggregateSpec extends AnyWordSpec, Matchers:
   private val name = Field.of[Person, String](_.name)
 
   private def collection: FakeMongoCollection[IO, S, Person] =
-    val fake = FakeMongoCollection[IO, S, Person](summon[BsonDocumentCodec[Person]], _ => fs2.Stream.empty)
+    val fake = FakeMongoCollection[IO, S, Person](summon[BsonDocumentCodec[Person]])
     fake.insertMany(people).unsafeRunSync()
     fake
 

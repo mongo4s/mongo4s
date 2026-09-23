@@ -21,7 +21,7 @@ final class ExplainSpec extends AnyWordSpec, Matchers:
   type S[A] = CatsStream[IO][A]
 
   private def collection: FakeMongoCollection[IO, S, Person] =
-    val fake = FakeMongoCollection[IO, S, Person](summon[BsonDocumentCodec[Person]], _ => fs2.Stream.empty)
+    val fake = FakeMongoCollection[IO, S, Person](summon[BsonDocumentCodec[Person]])
     fake.insertMany(AggregateSpec.people).unsafeRunSync()
     fake
 

@@ -55,7 +55,7 @@ final class DistinctParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, B
     yield collection
 
   private def fake: IO[FakeMongoCollection[IO, S, BsonDocument]] =
-    val collection = FakeMongoCollection[IO, S, BsonDocument](summon[BsonDocumentCodec[BsonDocument]], _ => fs2.Stream.empty)
+    val collection = FakeMongoCollection[IO, S, BsonDocument](summon[BsonDocumentCodec[BsonDocument]])
     collection.insertMany(people).as(collection)
 
   private def parity[B: Ordering](

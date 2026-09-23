@@ -35,7 +35,7 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
   type S[A] = CatsStream[IO][A]
 
   private def fake(seed: BsonDocument*): FakeMongoCollection[IO, S, BsonDocument] =
-    val c = FakeMongoCollection[IO, S, BsonDocument](summon[BsonDocumentCodec[BsonDocument]], _ => fs2.Stream.empty)
+    val c = FakeMongoCollection[IO, S, BsonDocument](summon[BsonDocumentCodec[BsonDocument]])
     c.insertMany(seed.toList).unsafeRunSync()
     c
 
@@ -201,6 +201,26 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
 
       found(fake(stored), Filter.Eq(Field.stored[BsonDocument, Int]("n").path, BsonInt32(5))) shouldBe 1
       found(fake(stored), Filter.Eq(Field.stored[BsonDocument, Double]("n").path, BsonDouble(5.0))) shouldBe 1
+    }
+  }
+
+  "a stream from the fake" should {
+    "read the collection when it runs, not when it is built, as a cursor would" in {
+      val c      = fake()
+      val stream = c.find().stream
+
+      c.insertOne(BsonDocument("name", BsonString("late"))).unsafeRunSync()
+
+      stream.compile.toList.unsafeRunSync().map(_.getString("name").getValue) shouldBe List("late")
+    }
+
+    "stream an aggregation, distinct values and a selection, not only a find" in {
+      val c = fake(BsonDocument("name", BsonString("a")).append("age", BsonInt32(1)), BsonDocument("name", BsonString("b")).append("age", BsonInt32(2)))
+
+      c.aggregate[BsonDocument](Seq(Stage.sortBy(Sort.desc(ageF)))).stream.compile.toList.unsafeRunSync().map(_.getString("name").getValue) shouldBe
+        List("b", "a")
+      c.distinct(nameF).stream.compile.toList.unsafeRunSync() shouldBe List("a", "b")
+      c.distinct(nameF).attempting.stream.compile.toList.unsafeRunSync() shouldBe List(Right("a"), Right("b"))
     }
   }
 

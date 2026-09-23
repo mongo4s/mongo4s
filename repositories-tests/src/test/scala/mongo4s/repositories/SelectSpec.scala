@@ -58,7 +58,7 @@ final class SelectSpec extends AnyWordSpec, Matchers:
   type S[A] = CatsStream[IO][A]
 
   private def collectionOf: FakeMongoCollection[IO, S, Person] =
-    val collection = FakeMongoCollection[IO, S, Person](summon[BsonDocumentCodec[Person]], _ => fs2.Stream.empty)
+    val collection = FakeMongoCollection[IO, S, Person](summon[BsonDocumentCodec[Person]])
     collection.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 25))).unsafeRunSync()
     collection
 
@@ -94,7 +94,7 @@ final class SelectSpec extends AnyWordSpec, Matchers:
     }
 
     "report a document missing a selected field, rather than guessing" in {
-      val collection = FakeMongoCollection[IO, S, Person](summon[BsonDocumentCodec[Person]], _ => fs2.Stream.empty)
+      val collection = FakeMongoCollection[IO, S, Person](summon[BsonDocumentCodec[Person]])
       collection.insertRaw(BsonDocument("id", BsonString("3")).append("name", BsonString("carol")))
 
       val attempts = collection.find().selectAs[(name: String, age: Int)].attempting.all.unsafeRunSync()
@@ -115,7 +115,7 @@ final class SelectSpec extends AnyWordSpec, Matchers:
 
     def contacts: FakeMongoCollection[IO, S, SelectSpec.Contact] =
       import SelectSpec.Contact.given
-      val collection = FakeMongoCollection[IO, S, SelectSpec.Contact](summon[BsonDocumentCodec[SelectSpec.Contact]], _ => fs2.Stream.empty)
+      val collection = FakeMongoCollection[IO, S, SelectSpec.Contact](summon[BsonDocumentCodec[SelectSpec.Contact]])
       collection.insertMany(List(SelectSpec.Contact("1", None), SelectSpec.Contact("2", Some("bo")))).unsafeRunSync()
       collection
 

@@ -76,7 +76,7 @@ final class FakeAggregateParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matche
     yield collection
 
   private def fake: FakeMongoCollection[IO, S, Person] =
-    val collection = FakeMongoCollection[IO, S, Person](summon[BsonDocumentCodec[Person]], _ => fs2.Stream.empty)
+    val collection = FakeMongoCollection[IO, S, Person](summon[BsonDocumentCodec[Person]])
     collection.insertMany(people).unsafeRunSync()
     collection
 
