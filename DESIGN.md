@@ -148,6 +148,17 @@ truth and no way to contradict it.
 comes from `medeia`, `calypso` or `zio-bson`, each with its own naming configuration that mongo4s has no way to
 read. There the caller is the only one who knows, so the caller is asked.
 
+"One source of truth" only holds if every codec tells it. For a while two did not: a derived sum type passed its
+naming to the code that built it and then reported identity, and `imap`/`iemap` built a fresh codec that forgot the
+naming of the one underneath. Both wrote `first_name` and let queries say `firstName`, the exact failure this
+section exists to prevent. Both carry it now, and a law spec checks that the naming a codec reports is the spelling
+it writes, for products, sums and mapped codecs alike.
+
+The one naming is per collection, applied to every derived segment of a path. A nested type derived under a
+different `WireCodecConfig` writes its own spelling and is queried through the root's, which is why the README says
+to derive an entity and what it contains under one config. Following the codec tree segment by segment would fix it
+at the cost of making every path render depend on a codec, and no one has needed mixed naming inside one document.
+
 ## Nothing derives without being asked
 
 `WireCodec`'s derivation used to be a `given`, which meant implicit scope produced one for any type with a `Mirror` —
@@ -434,6 +445,24 @@ must **clone** the caller's document first. Not cloning meant a rendered update 
 `BsonDocument`: a shared `Raw` came back permanently carrying fields it never declared, and rendering it twice under
 different `FieldNaming`s emitted both spellings. An update that would render empty throws rather than sending `{}`.
 
+**Merging cannot keep two changes to one path, so it refuses to try.** A sub-document holds one value per key, and
+for a while the second `$inc` on a path simply replaced the first — the update that went out was not the one that
+was written, and nothing said so. The fake, applying the two in turn, answered 3 where the server answered 2, so the
+same code passed its tests and did something else in production. An update that touches a path twice is now an
+`IllegalArgumentException` at render, and so is one whose paths overlap across operators, which the server refuses
+too — found at the call site rather than as a write error one round trip later. The fake renders an update before
+applying it, so it refuses the same ones.
+
+**A pipeline update is a case of `Update`, not a separate type.** Everything that takes an update — the three
+update calls, a bulk command, a repository's `…ByFilter` — takes one without growing an overload for it, which is
+the point. It renders through `toPipeline` rather than `toBson`, since it is a list of stages, and it is refused
+where the two forms would have to mix: the server takes one or the other, never both.
+
+**An operator that only applies to one kind of field says so in its signature.** `regex` asks for `TextOf`, `mod`
+for `NumericOf`, `hasSize` and `$pop` for `ElementOf` — the same capability pattern the array and numeric operators
+already used. What the missing bounds allowed was a filter the server accepts and that matches nothing, which is the
+failure mode the typed AST is there to rule out.
+
 Numeric operators go through `NumericOf[C, A]`, mirroring `ElementOf[C, A]`, so an `Option[Long]` field takes a plain
 `Long`. There is deliberately **no** `NumericValue[Option[A]]`: `None` has no numeric encoding, and the obvious
 stand-in — `$inc` by zero — is a write that silently does nothing.
@@ -448,9 +477,13 @@ dropping one.
 
 But a collection written by more than one version of more than one service will contain documents this version
 cannot read, and failing the whole page because of one of them is useless. So `attempting` — on `find`, `aggregate`
-and `distinct` — reports each document as `DecodeResult[A] = Either[BsonError, A]`, and `watchAttempting` does the
-same for change streams. Transport errors still fail the effect; only decoding is made recoverable, because only
-decoding is a per-document property.
+and `distinct` — reports each document as `DecodeResult[A] = Either[BsonError, A]`. Transport errors still fail the
+effect; only decoding is made recoverable, because only decoding is a per-document property.
+
+`watchAttempting` puts the result one level further in, on the event's documents — `ChangeEvent[DecodeResult[A]]`.
+It used to wrap the whole event, and an event whose document failed lost its resume token with it, so a durable
+consumer could neither checkpoint past the bad document nor avoid reading it again after every restart. The envelope
+is the server's and always readable; only the document is the model's.
 
 ## Streaming
 
@@ -505,6 +538,19 @@ instead of by waiting.
 Retrying is the default because it is the driver's default. `TransactionOptions.withoutRetries` restores the `2.x`
 behaviour of reporting the first failure.
 
+**The retry rules are the specification's, not an approximation of them.** Two had drifted. A commit that ran out of
+`maxCommitTime` carries the "unknown commit result" label — the driver adds it — so it was asked again until the
+retry window closed, which turned the limit into a delay; the specification excludes that error from commit retries,
+and so does this loop now. And a whole-transaction retry pauses first, for a jittered interval that grows by half each
+attempt from 5 ms to a 500 ms ceiling, so two clients that conflicted do not retry in lockstep. The pause needed a
+sleep `Effect` did not have; it has one now, with a default that blocks a thread and an override on every runtime
+that does not.
+
+A transaction body is built inside the protection, not before it. `fa` used to be evaluated while the transaction
+was being wired up, so a body that threw before returning an `F` — a `require`, an argument that failed to build —
+escaped the finalizer and left the transaction open on the session. The default `Effect.bracketCase` had the same
+hole, and it was the one kyo and rapid used.
+
 The manual path (`startTransaction`/`commitTransaction`/`abortTransaction` with `(using Some(session))` at each call
 site) is still there, and nothing is automatic on it, including the rollback. Both exist because the safe version
 should be the easy one, not the only one.
@@ -542,6 +588,12 @@ Batching is empty-list-safe throughout, which follows from `Filter`'s folding: `
 a caller splitting one logical write into batches calls `shiftUpsertedIds(offset)` per batch first, since only the
 caller knows how many commands preceded it. Getting this wrong collapsed every batch onto index 0 — a bug that only
 appears once a write exceeds one batch, which is to say in production and not in tests.
+
+The same rebasing had been done for successes and not for failures: a duplicate in the third batch of 500 came back
+as `index = 0`, and its partial result held only the third batch. A caller retrying "the failed command" retried a
+different one. The repository now reports a batched failure the way the driver reports its own internal batches —
+one `MongoBulkWriteException` for the whole write, global indices, and a result counting everything that landed —
+which keeps `BulkWriteFailed` a single shape whether the batching was the driver's or the repository's.
 
 Because `Filter`/`Update` are an AST rather than driver builders, they can be interpreted twice: once into real
 `Bson` for the server, and once against an in-memory buffer. `FakeMongoCollection` is that second interpreter —
@@ -585,6 +637,18 @@ can take are where two implementations actually part company, so `FakeFidelityPa
 against a container and compares the fake's answer to the server's.
 
 It also fails on the pre-fix fake, all fifteen cases, which is the only evidence that it tests anything.
+
+A second round found the combinations the first did not seed: a duplicate *within* one `insertMany`, an unordered
+bulk past a duplicate, a projection that left a document the codec could not read, an update touching one path twice,
+a unique secondary index, a stream built before an insert, a no-op update, a replacement without an `_id`, and
+numbers of different widths. One of them was pinned by a test that expected the fake's wrong answer, which is a
+reminder that a green suite describes the implementation it runs against, not the server. Each is now a parity case.
+
+**The fake streams through the `RsBridge` rather than an `emit` function the caller supplies.** `emit` took the
+results as a list, so they were computed when the stream was built and a stream set up before an insert missed it —
+the one thing a cursor never does. It also meant `aggregate`, `distinct` and `selectAs` could not stream at all,
+because nobody supplied an emitter for their types. A `Publisher` that computes its values on subscription, handed
+to the bridge the runtime already provides, fixes both and removes a parameter every caller had to get right.
 
 ## Evolving the API
 
@@ -630,6 +694,19 @@ wrong branch wins with no error. That is precisely the bug class the codec audit
 
 **A global `CodecProvider` convenience.** It would remove one implicit parameter and reintroduce process-wide
 coupling between unrelated collections. Not worth it.
+
+**Streaming bulk inputs.** `insertMany` and `bulkWrite` take a `Seq`, not an `S`, so the whole input is in memory
+before the first batch goes out. Consuming an `S` would need `RsBridge` to fold a stream into `F`, which none of the
+four runtimes shares a shape for, and the loop it would save is three lines in each of them — chunk the stream,
+`insertMany` each chunk. Until one runtime-neutral way to do it is worth a new abstract member, that loop is the
+answer.
+
+**Simulating pipeline updates in the fake.** A pipeline update computes from the document with aggregation
+expressions, and the fake does not evaluate expressions. It refuses them by name.
+
+**Copying every `BsonDocument` the API accepts.** `Filter.Raw`, `Stage.Raw`, hints and resume tokens are taken as
+given, not cloned: mongo4s never writes into them, so aliasing only matters if the caller mutates a document after
+handing it over. `Update.Raw` is the exception, cloned because rendering used to write into it.
 
 **Bounding a live stream with rapid's `Stream.take(n)`.** Not a `mongo4s` decision, but worth knowing: rapid decides
 `Step.Stop` *inside* `transform`, so it needs element n+1 to arrive before it stops. On an infinite change stream
