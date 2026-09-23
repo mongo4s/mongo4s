@@ -16,7 +16,6 @@ import mongo4s.{MongoClient, RsBridge}
 
 import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
-import mongo4s.bson.BsonInstances.given
 
 final class ScopeWatchItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers:
   import WatchFixture.Person
@@ -83,8 +82,9 @@ final class ScopeWatchItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers:
         yield events
 
       program.timeout(30.seconds).asserting { events =>
-        events.collect { case Right(event) => event }.flatMap(_.fullDocument) shouldBe List(Person("bob", 30))
-        events.count(_.isLeft) shouldBe 1
+        events.flatMap(_.fullDocument).collect { case Right(person) => person } shouldBe List(Person("bob", 30))
+        events.flatMap(_.fullDocument).count(_.isLeft) shouldBe 1
+        events.map(_.resumeToken.isEmpty) shouldBe List(false, false)
       }
     }
   }

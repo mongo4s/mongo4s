@@ -138,12 +138,12 @@ private[mongo4s] final class MongoDatabaseImpl[F[*], S[*]](
   )(using
       decoder: BsonDocumentDecoder[A],
   )(using
-      Streamable[S, DecodeResult[ChangeEvent[A]]],
-  ): S[DecodeResult[ChangeEvent[A]]] =
+      Streamable[S, ChangeEvent[DecodeResult[A]]],
+  ): S[ChangeEvent[DecodeResult[A]]] =
     rs.liveStream(
-      AttemptingPublisher(
+      DecodingPublisher(
         changeStreamPublisher(options),
-        doc => ChangeEvent.fromDriver(doc, decoder.decodeDocument),
+        doc => ChangeEvent.attempting(doc, decoder.decodeDocument),
       )
     )
 

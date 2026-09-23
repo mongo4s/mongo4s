@@ -395,7 +395,7 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   def watchAttempting(options: WatchOptions[E])(using
       session: Option[ClientSession]
-  )(using Streamable[S, DecodeResult[ChangeEvent[E]]]): S[DecodeResult[ChangeEvent[E]]] =
+  )(using Streamable[S, ChangeEvent[DecodeResult[E]]]): S[ChangeEvent[DecodeResult[E]]] =
     throw UnsupportedOperationException("FakeMongoCollection: watch is not simulated")
 
   def watch(options: WatchOptions[E])(using session: Option[ClientSession])(using Streamable[S, ChangeEvent[E]]): S[ChangeEvent[E]] =

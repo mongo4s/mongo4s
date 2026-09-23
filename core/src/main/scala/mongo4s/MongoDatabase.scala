@@ -53,8 +53,8 @@ trait MongoDatabase[F[*], S[*]]:
   )(using
       decoder: BsonDocumentDecoder[A],
   )(using
-      Streamable[S, DecodeResult[ChangeEvent[A]]],
-  ): S[DecodeResult[ChangeEvent[A]]]
+      Streamable[S, ChangeEvent[DecodeResult[A]]],
+  ): S[ChangeEvent[DecodeResult[A]]]
 
   def dropCollection(collectionName: String)(using session: Option[ClientSession] = None): F[Unit]
 

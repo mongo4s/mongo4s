@@ -60,11 +60,11 @@ private[mongo4s] final class MongoClientImpl[F[*], S[*]](
 
   def watchAsAttempting[A](options: WatchOptions[A])(using
       session: Option[ClientSession]
-  )(using decoder: BsonDocumentDecoder[A])(using Streamable[S, DecodeResult[ChangeEvent[A]]]): S[DecodeResult[ChangeEvent[A]]] =
+  )(using decoder: BsonDocumentDecoder[A])(using Streamable[S, ChangeEvent[DecodeResult[A]]]): S[ChangeEvent[DecodeResult[A]]] =
     rs.liveStream(
-      AttemptingPublisher(
+      DecodingPublisher(
         changeStreamPublisher(options),
-        doc => ChangeEvent.fromDriver(doc, decoder.decodeDocument),
+        doc => ChangeEvent.attempting(doc, decoder.decodeDocument),
       )
     )
 

@@ -1,9 +1,11 @@
 package mongo4s.changestream
 
+import scala.util.control.NonFatal
+
 import org.bson.{BsonDateTime, BsonDocument, BsonTimestamp}
 import com.mongodb.client.model.changestream.{ChangeStreamDocument, OperationType, SplitEvent, UpdateDescription}
 
-import mongo4s.bson.BsonError
+import mongo4s.bson.{BsonError, DecodeResult}
 
 final case class ChangeEvent[A](
     operationType: OperationType,
@@ -39,6 +41,19 @@ object ChangeEvent:
       clusterTime = Option(document.getClusterTime),
       wallTime = Option(document.getWallTime),
       splitEvent = Option(document.getSplitEvent),
+    )
+
+  private[mongo4s] def attempting[A](
+      document: ChangeStreamDocument[BsonDocument],
+      decode: BsonDocument => Either[BsonError, A],
+  ): Either[BsonError, ChangeEvent[DecodeResult[A]]] =
+    fromDriver(
+      document,
+      raw =>
+        Right(
+          try decode(raw)
+          catch case NonFatal(error) => Left(BsonError.fromThrowable(error))
+        ),
     )
 
   private def sequence[E, A](o: Option[Either[E, A]]): Either[E, Option[A]] =

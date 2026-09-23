@@ -316,7 +316,7 @@ object ReadmeSnippets:
   def startedAt(collection: MongoCollection[IO, S, User], timestamp: BsonTimestamp): S[ChangeEvent[User]] =
     collection.watch(WatchOptions.default[User].startingAt(timestamp))
 
-  def survivingBadDocuments(collection: MongoCollection[IO, S, User]): S[DecodeResult[ChangeEvent[User]]] =
+  def survivingBadDocuments(collection: MongoCollection[IO, S, User]): S[ChangeEvent[DecodeResult[User]]] =
     collection.watchAttempting()
 
   def databaseWide(db: MongoDatabase[IO, S]): S[ChangeEvent[User]] = db.watchAs[User]()

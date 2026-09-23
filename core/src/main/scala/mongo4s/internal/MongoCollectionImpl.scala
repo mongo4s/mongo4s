@@ -293,12 +293,12 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
   def watchAttempting(options: WatchOptions[A])(using
       session: Option[ClientSession],
   )(using
-      Streamable[S, DecodeResult[ChangeEvent[A]]],
-  ): S[DecodeResult[ChangeEvent[A]]] =
+      Streamable[S, ChangeEvent[DecodeResult[A]]],
+  ): S[ChangeEvent[DecodeResult[A]]] =
     rs.liveStream(
-      AttemptingPublisher(
+      DecodingPublisher(
         ChangeStreamSupport.configure(changeStreamPublisher(options), options),
-        doc => ChangeEvent.fromDriver(doc, codec.decodeDocument),
+        doc => ChangeEvent.attempting(doc, codec.decodeDocument),
       )
     )
 

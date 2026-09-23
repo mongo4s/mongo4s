@@ -25,7 +25,7 @@ trait MongoClient[F[*], S[*]]:
 
   def watchAsAttempting[A](options: WatchOptions[A] = WatchOptions.default[A])(using
       session: Option[ClientSession] = None
-  )(using decoder: BsonDocumentDecoder[A])(using Streamable[S, DecodeResult[ChangeEvent[A]]]): S[DecodeResult[ChangeEvent[A]]]
+  )(using decoder: BsonDocumentDecoder[A])(using Streamable[S, ChangeEvent[DecodeResult[A]]]): S[ChangeEvent[DecodeResult[A]]]
 
   def withTransaction[A](fa: Option[ClientSession] ?=> F[A], options: TransactionOptions = TransactionOptions.default)(using
       F: Effect[F],

@@ -172,3 +172,26 @@ final class ChangeEventSpec extends AnyWordSpec, Matchers:
       ChangeEvent.fromDriver(document, decodePerson) shouldBe Left(BsonError.MissingField("age"))
     }
   }
+
+  "ChangeEvent.attempting" should {
+
+    "keep the event, and the resume token a consumer checkpoints, when its document does not decode" in {
+      val document = changeStreamDocument(
+        operationType = "insert",
+        fullDocument = BsonDocument("name", BsonString("bob")),
+        documentKey = BsonDocument("_id", BsonString("1")),
+      )
+
+      val result = ChangeEvent.attempting(document, decodePerson)
+
+      result.map(_.resumeToken) shouldBe Right(BsonDocument("_data", BsonString("resume-token")))
+      result.map(_.documentKey) shouldBe Right(Some(BsonDocument("_id", BsonString("1"))))
+      result.map(_.fullDocument) shouldBe Right(Some(Left(BsonError.MissingField("age"))))
+    }
+
+    "report a decoder that throws as a Left on the document, not a failed event" in {
+      val document = changeStreamDocument(operationType = "insert", fullDocument = BsonDocument())
+
+      ChangeEvent.attempting[Person](document, _ => throw IllegalStateException("boom")).map(_.fullDocument.exists(_.isLeft)) shouldBe Right(true)
+    }
+  }

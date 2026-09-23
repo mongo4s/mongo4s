@@ -111,8 +111,8 @@ trait MongoCollection[F[*], S[*], A]:
   def watchAttempting(options: WatchOptions[A] = WatchOptions.default[A])(using
       session: Option[ClientSession] = None,
   )(using
-      Streamable[S, DecodeResult[ChangeEvent[A]]],
-  ): S[DecodeResult[ChangeEvent[A]]]
+      Streamable[S, ChangeEvent[DecodeResult[A]]],
+  ): S[ChangeEvent[DecodeResult[A]]]
 
   def withReadConcern(concern: ReadConcern): MongoCollection[F, S, A]
   def withWriteConcern(concern: WriteConcern): MongoCollection[F, S, A]

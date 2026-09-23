@@ -69,8 +69,9 @@ final class DirectCollectionWatchItSpec extends AsyncWordSpec, AsyncIOSpec, Matc
         yield events
 
       program.timeout(30.seconds).asserting { events =>
-        events.collect { case Right(event) => event }.flatMap(_.fullDocument) shouldBe List(Person("bob", 30))
-        events.count(_.isLeft) shouldBe 1
+        events.flatMap(_.fullDocument).collect { case Right(person) => person } shouldBe List(Person("bob", 30))
+        events.flatMap(_.fullDocument).count(_.isLeft) shouldBe 1
+        events.map(_.resumeToken.isEmpty) shouldBe List(false, false)
       }
     }
   }
