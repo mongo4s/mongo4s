@@ -83,12 +83,12 @@ trait RepositoryBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
       run(collection.insertMany(List(Person("3", "c", 3), Person("1", "a", 1), Person("2", "b", 2), Person("4", "d", 4))))
 
       val firstPage  = run(repository.findPage(2))
-      val secondPage = run(repository.findPage(2, after = Some(firstPage.last.id)))
-      val thirdPage  = run(repository.findPage(2, after = Some(secondPage.last.id)))
+      val secondPage = run(repository.findPage(2, after = firstPage.next))
 
-      firstPage.map(_.id) shouldBe List("1", "2")
-      secondPage.map(_.id) shouldBe List("3", "4")
-      thirdPage shouldBe empty
+      firstPage.items.map(_.id) shouldBe List("1", "2")
+      firstPage.next shouldBe Some("2")
+      secondPage.items.map(_.id) shouldBe List("3", "4")
+      secondPage.next shouldBe None
     }
 
     "narrow with a filter and still page by key" in {
@@ -97,10 +97,23 @@ trait RepositoryBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
 
       val ageField = Field.of[Person, Int](_.age)
       val page     = run(repository.findPage(1, filter = ageField.equalTo(9)))
-      val next     = run(repository.findPage(1, after = Some(page.last.id), filter = ageField.equalTo(9)))
+      val next     = run(repository.findPage(1, after = page.next, filter = ageField.equalTo(9)))
 
-      page.map(_.id) shouldBe List("2")
-      next.map(_.id) shouldBe List("3")
+      page.items.map(_.id) shouldBe List("2")
+      next.items.map(_.id) shouldBe List("3")
+      next.next shouldBe None
+    }
+
+    "walk backwards from the highest key when asked to" in {
+      val (collection, repository) = repo()
+      run(collection.insertMany(List(Person("3", "c", 3), Person("1", "a", 1), Person("2", "b", 2))))
+
+      val firstPage  = run(repository.findPage(2, descending = true))
+      val secondPage = run(repository.findPage(2, after = firstPage.next, descending = true))
+
+      firstPage.items.map(_.id) shouldBe List("3", "2")
+      secondPage.items.map(_.id) shouldBe List("1")
+      secondPage.next shouldBe None
     }
 
     "refuse a page that holds nothing" in {

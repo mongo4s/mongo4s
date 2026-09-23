@@ -43,17 +43,23 @@ open class BaseMongoRepository[F[*], S[*], E, K](
   def findByFilter(filter: Filter[E], page: Page[E])(using session: Option[ClientSession]): F[List[E]] =
     paged(collection.find(filter)(using session).projection(defaultProjection), page).all
 
-  def findPage(limit: Int, after: Option[K], filter: Filter[E])(using session: Option[ClientSession]): F[List[E]] =
-    require(limit > 0, s"a page has to hold at least one entity, got $limit")
+  def findPage(limit: Int, after: Option[K], filter: Filter[E], descending: Boolean)(using session: Option[ClientSession]): F[KeysetPage[E, K]] =
+    require(limit > 0 && limit < Int.MaxValue, s"a page has to hold at least one entity, got $limit")
 
-    val bounded = after.fold(filter)(key => Filter.and(filter, pk.afterFilter(key)))
+    val bounded = after.fold(filter)(key => Filter.and(filter, pk.afterFilter(key, descending)))
 
-    collection
-      .find(bounded)(using session)
-      .projection(defaultProjection)
-      .sort(pk.keyOrder)
-      .limit(limit)
-      .all
+    val rows =
+      collection
+        .find(bounded)(using session)
+        .projection(defaultProjection)
+        .sort(pk.keyOrder(descending))
+        .limit(limit + 1)
+        .all
+
+    F.map(rows) { fetched =>
+      val items = fetched.take(limit)
+      KeysetPage(items, if fetched.sizeIs > limit then items.lastOption.map(pk.key) else None)
+    }
   end findPage
 
   def getAll(using session: Option[ClientSession])(using Streamable[S, E]): S[E] =

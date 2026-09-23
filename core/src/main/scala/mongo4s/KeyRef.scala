@@ -18,18 +18,27 @@ trait KeyRef[E, K]:
       }*
     )
 
-  def keyOrder: Sort[E] =
-    fieldNames.foldLeft(Sort.empty[E])((sort, name) => sort.asc(Field.stored[E, Any](name)))
+  def keyOrder: Sort[E] = keyOrder(descending = false)
 
-  def afterFilter(key: K): Filter[E] =
+  def keyOrder(descending: Boolean): Sort[E] =
+    fieldNames.foldLeft(Sort.empty[E]) { (sort, name) =>
+      if descending
+      then sort.desc(Field.stored[E, Any](name))
+      else sort.asc(Field.stored[E, Any](name))
+    }
+
+  def afterFilter(key: K): Filter[E] = afterFilter(key, descending = false)
+
+  def afterFilter(key: K, descending: Boolean): Filter[E] =
     val entries = fields(key).toList
 
     Filter.or(
       entries.indices.toList.map { position =>
-        val settled = entries.take(position).map((name, value) => Filter.Eq[E](FieldPath.literal(name), value))
-        val greater = Filter.Gt[E](FieldPath.literal(entries(position)._1), entries(position)._2)
+        val settled       = entries.take(position).map((name, value) => Filter.Eq[E](FieldPath.literal(name), value))
+        val (name, value) = entries(position)
+        val beyond        = if descending then Filter.Lt[E](FieldPath.literal(name), value) else Filter.Gt[E](FieldPath.literal(name), value)
 
-        Filter.and((settled :+ greater)*)
+        Filter.and((settled :+ beyond)*)
       }*
     )
   end afterFilter

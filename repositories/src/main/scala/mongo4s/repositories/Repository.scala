@@ -29,9 +29,9 @@ trait Repository[F[*], S[*], E, K]:
       session: Option[ClientSession] = None,
   ): F[List[E]]
 
-  def findPage(limit: Int, after: Option[K] = None, filter: Filter[E] = Filter.all)(using
+  def findPage(limit: Int, after: Option[K] = None, filter: Filter[E] = Filter.all, descending: Boolean = false)(using
       session: Option[ClientSession] = None,
-  ): F[List[E]]
+  ): F[KeysetPage[E, K]]
 
   def getAll(using session: Option[ClientSession] = None)(using Streamable[S, E]): S[E]
 

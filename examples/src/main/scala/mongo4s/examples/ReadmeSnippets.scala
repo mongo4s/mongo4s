@@ -230,10 +230,16 @@ object ReadmeSnippets:
   // --- Keyset paging ---
 
   def walk(users: BaseMongoRepository[IO, S, User, String]): IO[List[User]] =
-    for
-      firstPage <- users.findPage(100)
-      nextPage  <- firstPage.lastOption.fold(IO.pure(List.empty[User]))(last => users.findPage(100, after = Some(last.id)))
-    yield firstPage ++ nextPage
+    def from(after: Option[String]): IO[List[User]] =
+      users.findPage(100, after).flatMap { page =>
+        page.next.fold(IO.pure(page.items))(next => from(Some(next)).map(page.items ++ _))
+      }
+
+    from(None)
+  end walk
+
+  def newestFirst(users: BaseMongoRepository[IO, S, User, String]): IO[List[User]] =
+    users.findPage(20, descending = true).map(_.items)
 
   // --- AST-free aggregation ---
 

@@ -56,12 +56,12 @@ final class KeysetPageItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befor
       _          <- repo.insertMany(scala.util.Random.shuffle(readings))
     yield repo
 
-  private def walk(repo: BaseMongoRepository[IO, S, Reading, Key], size: Int): IO[List[List[Reading]]] =
+  private def walk(repo: BaseMongoRepository[IO, S, Reading, Key], size: Int, descending: Boolean = false): IO[List[List[Reading]]] =
     def go(after: Option[Key], acc: List[List[Reading]]): IO[List[List[Reading]]] =
-      repo.findPage(size, after).flatMap { page =>
-        if page.isEmpty
-        then IO.pure(acc.reverse)
-        else go(Some((sensor = page.last.sensor, seq = page.last.seq)), page :: acc)
+      repo.findPage(size, after, descending = descending).flatMap { page =>
+        page.next match
+          case Some(key) => go(Some(key), page.items :: acc)
+          case None      => IO.pure((page.items :: acc).reverse)
       }
 
     go(None, Nil)
@@ -74,6 +74,15 @@ final class KeysetPageItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befor
       program.timeout(60.seconds).asserting { pages =>
         pages.map(_.size) shouldBe List(2, 2, 1)
         pages.flatten shouldBe readings
+      }
+    }
+
+    "walk a compound key backwards, from its highest value" in {
+      val program = repository("descending").flatMap(walk(_, 2, descending = true))
+
+      program.timeout(60.seconds).asserting { pages =>
+        pages.map(_.size) shouldBe List(2, 2, 1)
+        pages.flatten shouldBe readings.reverse
       }
     }
 
@@ -97,8 +106,8 @@ final class KeysetPageItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befor
           repo  <- repository("shifting")
           first <- repo.findPage(2)
           _     <- repo.deleteOne((sensor = "a", seq = 1))
-          next  <- repo.findPage(2, after = Some((sensor = first.last.sensor, seq = first.last.seq)))
-        yield next
+          next  <- repo.findPage(2, after = first.next)
+        yield next.items
 
       program.timeout(60.seconds).asserting(_ shouldBe List(Reading("b", 1, 3.0), Reading("b", 2, 4.0)))
     }
