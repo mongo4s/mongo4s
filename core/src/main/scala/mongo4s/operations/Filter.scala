@@ -115,7 +115,7 @@ object Filter:
   def expr[E](expression: BsonDocument): Filter[E]                        = Expr(expression)
 
   def and[E](filters: Filter[E]*): Filter[E] =
-    val relevant = filters.toList.filterNot(isAll)
+    val relevant = filters.toList.flatMap(conjuncts).filterNot(isAll)
 
     if relevant.exists(isNone)
     then MatchNone()
@@ -127,7 +127,7 @@ object Filter:
   end and
 
   def or[E](filters: Filter[E]*): Filter[E] =
-    val relevant = filters.toList.filterNot(isNone)
+    val relevant = filters.toList.flatMap(disjuncts).filterNot(isNone)
 
     if relevant.exists(isAll)
     then MatchAll()
@@ -137,6 +137,16 @@ object Filter:
         case single :: Nil => single
         case many          => Or(many)
   end or
+
+  private def conjuncts[E](filter: Filter[E]): List[Filter[E]] =
+    filter match
+      case And(filters) => filters
+      case other        => List(other)
+
+  private def disjuncts[E](filter: Filter[E]): List[Filter[E]] =
+    filter match
+      case Or(filters) => filters
+      case other       => List(other)
 
   private def isAll[E](filter: Filter[E]): Boolean =
     filter match

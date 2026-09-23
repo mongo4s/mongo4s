@@ -76,6 +76,22 @@ final class FilterSpec extends AnyWordSpec with Matchers:
       val filter = Field.of[User, Int](_.age).gt(18) && Field.of[User, String](_.firstName).equalTo("bob")
       filter.toBson(FieldNaming.snakeCase).toJson shouldBe """{"$and": [{"age": {"$gt": 18}}, {"first_name": "bob"}]}"""
     }
+
+    "chain into one flat $and or $or rather than nesting one inside the next" in {
+      val age   = Field.of[User, Int](_.age)
+      val chain = age.gt(18) && age.lt(65) && age.notEqualTo(30)
+      val alts  = age.equalTo(1) || age.equalTo(2) || age.equalTo(3)
+
+      chain.toBson(FieldNaming.identity).toJson shouldBe """{"$and": [{"age": {"$gt": 18}}, {"age": {"$lt": 65}}, {"age": {"$ne": 30}}]}"""
+      alts.toBson(FieldNaming.identity).toJson shouldBe """{"$or": [{"age": 1}, {"age": 2}, {"age": 3}]}"""
+    }
+
+    "keep an $or nested inside an $and, since flattening it would change what matches" in {
+      val age = Field.of[User, Int](_.age)
+
+      (age.gt(18) && (age.equalTo(1) || age.equalTo(2))).toBson(FieldNaming.identity).toJson shouldBe
+        """{"$and": [{"age": {"$gt": 18}}, {"$or": [{"age": 1}, {"age": 2}]}]}"""
+    }
   }
 
   "PrimaryKey" should {
