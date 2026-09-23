@@ -22,7 +22,7 @@ open class BaseMongoRepository[F[*], S[*], E, K](
   def count(filter: Filter[E])(using session: Option[ClientSession]): F[Long] = collection.count(filter)(using session)
 
   def exists(key: K)(using session: Option[ClientSession]): F[Boolean] =
-    F.map(collection.count(pk.eqFilter(key))(using session))(_ > 0)
+    F.map(collection.count(pk.eqFilter(key), CountOptions.default.withLimit(1))(using session))(_ > 0)
 
   def findOne(key: K)(using session: Option[ClientSession]): F[Option[E]] =
     collection.find(pk.eqFilter(key))(using session).projection(defaultProjection).first
