@@ -59,12 +59,12 @@ object Field:
     infix def /[A](segment: String): Field[E, A] = Field(field.path.stored(segment))
 
   extension [E, A](field: Field[E, A])
-    def exists: Filter[E]                                       = Filter.Exists(field.path, true)
-    def notExists: Filter[E]                                    = Filter.Exists(field.path, false)
-    def regex(pattern: String, options: String = ""): Filter[E] = Filter.Regex(field.path, pattern, options)
-    def unset: Update[E]                                        = Update.Unset(field.path)
-    def ascending: Sort[E]                                      = Sort.asc(field)
-    def descending: Sort[E]                                     = Sort.desc(field)
+    def exists: Filter[E]                                                        = Filter.Exists(field.path, true)
+    def notExists: Filter[E]                                                     = Filter.Exists(field.path, false)
+    def regex(pattern: String, options: String = "")(using TextOf[A]): Filter[E] = Filter.Regex(field.path, pattern, options)
+    def unset: Update[E]                                                         = Update.Unset(field.path)
+    def ascending: Sort[E]                                                       = Sort.asc(field)
+    def descending: Sort[E]                                                      = Sort.desc(field)
 
   extension [E, C](field: Field[E, C])
     def inc[A](amount: A)(using NumericOf[C, A]): Update[E]   = Update.inc(field, amount)
@@ -92,7 +92,7 @@ object Field:
       then Filter.MatchAll()
       else Filter.All(field.path, values.toList.map(encoder.encode))
 
-    def hasSize(size: Int): Filter[E] = Filter.Size(field.path, size)
+    def hasSize[A](size: Int)(using ElementOf[C, A]): Filter[E] = Filter.Size(field.path, size)
 
   extension [E, A](field: Field[E, A])
     def near(point: Geometry.Point, maxDistance: Option[Double] = None, minDistance: Option[Double] = None): Filter[E] =
@@ -106,5 +106,5 @@ object Field:
     def intersects(geometry: Geometry): Filter[E] = Filter.GeoIntersects(field.path, geometry)
 
   extension [E, A](field: Field[E, A])
-    def hasType(bsonType: BsonTypeName): Filter[E]     = Filter.Type(field.path, bsonType)
-    def mod(divisor: Long, remainder: Long): Filter[E] = Filter.Mod(field.path, divisor, remainder)
+    def hasType(bsonType: BsonTypeName): Filter[E]                               = Filter.Type(field.path, bsonType)
+    def mod[N](divisor: Long, remainder: Long)(using NumericOf[A, N]): Filter[E] = Filter.Mod(field.path, divisor, remainder)

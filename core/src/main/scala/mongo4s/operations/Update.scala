@@ -133,8 +133,8 @@ object Update:
   ): Update[E] =
     AddToSetEach(field.path, bsonArray(values))
 
-  def popFirst[E, C](field: Field[E, C]): Update[E] = Pop(field.path, first = true)
-  def popLast[E, C](field: Field[E, C]): Update[E]  = Pop(field.path, first = false)
+  def popFirst[E, C, A](field: Field[E, C])(using ElementOf[C, A]): Update[E] = Pop(field.path, first = true)
+  def popLast[E, C, A](field: Field[E, C])(using ElementOf[C, A]): Update[E]  = Pop(field.path, first = false)
 
   def combine[E](updates: Update[E]*): Update[E] = Combine(updates.toList)
 

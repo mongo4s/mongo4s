@@ -52,6 +52,23 @@ final class OperatorsSpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "an operator that only makes sense for one kind of field" should {
+    "compile for that kind, and not for another" in {
+      typeChecks("""Field.of[OperatorsSpec.Item, String](_.sku).regex("^a")""") shouldBe true
+      typeChecks("""Field.of[OperatorsSpec.Order, Set[String]](_.labels).regex("^a")""") shouldBe true
+      typeChecks("""Field.of[OperatorsSpec.Order, Int](_.total).regex("^a")""") shouldBe false
+
+      typeChecks("Field.of[OperatorsSpec.Order, List[OperatorsSpec.Item]](_.items).hasSize(3)") shouldBe true
+      typeChecks("Field.of[OperatorsSpec.Order, Int](_.total).hasSize(3)") shouldBe false
+
+      typeChecks("Field.of[OperatorsSpec.Order, Int](_.total).mod(4, 1)") shouldBe true
+      typeChecks("Field.of[OperatorsSpec.Item, String](_.sku).mod(4, 1)") shouldBe false
+
+      typeChecks("Update.popFirst(Field.of[OperatorsSpec.Order, Set[String]](_.labels))") shouldBe true
+      typeChecks("Update.popLast(Field.of[OperatorsSpec.Order, Int](_.total))") shouldBe false
+    }
+  }
+
   "other predicates" should {
     "render $type and $mod" in {
       json(totalField.hasType(BsonTypeName.Int)) shouldBe """{"total": {"$type": "int"}}"""
