@@ -54,21 +54,22 @@ private[mongo4s] object SelectMacro:
 
     val paths = Expr.ofList(labels.map(label => '{ FieldPath.derived(List(${ Expr(label) })) }))
 
-    val decoder = '{ (naming: FieldNaming) =>
-      BsonDocumentDecoder.instance[K] { document =>
-        SelectSupport
-          .sequence(${
-            Expr.ofList(valueTypes.zipWithIndex.map { (tpe, index) =>
-              tpe.asType match
-                case '[t] =>
-                  val instance = Expr
-                    .summon[BsonDecoder[t]]
-                    .getOrElse(fail(s"no BsonDecoder in scope for '${labels(index)}' of type ${tpe.show}"))
+    val instances = Expr.ofList(valueTypes.zip(labels).map { (tpe, label) =>
+      tpe.asType match
+        case '[t] =>
+          val instance = Expr
+            .summon[BsonDecoder[t]]
+            .getOrElse(fail(s"no BsonDecoder in scope for '$label' of type ${tpe.show}"))
 
-                  '{ SelectSupport.decodeField(document, ${ paths }.apply(${ Expr(index) }).render(naming), ${ instance }) }
-            })
-          })
-          .map(values => Tuple.fromArray(values).asInstanceOf[K])
+          '{ ${ instance }: BsonDecoder[?] }
+    })
+
+    val decoder = '{ (naming: FieldNaming) =>
+      val names    = ${ paths }.map(_.render(naming)).toArray
+      val decoders = ${ instances }.toArray
+
+      BsonDocumentDecoder.instance[K] { document =>
+        SelectSupport.decodeAll(document, names, decoders).map(values => Tuple.fromArray(values).asInstanceOf[K])
       }
     }
 

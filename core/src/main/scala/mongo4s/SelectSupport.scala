@@ -14,6 +14,20 @@ private[mongo4s] object SelectSupport:
       case Some(value) => decoder.decode(value)
       case None        => decoder.decode(BsonNull.VALUE).left.map(_ => BsonError.MissingField(name))
 
+  def decodeAll(document: BsonDocument, names: Array[String], decoders: Array[BsonDecoder[?]]): Either[BsonError, Array[Any]] =
+    val values = new Array[Any](names.length)
+    var index  = 0
+    var failed = Option.empty[BsonError]
+
+    while failed.isEmpty && index < names.length do
+      decodeField(document, names(index), decoders(index)) match
+        case Right(value) => values(index) = value
+        case Left(error)  => failed = Some(error)
+      index += 1
+
+    failed.toLeft(values)
+  end decodeAll
+
   def sequence(results: List[Either[BsonError, Any]]): Either[BsonError, Array[Any]] =
     val values = new Array[Any](results.size)
     var index  = 0
