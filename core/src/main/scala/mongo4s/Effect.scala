@@ -49,7 +49,7 @@ trait Effect[F[*]]:
     }
 
   def bracketCase[A, B](acquire: F[A])(use: A => F[B])(release: (A, ExitCase) => F[Unit]): F[B] =
-    flatMap(acquire)(a => guaranteeCase(use(a))(exitCase => release(a, exitCase)))
+    flatMap(acquire)(a => guaranteeCase(suspend(use(a)))(exitCase => release(a, exitCase)))
 
   def bracket[A, B](acquire: F[A])(use: A => F[B])(release: A => F[Unit]): F[B] =
     bracketCase(acquire)(use)((a, _) => release(a))

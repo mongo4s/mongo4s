@@ -151,6 +151,14 @@ trait EffectBackendSpec[F[*]] extends AnyWordSpec, Matchers:
       released.get shouldBe 1
     }
 
+    "release when use throws before it has returned an F" in {
+      val released = AtomicInteger(0)
+      val boom     = Boom("thrown-by-use")
+
+      runAttempt(F.bracket[String, Int](F.pure("resource"))(_ => throw boom)(_ => F.delay(released.incrementAndGet(): Unit))) shouldBe Left(boom)
+      released.get shouldBe 1
+    }
+
     "not release when acquisition fails" in {
       val released = AtomicInteger(0)
       val boom     = Boom("acquire")
