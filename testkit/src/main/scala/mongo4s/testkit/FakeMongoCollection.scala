@@ -2,8 +2,9 @@ package mongo4s.testkit
 
 import scala.collection.mutable
 
+import com.mongodb.bulk.BulkWriteError
 import org.bson.{BsonArray, BsonDateTime, BsonDocument, BsonDouble, BsonInt32, BsonInt64, BsonNull, BsonObjectId, BsonValue}
-import com.mongodb.{ExplainVerbosity, MongoWriteException, ReadConcern, ReadPreference, ServerAddress, WriteConcern, WriteError}
+import com.mongodb.{ExplainVerbosity, MongoBulkWriteException, MongoWriteException, ReadConcern, ReadPreference, ServerAddress, WriteConcern, WriteError}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
 import mongo4s.operations.*
@@ -57,10 +58,25 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   def insertMany(documents: Seq[E])(using session: Option[ClientSession]): F[InsertManyResult] =
     F.delay {
-      val encoded = documents.map(document => identified(codec.encodeDocument(document)))
-      storage ++= encoded
-      InsertManyResult(encoded.flatMap(d => Option(d.get(BsonField.Id))).toList)
+      val ids = mutable.ListBuffer.empty[BsonValue]
+
+      documents.zipWithIndex.foreach { (document, i) =>
+        val encoded =
+          try identified(codec.encodeDocument(document))
+          catch case duplicate: MongoError.DuplicateKey => throw bulkFailure(BulkWriteResult.none.copy(insertedCount = i.toLong), List(failureAt(i, duplicate)))
+
+        storage += encoded
+        ids ++= Option(encoded.get(BsonField.Id))
+      }
+
+      InsertManyResult(ids.toList)
     }
+
+  private def failureAt(index: Int, error: MongoError): BulkWriteError =
+    BulkWriteError(error.code, error.getMessage, BsonDocument(), index)
+
+  private def bulkFailure(written: BulkWriteResult, failures: List[BulkWriteError]): MongoError =
+    MongoError.bulkWriteFailed(MongoBulkWriteException(written.toDriver, failures.asJava, null, ServerAddress(), java.util.Set.of()))
 
   private def identified(document: BsonDocument): BsonDocument =
     val stamped =
@@ -183,8 +199,9 @@ final class FakeMongoCollection[F[*], S[*], E](
       var deleted  = 0L
 
       val upserted = mutable.Map.empty[Int, BsonValue]
+      val failures = mutable.ListBuffer.empty[BulkWriteError]
 
-      commands.zipWithIndex.foreach {
+      val perform: ((WriteCommand[E], Int)) => Unit = {
         case (WriteCommand.InsertOne(document), _)                 =>
           storage += identified(codec.encodeDocument(document))
           inserted += 1
@@ -221,7 +238,16 @@ final class FakeMongoCollection[F[*], S[*], E](
           deleted += matches.size
       }
 
-      BulkWriteResult(inserted, matched, modified, deleted, upserted.toMap)
+      commands.zipWithIndex.iterator.takeWhile(_ => !ordered || failures.isEmpty).foreach { (command, index) =>
+        try perform((command, index))
+        catch case duplicate: MongoError.DuplicateKey => failures.addOne(failureAt(index, duplicate)): Unit
+      }
+
+      val written = BulkWriteResult(inserted, matched, modified, deleted, upserted.toMap)
+
+      if failures.isEmpty
+      then written
+      else throw bulkFailure(written, failures.toList)
     }
 
   def aggregate[B](pipeline: Seq[Stage[E]])(using session: Option[ClientSession])(using decoderB: BsonDocumentDecoder[B]): AggregateQuery[F, S, B] =

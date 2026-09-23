@@ -1,7 +1,7 @@
 package mongo4s.results
 
 import org.bson.BsonValue
-import com.mongodb.bulk.BulkWriteResult as DriverBulkWriteResult
+import com.mongodb.bulk.{BulkWriteUpsert, BulkWriteResult as DriverBulkWriteResult}
 
 import scala.jdk.CollectionConverters.given
 
@@ -17,6 +17,16 @@ final case class BulkWriteResult(
     if by == 0 || upsertedIds.isEmpty
     then this
     else copy(upsertedIds = upsertedIds.map((index, id) => (index + by, id)))
+
+  private[mongo4s] def toDriver: DriverBulkWriteResult =
+    DriverBulkWriteResult.acknowledged(
+      insertedCount.toInt,
+      matchedCount.toInt,
+      deletedCount.toInt,
+      Integer.valueOf(modifiedCount.toInt),
+      upsertedIds.toList.sortBy(_._1).map((index, id) => BulkWriteUpsert(index, id)).asJava,
+      java.util.List.of(),
+    )
 
 object BulkWriteResult:
   val none: BulkWriteResult =

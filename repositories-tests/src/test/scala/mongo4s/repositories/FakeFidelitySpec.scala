@@ -27,6 +27,8 @@ object FakeFidelitySpec:
   def docs(values: (String, Int)*): BsonArray =
     BsonArray(values.toList.map((n, q) => BsonDocument("name", BsonString(n)).append("qty", BsonInt32(q)): BsonValue).asJava)
 
+  def keyed(id: String): BsonDocument = BsonDocument("_id", BsonString(id))
+
 final class FakeFidelitySpec extends AnyWordSpec, Matchers:
   import FakeFidelitySpec.*
 
@@ -219,6 +221,41 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
 
       intercept[mongo4s.MongoError.DuplicateKey](c.insertOne(doc.clone()).unsafeRunSync())
       c.find().all.unsafeRunSync().size shouldBe 1
+    }
+
+    "refuse a duplicate _id within one insertMany, keeping what came before it, as an ordered insert does" in {
+      val c      = fake()
+      val failed = intercept[mongo4s.MongoError.BulkWriteFailed] {
+        c.insertMany(List(keyed("a"), keyed("a"), keyed("b"))).unsafeRunSync()
+      }
+
+      failed.failures.map(_.index) shouldBe List(1)
+      failed.result.insertedCount shouldBe 1
+      c.count().unsafeRunSync() shouldBe 1
+    }
+  }
+
+  "a bulk write that meets a duplicate _id" should {
+    "stop there when ordered, and report the command by its position" in {
+      val c      = fake(keyed("a"))
+      val failed = intercept[mongo4s.MongoError.BulkWriteFailed] {
+        c.bulkWrite(Seq(WriteCommand.InsertOne(keyed("b")), WriteCommand.InsertOne(keyed("a")), WriteCommand.InsertOne(keyed("c")))).unsafeRunSync()
+      }
+
+      failed.failures.map(_.index) shouldBe List(1)
+      failed.result.insertedCount shouldBe 1
+      c.count().unsafeRunSync() shouldBe 2
+    }
+
+    "carry on past it when unordered, and report every failure" in {
+      val c      = fake(keyed("a"))
+      val failed = intercept[mongo4s.MongoError.BulkWriteFailed] {
+        c.bulkWrite(Seq(WriteCommand.InsertOne(keyed("a")), WriteCommand.InsertOne(keyed("b")), WriteCommand.InsertOne(keyed("a"))), ordered = false).unsafeRunSync()
+      }
+
+      failed.failures.map(_.index) shouldBe List(0, 2)
+      failed.result.insertedCount shouldBe 1
+      c.count().unsafeRunSync() shouldBe 2
     }
   }
 

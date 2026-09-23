@@ -13,6 +13,8 @@ import com.mongodb.{
   MongoWriteException,
 }
 
+import mongo4s.results.BulkWriteResult
+
 sealed abstract class MongoError(val cause: MongoException) extends RuntimeException(cause.getMessage, cause), NoStackTrace:
   def code: Int = cause.getCode
 
@@ -36,17 +38,15 @@ object MongoError:
   final case class BulkWriteFailed(failures: List[BulkFailure], override val cause: MongoBulkWriteException) extends MongoError(cause):
     def duplicateKeys: List[BulkFailure] = failures.filter(_.isDuplicateKey)
 
+    def result: BulkWriteResult = BulkWriteResult.fromDriver(cause.getWriteResult)
+
   final case class BulkFailure(index: Int, code: Int, message: String):
     def isDuplicateKey: Boolean = ErrorCategory.fromErrorCode(code) == ErrorCategory.DUPLICATE_KEY
 
   private[mongo4s] def translate(error: Throwable): Throwable = error match
     case already: MongoError => already
 
-    case bulk: MongoBulkWriteException =>
-      BulkWriteFailed(
-        bulk.getWriteErrors.asScala.map(e => BulkFailure(e.getIndex, e.getCode, e.getMessage)).toList,
-        bulk,
-      )
+    case bulk: MongoBulkWriteException => bulkWriteFailed(bulk)
 
     case write: MongoWriteException              => byCategory(write.getError.getCategory, write)
     case timeout: MongoExecutionTimeoutException => ExecutionTimeout(timeout)
@@ -54,6 +54,12 @@ object MongoError:
     case selection: MongoTimeoutException        => Unavailable(selection)
     case mongo: MongoException                   => byCategory(ErrorCategory.fromErrorCode(mongo.getCode), mongo)
     case other                                   => other
+
+  private[mongo4s] def bulkWriteFailed(bulk: MongoBulkWriteException): BulkWriteFailed =
+    BulkWriteFailed(
+      bulk.getWriteErrors.asScala.map(e => BulkFailure(e.getIndex, e.getCode, e.getMessage)).toList,
+      bulk,
+    )
 
   private def byCategory(category: ErrorCategory, error: MongoException): MongoError = category match
     case ErrorCategory.DUPLICATE_KEY     => DuplicateKey(error)

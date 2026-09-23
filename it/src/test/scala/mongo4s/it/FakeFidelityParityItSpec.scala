@@ -16,7 +16,7 @@ import mongo4s.bson.BsonDocumentCodec
 import mongo4s.cats.CatsStream
 import mongo4s.operations.*
 import mongo4s.testkit.FakeMongoCollection
-import mongo4s.{Field, MongoClient, MongoCollection}
+import mongo4s.{Field, MongoClient, MongoCollection, MongoError}
 
 import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
@@ -244,4 +244,38 @@ final class FakeFidelityParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matcher
         yield stored.map(document => Option(document.get("_id")).map(_.getBsonType))
       }
     }
+
+    "agree on how an insertMany reports a duplicate _id inside it, and on what it kept" in {
+      agree("insert_many_duplicate", Nil) { collection =>
+        for
+          failed <- collection.insertMany(keyed("a", "a", "b")).attempt
+          stored <- collection.count()
+        yield (bulkOutcome(failed), stored)
+      }
+    }
+
+    "agree on an ordered bulk write stopping at a duplicate _id" in {
+      agree("bulk_ordered_duplicate", keyed("a")) { collection =>
+        for
+          failed <- collection.bulkWrite(keyed("b", "a", "c").map(WriteCommand.InsertOne(_))).attempt
+          stored <- collection.count()
+        yield (bulkOutcome(failed), stored)
+      }
+    }
+
+    "agree on an unordered bulk write carrying on past a duplicate _id" in {
+      agree("bulk_unordered_duplicate", keyed("a")) { collection =>
+        for
+          failed <- collection.bulkWrite(keyed("a", "b", "a").map(WriteCommand.InsertOne(_)), ordered = false).attempt
+          stored <- collection.count()
+        yield (bulkOutcome(failed), stored)
+      }
+    }
   }
+
+  private def keyed(ids: String*): List[BsonDocument] = ids.toList.map(id => BsonDocument("_id", BsonString(id)))
+
+  private def bulkOutcome(outcome: Either[Throwable, Any]): Option[(List[Int], Long)] =
+    outcome match
+      case Left(failed: MongoError.BulkWriteFailed) => Some((failed.failures.map(_.index), failed.result.insertedCount))
+      case _                                        => None
