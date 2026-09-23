@@ -121,6 +121,28 @@ final class UpdateSpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "a pipeline update" should {
+    val shout = Stage.addFields[Person]("name" -> BsonDocument("$toUpper", BsonString("$name")))
+    val tidy  = Stage.project(Projection.empty[Person].exclude(ageField))
+
+    "render as the stages it holds, and not as an operator document" in {
+      Update.pipeline(shout, tidy).toPipeline(FieldNaming.identity).map(_.map(_.toJson)) shouldBe Some(
+        List("""{"$addFields": {"name": {"$toUpper": "$name"}}}""", """{"$project": {"age": 0}}""")
+      )
+      Update.set(nameField, "bob").toPipeline(FieldNaming.identity) shouldBe None
+    }
+
+    "join another pipeline into one, but refuse to be mixed with operators" in {
+      Update.pipeline(shout).and(Update.pipeline(tidy)) shouldBe Update.pipeline(shout, tidy)
+      an[IllegalArgumentException] should be thrownBy json(Update.pipeline(shout).and(Update.set(nameField, "bob")))
+    }
+
+    "refuse a stage the server does not take in an update" in {
+      val thrown = the[IllegalArgumentException] thrownBy Update.pipeline(Stage.matching(nameField.equalTo("bob")))
+      thrown.getMessage should include("$match")
+    }
+  }
+
   "an empty update" should {
     "fail with a message naming the problem" in {
       val thrown = the[IllegalArgumentException] thrownBy json(Update.combine())

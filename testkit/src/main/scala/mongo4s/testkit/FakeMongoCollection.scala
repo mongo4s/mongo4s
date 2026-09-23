@@ -54,7 +54,9 @@ final class FakeMongoCollection[F[*], S[*], E](
     then throw UnsupportedOperationException(s"FakeMongoCollection: $operation with a collation is not simulated")
 
   private def requireRenderable(update: Update[E]): Unit =
-    update.toBson(naming): Unit
+    update.toPipeline(naming) match
+      case Some(_) => throw UnsupportedOperationException("FakeMongoCollection: a pipeline update computes from the document on the server, so it is not simulated")
+      case None    => update.toBson(naming): Unit
 
   private def refuseCollation: Nothing =
     throw UnsupportedOperationException("FakeMongoCollection: a collation changes what matches and how it sorts, so it is not simulated")
@@ -537,6 +539,9 @@ final class FakeMongoCollection[F[*], S[*], E](
 
     case raw: Update.Raw[?] =>
       throw UnsupportedOperationException(s"FakeMongoCollection: the raw update ${raw.document.toJson} is not simulated")
+
+    case Update.Pipeline(_) =>
+      throw UnsupportedOperationException("FakeMongoCollection: a pipeline update computes from the document on the server, so it is not simulated")
 
   private def withArray(document: BsonDocument, path: mongo4s.FieldPath)(f: List[BsonValue] => List[BsonValue]): BsonDocument =
     val current = at(document, path) match

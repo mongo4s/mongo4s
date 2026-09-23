@@ -25,6 +25,7 @@ enum Update[E](val key: String):
   case AddToSetEach[T](path: FieldPath, values: BsonArray) extends Update[T]("$addToSet")
   case Combine[T](updates: List[Update[T]])                extends Update[T]("")
   case Raw[T](document: BsonDocument)                      extends Update[T]("")
+  case Pipeline[T](stages: List[Stage[T]])                 extends Update[T]("")
 
   case PushEach[T](
       path: FieldPath,
@@ -33,10 +34,16 @@ enum Update[E](val key: String):
   ) extends Update[T]("$push")
 
   def and(other: Update[E]): Update[E] = (this, other) match
-    case (Combine(left), Combine(right)) => Combine(left ++ right)
-    case (Combine(left), single)         => Combine(left :+ single)
-    case (single, Combine(right))        => Combine(single :: right)
-    case (left, right)                   => Combine(List(left, right))
+    case (Pipeline(left), Pipeline(right)) => Pipeline(left ++ right)
+    case (Combine(left), Combine(right))   => Combine(left ++ right)
+    case (Combine(left), single)           => Combine(left :+ single)
+    case (single, Combine(right))          => Combine(single :: right)
+    case (left, right)                     => Combine(List(left, right))
+
+  def toPipeline(naming: FieldNaming): Option[List[BsonDocument]] =
+    this match
+      case Pipeline(stages) => Some(stages.map(_.toBson(naming)))
+      case _                => None
 
   def toBson(naming: FieldNaming): BsonDocument =
     val document = BsonDocument()
@@ -131,6 +138,18 @@ object Update:
 
   def combine[E](updates: Update[E]*): Update[E] = Combine(updates.toList)
 
+  def pipeline[E](stages: Stage[E]*): Update[E] =
+    require(stages.nonEmpty, "A pipeline update needs at least one stage")
+
+    stages.foreach {
+      case _: (Stage.AddFields[E] | Stage.ProjectStage[E] | Stage.ReplaceRoot[E] | Stage.Raw[E]) => ()
+      case other                                                                                 =>
+        throw IllegalArgumentException(s"A pipeline update takes $$addFields, $$project and $$replaceRoot stages, not ${other.key}")
+    }
+
+    Pipeline(stages.toList)
+  end pipeline
+
   private def bsonArray[A](values: Seq[A])(using encoder: BsonEncoder[A]): BsonArray =
     val array = BsonArray()
 
@@ -158,6 +177,8 @@ object Update:
     case AddToSetEach(path, vs)          => operator(target, update.key, path.render(naming), each(vs))
     case Combine(updates)                => updates.foreach(write(_, naming, target))
     case Raw(document)                   => document.forEach((name, value) => mergeOperator(target, name, value))
+    case Pipeline(_)                     =>
+      throw IllegalArgumentException("A pipeline update goes to the server as stages, not operators — it cannot be rendered as, or combined with, an operator update")
 
   private val Each      = "$each"
   private val Position  = "$position"

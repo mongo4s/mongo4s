@@ -4,7 +4,7 @@ import scala.annotation.unused
 
 import org.bson.BsonDocument
 import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
-import com.mongodb.client.model.{ReplaceOneModel, UpdateManyModel, UpdateOneModel, WriteModel}
+import com.mongodb.client.model.{ReplaceOneModel, WriteModel}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 import com.mongodb.client.model.{BulkWriteOptions, DeleteManyModel, DeleteOneModel, InsertOneModel}
 
@@ -86,9 +86,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
     F.suspend {
       val driverOptions = DriverOptions.update(options, naming)
 
-      val publisher = session match
-        case Some(s) => underlying.updateOne(s, filter.toBson(naming), update.toBson(naming), driverOptions)
-        case None    => underlying.updateOne(filter.toBson(naming), update.toBson(naming), driverOptions)
+      val publisher = DriverUpdates.updateOne(underlying, session, filter.toBson(naming), update, naming, driverOptions)
 
       F.map(rs.one(publisher))(UpdateResult.fromDriver)
     }
@@ -101,9 +99,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
     F.suspend {
       val driverOptions = DriverOptions.update(options, naming)
 
-      val publisher = session match
-        case Some(s) => underlying.updateMany(s, filter.toBson(naming), update.toBson(naming), driverOptions)
-        case None    => underlying.updateMany(filter.toBson(naming), update.toBson(naming), driverOptions)
+      val publisher = DriverUpdates.updateMany(underlying, session, filter.toBson(naming), update, naming, driverOptions)
 
       F.map(rs.one(publisher))(UpdateResult.fromDriver)
     }
@@ -148,9 +144,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
     F.suspend {
       val driverOptions = DriverOptions.findOneAndUpdate(options, naming)
 
-      val publisher = session match
-        case Some(s) => underlying.findOneAndUpdate(s, filter.toBson(naming), update.toBson(naming), driverOptions)
-        case None    => underlying.findOneAndUpdate(filter.toBson(naming), update.toBson(naming), driverOptions)
+      val publisher = DriverUpdates.findOneAndUpdate(underlying, session, filter.toBson(naming), update, naming, driverOptions)
 
       decodeOptional(publisher)
     }
@@ -346,7 +340,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
   private def toModel(command: WriteCommand[A]): WriteModel[BsonDocument] = command match
     case WriteCommand.InsertOne(document)                 => InsertOneModel(codec.encodeDocument(document))
     case WriteCommand.ReplaceOne(filter, value, options)  => ReplaceOneModel(filter.toBson(naming), codec.encodeDocument(value), DriverOptions.replace(options))
-    case WriteCommand.UpdateOne(filter, update, options)  => UpdateOneModel(filter.toBson(naming), update.toBson(naming), DriverOptions.update(options, naming))
-    case WriteCommand.UpdateMany(filter, update, options) => UpdateManyModel(filter.toBson(naming), update.toBson(naming), DriverOptions.update(options, naming))
+    case WriteCommand.UpdateOne(filter, update, options)  => DriverUpdates.updateOneModel(filter.toBson(naming), update, naming, DriverOptions.update(options, naming))
+    case WriteCommand.UpdateMany(filter, update, options) => DriverUpdates.updateManyModel(filter.toBson(naming), update, naming, DriverOptions.update(options, naming))
     case WriteCommand.DeleteOne(filter)                   => DeleteOneModel(filter.toBson(naming))
     case WriteCommand.DeleteMany(filter)                  => DeleteManyModel(filter.toBson(naming))
