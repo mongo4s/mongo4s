@@ -1,11 +1,19 @@
 package mongo4s
 
+import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
+
+import scala.concurrent.duration.FiniteDuration
+
 import com.mongodb.MongoException
 import com.mongodb.reactivestreams.client.ClientSession
 
 import mongo4s.operations.TransactionOptions
 
 object MongoSession:
+
+  private val BackoffInitial = FiniteDuration(5, TimeUnit.MILLISECONDS)
+  private val BackoffMax     = FiniteDuration(500, TimeUnit.MILLISECONDS)
+  private val BackoffGrowth  = 1.5
 
   def startTransaction[F[*]](
       session: ClientSession,
@@ -40,5 +48,16 @@ object MongoSession:
       case mongo: MongoException => mongo.hasErrorLabel(label)
       case typed: MongoError     => typed.hasLabel(label)
       case _                     => false
+
+  private[mongo4s] def exceededMaxTime(error: Throwable): Boolean =
+    MongoError.translate(error) match
+      case _: MongoError.ExecutionTimeout => true
+      case _                              => false
+
+  private[mongo4s] def backoff[F[*]](attempt: Int)(using F: Effect[F]): F[FiniteDuration] =
+    F.delay {
+      val ceiling = math.min(BackoffInitial.toNanos * math.pow(BackoffGrowth, attempt.toDouble), BackoffMax.toNanos.toDouble)
+      FiniteDuration((ThreadLocalRandom.current().nextDouble() * ceiling).toLong, TimeUnit.NANOSECONDS)
+    }
 
 end MongoSession

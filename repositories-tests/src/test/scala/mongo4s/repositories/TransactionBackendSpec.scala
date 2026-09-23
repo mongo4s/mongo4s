@@ -3,17 +3,19 @@ package mongo4s.repositories
 import java.lang.reflect.{InvocationHandler, Method, Proxy}
 import java.util.concurrent.atomic.AtomicInteger
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
-import org.reactivestreams.{Publisher, Subscriber, Subscription}
-import com.mongodb.MongoException
+import org.bson.BsonDocument
+import com.mongodb.bulk.WriteConcernError
 import com.mongodb.reactivestreams.client.ClientSession
+import org.reactivestreams.{Publisher, Subscriber, Subscription}
+import com.mongodb.{MongoException, MongoExecutionTimeoutException, MongoWriteConcernException, ServerAddress}
 
 import mongo4s.operations.TransactionOptions
-import mongo4s.{Effect, RsBridge, withTransaction}
+import mongo4s.{Effect, MongoSession, RsBridge, withTransaction}
 
 import scala.concurrent.duration.given
 
@@ -26,6 +28,10 @@ object TransactionBackendSpec:
 
   def unknownCommit(message: String): MongoException =
     val error = MongoException(message)
+    error.addLabel(MongoException.UNKNOWN_TRANSACTION_COMMIT_RESULT_LABEL)
+    error
+
+  def commitOutOfTime(error: MongoException): MongoException =
     error.addLabel(MongoException.UNKNOWN_TRANSACTION_COMMIT_RESULT_LABEL)
     error
 
@@ -120,6 +126,21 @@ trait TransactionBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
       fake.aborts.get shouldBe 0
     }
 
+    "not retry a commit that ran out of maxCommitTime, whether the server reports it at the top level or in its write concern" in {
+      val topLevel     = commitOutOfTime(MongoExecutionTimeoutException(50, "MaxTimeMSExpired"))
+      val writeConcern = commitOutOfTime(MongoWriteConcernException(WriteConcernError(50, "MaxTimeMSExpired", "wtimeout", BsonDocument()), ServerAddress()))
+
+      List(topLevel, writeConcern).foreach { failure =>
+        val fake          = FakeSession(commitFailures = List(failure))
+        val (calls, body) = bodyFailing(Nil)
+
+        runAttempt(fake.session.withTransaction[F, S, Int](body)).isLeft shouldBe true
+
+        calls.get shouldBe 1
+        fake.commits.get shouldBe 1
+      }
+    }
+
     "leave an error the server did not label alone" in {
       val boom          = RuntimeException("not labelled")
       val fake          = FakeSession()
@@ -167,6 +188,17 @@ trait TransactionBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
 
       calls.get shouldBe 6
       fake.started.get shouldBe 6
+    }
+  }
+
+  "the pause before a transaction is retried" should {
+    "stay below 5 ms grown by half per attempt, capped at 500 ms, and be jittered" in {
+      List(1 -> 7500.micros, 2 -> 11250.micros, 12 -> 500.millis, 50 -> 500.millis).foreach { (attempt, ceiling) =>
+        val pauses = List.fill(200)(run(MongoSession.backoff[F](attempt)))
+
+        pauses.forall(pause => pause >= Duration.Zero && pause < ceiling) shouldBe true
+        pauses.distinct.size should be > 1
+      }
     }
   }
 

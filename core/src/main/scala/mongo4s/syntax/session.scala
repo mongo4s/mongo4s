@@ -1,6 +1,6 @@
 package mongo4s.syntax
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 import com.mongodb.MongoException
 import com.mongodb.reactivestreams.client.ClientSession
@@ -22,13 +22,13 @@ trait session:
           case Some(timeout) => F.map(F.monotonic)(now => Some(now + timeout))
           case None          => F.pure(None)
 
-      def retryable(until: Option[FiniteDuration]): F[Boolean] =
+      def retryable(until: Option[FiniteDuration], pause: FiniteDuration): F[Boolean] =
         until match
-          case Some(limit) => F.map(F.monotonic)(_ < limit)
+          case Some(limit) => F.map(F.monotonic)(_ + pause < limit)
           case None        => F.pure(false)
 
-      def orRaise[B](error: Throwable, until: Option[FiniteDuration])(retry: => F[B]): F[B] =
-        F.flatMap(retryable(until)) { again =>
+      def orRaise[B](error: Throwable, until: Option[FiniteDuration], pause: FiniteDuration)(retry: => F[B]): F[B] =
+        F.flatMap(retryable(until, pause)) { again =>
           if again
           then retry
           else F.raiseError(error)
@@ -36,8 +36,8 @@ trait session:
 
       def commit(until: Option[FiniteDuration]): F[Unit] =
         F.handleErrorWith(MongoSession.commitTransaction[F, S](session)) { error =>
-          if MongoSession.hasErrorLabel(error, MongoException.UNKNOWN_TRANSACTION_COMMIT_RESULT_LABEL)
-          then orRaise(error, until)(commit(until))
+          if MongoSession.hasErrorLabel(error, MongoException.UNKNOWN_TRANSACTION_COMMIT_RESULT_LABEL) && !MongoSession.exceededMaxTime(error)
+          then orRaise(error, until, Duration.Zero)(commit(until))
           else F.raiseError(error)
         }
 
@@ -52,14 +52,17 @@ trait session:
           }
         }
 
-      def run(until: Option[FiniteDuration]): F[A] =
+      def run(until: Option[FiniteDuration], started: Int): F[A] =
         F.handleErrorWith(F.suspend(attempt(until))) { error =>
           if MongoSession.hasErrorLabel(error, MongoException.TRANSIENT_TRANSACTION_ERROR_LABEL)
-          then orRaise(error, until)(run(until))
+          then
+            F.flatMap(MongoSession.backoff[F](started)) { pause =>
+              orRaise(error, until, pause)(F.flatMap(F.sleep(pause))(_ => run(until, started + 1)))
+            }
           else F.raiseError(error)
         }
 
-      F.flatMap(deadline)(run)
+      F.flatMap(deadline)(run(_, 1))
     end withTransaction
 
 end session
