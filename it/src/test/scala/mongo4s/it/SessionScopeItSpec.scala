@@ -6,12 +6,13 @@ import org.scalatest.matchers.should.Matchers
 import cats.effect.testing.scalatest.AsyncIOSpec
 import org.testcontainers.containers.MongoDBContainer
 
-import cats.effect.IO
+import cats.effect.{IO, Ref}
 import com.mongodb.reactivestreams.client.ClientSession
 import org.bson.{BsonDocument, BsonInt32, BsonString}
 
 import mongo4s.bson.*
 import mongo4s.cats.CatsStream
+import mongo4s.operations.SessionOptions
 import mongo4s.{MongoClient, MongoCollection, withTransaction}
 
 import scala.concurrent.duration.given
@@ -93,5 +94,45 @@ final class SessionScopeItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Bef
         yield survivors
 
       program.timeout(60.seconds).asserting(_ shouldBe List(Person("bob")))
+    }
+  }
+
+  "withSession" should {
+
+    "give its session to every call inside, so a snapshot session reads one point in time throughout" in {
+      val program =
+        for
+          (client, people) <- collection("snapshot")
+          _                <- people.insertOne(Person("before"))
+          seen             <- client.withSession(
+                                for
+                                  first  <- people.find().all
+                                  _      <- insertOutsideSession(people, Person("after"))
+                                  second <- people.find().all
+                                yield (first, second),
+                                SessionOptions.snapshot,
+                              )
+          everything       <- people.find().all
+          _                <- client.close
+        yield (seen, everything)
+
+      program.timeout(60.seconds).asserting { case ((first, second), everything) =>
+        first shouldBe List(Person("before"))
+        second shouldBe first
+        everything should have size 2
+      }
+    }
+
+    "close its session when the body fails" in {
+      val program =
+        for
+          (client, _) <- collection("closed")
+          opened      <- Ref.of[IO, Option[ClientSession]](None)
+          failed      <- client.withSession(opened.set(summon[Option[ClientSession]]) *> IO.raiseError[Unit](RuntimeException("boom"))).attempt
+          session     <- opened.get
+          _           <- client.close
+        yield (failed.isLeft, session.map(closed => scala.util.Try(closed.getServerSession).isFailure))
+
+      program.timeout(60.seconds).asserting(_ shouldBe (true, Some(true)))
     }
   }

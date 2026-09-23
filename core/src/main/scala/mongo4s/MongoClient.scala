@@ -5,9 +5,9 @@ import com.mongodb.MongoClientSettings
 import com.mongodb.reactivestreams.client.{ClientSession, MongoClient as RSMongoClient, MongoClients}
 
 import mongo4s.internal.MongoClientImpl
-import mongo4s.operations.TransactionOptions
 import mongo4s.bson.{BsonDocumentDecoder, DecodeResult}
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
+import mongo4s.operations.{SessionOptions, TransactionOptions}
 
 trait MongoClient[F[*], S[*]]:
   def getDatabase(name: String): F[MongoDatabase[F, S]]
@@ -33,6 +33,20 @@ trait MongoClient[F[*], S[*]]:
   ): F[A] =
     F.bracket(startSession) { session =>
       session.withTransaction[F, S, A](fa, options)
+    } { session =>
+      F.delay(session.close())
+    }
+
+  def startSession(options: SessionOptions)(using rs: RsBridge[F, S]): F[ClientSession] =
+    rs.one(underlying.startSession(options.toDriver))
+
+  def withSession[A](fa: Option[ClientSession] ?=> F[A], options: SessionOptions = SessionOptions.default)(using
+      F: Effect[F],
+      rs: RsBridge[F, S],
+  ): F[A] =
+    F.bracket(startSession(options)) { session =>
+      given Option[ClientSession] = Some(session)
+      F.suspend(fa)
     } { session =>
       F.delay(session.close())
     }
