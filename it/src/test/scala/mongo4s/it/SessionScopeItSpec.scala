@@ -79,3 +79,19 @@ final class SessionScopeItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Bef
         .asserting(_ shouldBe List(Person("bob")))
     }
   }
+
+  "a call built before the transaction" should {
+
+    "commit outside it even when it runs inside, because a call takes its session when it is built" in {
+      val program =
+        for
+          (client, people) <- collection("prebuilt")
+          write             = people.insertOne(Person("bob")).void
+          _                <- client.withTransaction(write *> IO.raiseError(RuntimeException("rollback"))).attempt
+          survivors        <- people.find().all
+          _                <- client.close
+        yield survivors
+
+      program.timeout(60.seconds).asserting(_ shouldBe List(Person("bob")))
+    }
+  }
