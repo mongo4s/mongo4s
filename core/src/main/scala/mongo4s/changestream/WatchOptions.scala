@@ -37,6 +37,10 @@ final class WatchOptions[E] private (
     copy(startAtOperationTime = Some(time), resumeAfter = None, startAfter = None)
 
   def withMaxAwaitTime(value: FiniteDuration): WatchOptions[E] =
+    require(
+      value.toMillis > 0,
+      s"maxAwaitTime must be at least one millisecond — MongoDB takes it in whole milliseconds, and $value would truncate to 0",
+    )
     copy(maxAwaitTime = Some(value))
 
   def withBatchSize(value: Int): WatchOptions[E] =

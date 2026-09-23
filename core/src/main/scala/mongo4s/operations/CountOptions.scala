@@ -20,7 +20,13 @@ final class CountOptions private (
 
   def withSkip(value: Int): CountOptions = copy(skip = Some(value))
 
-  def withMaxTime(value: FiniteDuration): CountOptions = copy(maxTime = Some(value))
+  def withMaxTime(value: FiniteDuration): CountOptions =
+    require(
+      value.toMillis > 0,
+      s"maxTime must be at least one millisecond — MongoDB takes it in whole milliseconds, and $value would truncate to 0, which it reads as no limit",
+    )
+    copy(maxTime = Some(value))
+  end withMaxTime
 
   private def copy(
       collation: Option[Collation] = collation,

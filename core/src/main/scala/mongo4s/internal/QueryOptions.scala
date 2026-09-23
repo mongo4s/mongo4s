@@ -14,11 +14,18 @@ private[mongo4s] final case class QueryOptions(
     batchSize: Option[Int] = None,
     comment: Option[String] = None,
 ):
-  def withHint(keys: BsonDocument): QueryOptions       = copy(hint = Some(keys))
-  def withCollation(value: Collation): QueryOptions    = copy(collation = Some(value))
-  def withMaxTime(value: FiniteDuration): QueryOptions = copy(maxTime = Some(value))
-  def withBatchSize(value: Int): QueryOptions          = copy(batchSize = Some(value))
-  def withComment(value: String): QueryOptions         = copy(comment = Some(value))
+  def withHint(keys: BsonDocument): QueryOptions    = copy(hint = Some(keys))
+  def withCollation(value: Collation): QueryOptions = copy(collation = Some(value))
+  def withBatchSize(value: Int): QueryOptions       = copy(batchSize = Some(value))
+  def withComment(value: String): QueryOptions      = copy(comment = Some(value))
+
+  def withMaxTime(value: FiniteDuration): QueryOptions =
+    require(
+      value.toMillis > 0,
+      s"maxTime must be at least one millisecond — MongoDB takes it in whole milliseconds, and $value would truncate to 0, which it reads as no limit",
+    )
+    copy(maxTime = Some(value))
+  end withMaxTime
 
   def maxTimeMillis: Option[Long] = maxTime.map(_.toMillis)
 
