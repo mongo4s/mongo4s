@@ -136,14 +136,14 @@ final class BatchingSpec extends AsyncWordSpec, AsyncIOSpec, Matchers:
   }
 
   "the repository's default projection" should {
-    "apply to findOneAndUpdate as well as to finds" in {
+    "apply to findOneAndUpdate as well as to finds, failing the read of a document it cut short while the write still lands" in {
       val repository = repo(batchSize = 500, projection = Projection.empty[Person].include(Field.of[Person, String](_.id)))
 
       for
         _       <- repository.fake.insertOne(Person("1", "bob", 30))
-        updated <- repository.findOneAndUpdate("1", Update.set(Field.of[Person, Int](_.age), 31))
+        updated <- repository.findOneAndUpdate("1", Update.set(Field.of[Person, Int](_.age), 31)).attempt
       yield
-        updated shouldBe None
+        updated.isLeft shouldBe true
         repository.fake.snapshot shouldBe List(Person("1", "bob", 31))
     }
 

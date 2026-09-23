@@ -473,7 +473,7 @@ final class FakeMongoCollection[F[*], S[*], E](
       case _                      => None
 
   private def decodeProjected(document: BsonDocument, projection: Projection[E]): Option[E] =
-    codec.decodeDocument(applyProjection(document, projection)).toOption
+    codec.decodeDocument(applyProjection(document, projection)).fold(error => throw error.toThrowable, Some(_))
 
   private def applyProjection(document: BsonDocument, projection: Projection[E]): BsonDocument =
     val projected = projection match
