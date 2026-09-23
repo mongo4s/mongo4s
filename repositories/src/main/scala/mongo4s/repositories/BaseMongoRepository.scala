@@ -1,9 +1,12 @@
 package mongo4s.repositories
 
+import scala.reflect.ClassTag
+
 import org.bson.types.ObjectId
 import com.mongodb.reactivestreams.client.ClientSession
 
 import mongo4s.operations.*
+import mongo4s.bson.direct.WireCodec
 import mongo4s.bson.{BsonDocumentCodec, BsonEncoder, FieldNaming}
 import mongo4s.results.{BulkWriteResult, DeleteResult, UpdateResult}
 import mongo4s.{Effect, Field, MongoCollection, MongoDatabase, MongoError, PrimaryKey, Streamable, WithId}
@@ -188,6 +191,15 @@ object BaseMongoRepository:
       batchSize: Int = DefaultBatchSize,
   )(using F: Effect[F], codec: BsonDocumentCodec[E], pk: PrimaryKey[E, K]): F[BaseMongoRepository[F, S, E, K]] =
     F.map(database.getCollection[E](collectionName, naming)) { collection =>
+      BaseMongoRepository(collection, batchSize)
+    }
+
+  def createDirect[F[*], S[*], E, K](
+      database: MongoDatabase[F, S],
+      collectionName: String,
+      batchSize: Int = DefaultBatchSize,
+  )(using F: Effect[F], codec: WireCodec[E], tag: ClassTag[E], pk: PrimaryKey[E, K]): F[BaseMongoRepository[F, S, E, K]] =
+    F.map(database.getDirectCollection[E](collectionName)) { collection =>
       BaseMongoRepository(collection, batchSize)
     }
 

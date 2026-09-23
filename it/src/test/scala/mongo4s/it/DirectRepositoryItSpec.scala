@@ -56,6 +56,19 @@ trait DirectRepositoryItSpec[F[*], S[*]] extends AnyWordSpec, Matchers, BeforeAn
       missing shouldBe None
     }
 
+    "come out of createDirect the same as one built by hand over getDirectCollection" in {
+      given Effect[F]      = effectInstance
+      given RsBridge[F, S] = rsBridge
+      val client           = run(MongoClient.fromConnectionString[F, S](container.getConnectionString))
+      val database         = run(client.getDatabase("direct_it_create"))
+      val repo             = run(BaseMongoRepository.createDirect[F, S, Person, String](database, "people"))
+      run(repo.insertOne(Person("1", "bob", 30)))
+      val found            = run(repo.findByField(Field.of[Person, String](_.name), "bob"))
+      run(client.close)
+
+      found shouldBe List(Person("1", "bob", 30))
+    }
+
     "insertMany / findMany / findByField / findByFilter batch and filter correctly" in {
       val (client, repo) = repository("direct_it_find_many")
       run(repo.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 25), Person("3", "eve", 40))))
