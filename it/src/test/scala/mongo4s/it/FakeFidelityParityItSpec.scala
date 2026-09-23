@@ -245,6 +245,25 @@ final class FakeFidelityParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matcher
       }
     }
 
+    "agree on ordering Longs past Double's precision, and NaN among numbers" in {
+      val seed = List(
+        BsonDocument("name", BsonString("bigger")).append("n", BsonInt64((1L << 53) + 1)),
+        BsonDocument("name", BsonString("smaller")).append("n", BsonInt64(1L << 53)),
+        BsonDocument("name", BsonString("nan")).append("n", BsonDouble(Double.NaN)),
+      )
+      agree("long_order", seed)(_.find().sort(Sort.asc(Field.stored[BsonDocument, Long]("n"))).all.map(_.map(_.getString("name").getValue)))
+    }
+
+    "agree on matching a number stored at another width" in {
+      val seed = List(BsonDocument("name", BsonString("five")).append("n", BsonInt64(5)))
+      agree("width_match", seed) { collection =>
+        for
+          asInt    <- collection.find(Filter.Eq(Field.stored[BsonDocument, Int]("n").path, BsonInt32(5))).all
+          asDouble <- collection.find(Filter.Eq(Field.stored[BsonDocument, Double]("n").path, BsonDouble(5.0))).all
+        yield (namesOf(asInt), namesOf(asDouble))
+      }
+    }
+
     "agree that a replacement without an _id keeps the one it replaced" in {
       agree("replace_keeps_id", keyed("a").map(_.append("name", BsonString("old")))) { collection =>
         for

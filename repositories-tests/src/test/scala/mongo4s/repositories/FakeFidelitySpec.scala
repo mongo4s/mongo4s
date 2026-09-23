@@ -183,6 +183,25 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
         .unsafeRunSync()
         .map(_.getString("name").getValue) shouldBe List("b", "a")
     }
+
+    "order Longs past Double's precision exactly, and NaN below every number" in {
+      val bigger  = BsonDocument("name", BsonString("bigger")).append("n", BsonInt64((1L << 53) + 1))
+      val smaller = BsonDocument("name", BsonString("smaller")).append("n", BsonInt64(1L << 53))
+      val nan     = BsonDocument("name", BsonString("nan")).append("n", BsonDouble(Double.NaN))
+      val numberF = Field.stored[BsonDocument, Long]("n")
+
+      fake(bigger, smaller, nan).find().sort(Sort.asc(numberF)).all.unsafeRunSync().map(_.getString("name").getValue) shouldBe
+        List("nan", "smaller", "bigger")
+    }
+  }
+
+  "equality on a number" should {
+    "match the value whatever width it is stored at, as the server compares numbers" in {
+      val stored = BsonDocument("name", BsonString("five")).append("n", BsonInt64(5))
+
+      found(fake(stored), Filter.Eq(Field.stored[BsonDocument, Int]("n").path, BsonInt32(5))) shouldBe 1
+      found(fake(stored), Filter.Eq(Field.stored[BsonDocument, Double]("n").path, BsonDouble(5.0))) shouldBe 1
+    }
   }
 
   "a refused stage" should {

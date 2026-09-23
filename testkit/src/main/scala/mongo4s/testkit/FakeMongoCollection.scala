@@ -115,7 +115,7 @@ final class FakeMongoCollection[F[*], S[*], E](
 
     val id = stamped.get(BsonField.Id)
 
-    if storage.exists(existing => Option(existing.get(BsonField.Id)).contains(id))
+    if storage.exists(existing => Option(existing.get(BsonField.Id)).exists(BsonOrdering.same(_, id)))
     then
       throw MongoError.DuplicateKey(
         MongoWriteException(WriteError(11000, s"E11000 duplicate key error: _id $id", BsonDocument()), ServerAddress(), java.util.Collections.emptyList())
@@ -363,7 +363,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Filter.MatchAll()                    => true
     case Filter.MatchNone()                   => false
 
-    case Filter.All(path, values) => elementsAt(document, path).exists(elements => values.forall(elements.contains))
+    case Filter.All(path, values) => elementsAt(document, path).exists(elements => values.forall(value => elements.exists(BsonOrdering.same(_, value))))
     case Filter.Size(path, size)  => at(document, path).exists(v => v.isArray && v.asArray.size == size)
     case Filter.Type(path, name)  => at(document, path).exists(v => mongo4s.bson.BsonTypeName.of(v) == name)
 
@@ -418,7 +418,7 @@ final class FakeMongoCollection[F[*], S[*], E](
   private def equals(document: BsonDocument, path: mongo4s.FieldPath, value: BsonValue): Boolean =
     if value.isNull
     then candidates(document, path).isEmpty || leaves(document, path).exists(_.isNull)
-    else leaves(document, path).contains(value)
+    else leaves(document, path).exists(BsonOrdering.same(_, value))
 
   private def at(document: BsonDocument, path: mongo4s.FieldPath): Option[BsonValue] =
     def go(current: BsonValue, segments: List[String]): Option[BsonValue] = segments match
@@ -821,8 +821,38 @@ final class FakeMongoCollection[F[*], S[*], E](
       }
 
 private object BsonOrdering:
+  def same(a: BsonValue, b: BsonValue): Boolean =
+    if a.isNumber && b.isNumber then compareNumbers(a, b) == 0 else a == b
+
+  private def compareNumbers(a: BsonValue, b: BsonValue): Int =
+    if (a.isInt32 || a.isInt64) && (b.isInt32 || b.isInt64)
+    then java.lang.Long.compare(a.asNumber.longValue, b.asNumber.longValue)
+    else
+      (magnitude(a), magnitude(b)) match
+        case (Right(x), Right(y)) => x.compareTo(y)
+        case (x, y)               => Integer.compare(x.swap.getOrElse(0), y.swap.getOrElse(0))
+  end compareNumbers
+
+  private def magnitude(value: BsonValue): Either[Int, java.math.BigDecimal] =
+    if value.isDouble
+    then
+      val double = value.asDouble.getValue
+      if double.isNaN then Left(-2)
+      else if double.isInfinite then Left(if double > 0 then 1 else -1)
+      else Right(java.math.BigDecimal(double))
+    else if value.isDecimal128
+    then
+      val decimal = value.asDecimal128.getValue
+      if decimal.isNaN then Left(-2)
+      else if decimal.isInfinite then Left(if decimal.isNegative then -1 else 1)
+      else
+        Right(try decimal.bigDecimalValue
+        catch case _: ArithmeticException => java.math.BigDecimal.ZERO)
+    else Right(java.math.BigDecimal.valueOf(value.asNumber.longValue))
+  end magnitude
+
   def compare(a: BsonValue, b: BsonValue): Int =
-    if a.isNumber && b.isNumber then java.lang.Double.compare(a.asNumber.doubleValue, b.asNumber.doubleValue)
+    if a.isNumber && b.isNumber then compareNumbers(a, b)
     else if a.isString && b.isString then a.asString.getValue.compareTo(b.asString.getValue)
     else if a.isDateTime && b.isDateTime then java.lang.Long.compare(a.asDateTime.getValue, b.asDateTime.getValue)
     else if a.isObjectId && b.isObjectId then a.asObjectId.getValue.compareTo(b.asObjectId.getValue)
