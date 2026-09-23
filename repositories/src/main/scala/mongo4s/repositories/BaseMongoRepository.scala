@@ -106,7 +106,13 @@ open class BaseMongoRepository[F[*], S[*], E, K](
       update: Update[E],
       options: FindOneAndUpdateOptions[E],
   )(using session: Option[ClientSession]): F[Option[E]] =
-    collection.findOneAndUpdate(pk.eqFilter(key), update, options.withProjection(defaultProjection))(using session)
+    val projected =
+      if options.projection.isEmpty
+      then options.withProjection(defaultProjection)
+      else options
+
+    collection.findOneAndUpdate(pk.eqFilter(key), update, projected)(using session)
+  end findOneAndUpdate
 
   def bulkWrite(commands: Seq[WriteCommand[E]], ordered: Boolean)(using session: Option[ClientSession]): F[BulkWriteResult] =
     if ordered

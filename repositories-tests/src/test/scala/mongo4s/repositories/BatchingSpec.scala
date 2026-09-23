@@ -9,7 +9,7 @@ import cats.effect.IO
 import mongo4s.Field
 import mongo4s.cats.CatsStream
 import mongo4s.testkit.FakeRepository
-import mongo4s.operations.{Filter, Projection, Update, WriteCommand}
+import mongo4s.operations.{Filter, FindOneAndUpdateOptions, Projection, Update, WriteCommand}
 
 import mongo4s.bson.BsonInstances.given
 import mongo4s.cats.CatsInstances.given
@@ -100,6 +100,17 @@ final class BatchingSpec extends AsyncWordSpec, AsyncIOSpec, Matchers:
       for
         _       <- repository.fake.insertOne(Person("1", "bob", 30))
         updated <- repository.findOneAndUpdate("1", Update.set(Field.of[Person, Int](_.age), 31))
+      yield updated shouldBe Some(Person("1", "bob", 31))
+    }
+
+    "give way to a projection the caller passed to findOneAndUpdate" in {
+      val repository = repo(batchSize = 500, projection = Projection.empty[Person].exclude(Field.of[Person, Int](_.age)))
+      val everything =
+        Projection.empty[Person].include(Field.of[Person, String](_.id)).include(Field.of[Person, String](_.name)).include(Field.of[Person, Int](_.age))
+
+      for
+        _       <- repository.fake.insertOne(Person("1", "bob", 30))
+        updated <- repository.findOneAndUpdate("1", Update.set(Field.of[Person, Int](_.age), 31), FindOneAndUpdateOptions.default[Person].withProjection(everything))
       yield updated shouldBe Some(Person("1", "bob", 31))
     }
   }
