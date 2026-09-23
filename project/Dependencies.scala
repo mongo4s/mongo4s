@@ -5,7 +5,7 @@ object Dependencies {
   object Versions {
     val scala3 = "3.9.0"
 
-    val mongo = "5.11.0"
+    val mongo = "5.12.0"
 
     val cats              = "2.13.0"
     val catsEffect3       = "3.7.1"
@@ -26,7 +26,7 @@ object Dependencies {
 
     val mongo4cats = "0.7.18"
     val circe      = "0.14.16"
-    val zioSchema  = "1.8.6"
+    val zioSchema  = "1.9.0"
 
     val testcontainers = "1.21.4"
 
