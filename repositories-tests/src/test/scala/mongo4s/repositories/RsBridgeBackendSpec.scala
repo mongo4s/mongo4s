@@ -260,6 +260,13 @@ trait RsBridgeBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers, TimeLimits:
       attempt(timed.list(publisher)).isLeft shouldBe true
       eventuallyCancelled(publisher.cancelled) shouldBe true
     }
+
+    "release the subscription of a unit call when it times out, as it does for a list" in {
+      val publisher = NeverPublisher()
+
+      attempt(timed.unit(publisher)).isLeft shouldBe true
+      eventuallyCancelled(publisher.cancelled) shouldBe true
+    }
   }
 
   private def eventuallyCancelled(flag: AtomicBoolean): Boolean =

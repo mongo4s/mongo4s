@@ -21,6 +21,8 @@ private[mongo4s] object PublisherCollector:
       else drained.completeExceptionally(unwrap(error)): Unit
     }
 
+    drained.whenComplete((_, _) => collected.cancel(false): Unit)
+
     drained
   end drain
 
