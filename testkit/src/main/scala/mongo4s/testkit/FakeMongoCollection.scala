@@ -55,6 +55,9 @@ final class FakeMongoCollection[F[*], S[*], E](
     if collation.nonEmpty
     then throw UnsupportedOperationException(s"FakeMongoCollection: $operation with a collation is not simulated")
 
+  private def requireRenderable(update: Update[E]): Unit =
+    update.toBson(naming): Unit
+
   private def refuseCollation: Nothing =
     throw UnsupportedOperationException("FakeMongoCollection: a collation changes what matches and how it sorts, so it is not simulated")
 
@@ -145,6 +148,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     F.delay {
       requireNoArrayFilters(options.arrayFilters, "updateOne")
       requireNoCollation(options.collation, "updateOne")
+      requireRenderable(update)
 
       matching(filter).headOption match
         case Some(existing)         =>
@@ -160,6 +164,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     F.delay {
       requireNoArrayFilters(options.arrayFilters, "updateMany")
       requireNoCollation(options.collation, "updateMany")
+      requireRenderable(update)
 
       val matches  = matching(filter)
       val modified = matches.map { doc =>
@@ -177,6 +182,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     F.delay {
       requireNoArrayFilters(options.arrayFilters, "findOneAndUpdate")
       requireNoCollation(options.collation, "findOneAndUpdate")
+      requireRenderable(update)
 
       firstMatching(filter, options.sort) match
         case None if options.upsert => throw UnsupportedOperationException("FakeMongoCollection: findOneAndUpdate with upsert is not simulated")
@@ -270,6 +276,7 @@ final class FakeMongoCollection[F[*], S[*], E](
             case None                   => ()
         case (WriteCommand.UpdateOne(filter, update, options), _)  =>
           requireDefaultUpdateOptions(options, "bulkWrite UpdateOne")
+          requireRenderable(update)
           matching(filter).headOption.foreach { doc =>
             val updated = applyUpdate(doc, update)
             storage(storage.indexOf(doc)) = checked(updated, Some(doc))
@@ -278,6 +285,7 @@ final class FakeMongoCollection[F[*], S[*], E](
           }
         case (WriteCommand.UpdateMany(filter, update, options), _) =>
           requireDefaultUpdateOptions(options, "bulkWrite UpdateMany")
+          requireRenderable(update)
           matching(filter).foreach { doc =>
             val updated = applyUpdate(doc, update)
             storage(storage.indexOf(doc)) = checked(updated, Some(doc))

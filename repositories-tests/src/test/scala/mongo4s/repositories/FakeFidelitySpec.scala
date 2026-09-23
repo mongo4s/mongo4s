@@ -272,6 +272,16 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "an update that changes one path twice" should {
+    "be refused as rendering refuses it, not applied one change after the other" in {
+      val c = fake(keyed("a").append("n", BsonInt32(0)))
+      val n = Field.stored[BsonDocument, Int]("n")
+
+      intercept[IllegalArgumentException](c.updateOne(Filter.all, Update.inc(n, 1).and(Update.inc(n, 2))).unsafeRunSync())
+      c.find().first.unsafeRunSync().map(_.getInt32("n").getValue) shouldBe Some(0)
+    }
+  }
+
   "an update that changes nothing" should {
     "count as matched but not modified" in {
       val c = fake(keyed("a").append("name", BsonString("same")))
