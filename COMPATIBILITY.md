@@ -10,8 +10,137 @@
   yourself keeps working across minor releases.
 * Deprecations get at least one minor release before removal.
 * Every deliberate break inside a major version is listed here and carries a matching MiMa exclusion in
-  `build.sbt`, so nothing is waived silently. `3.0.0` has no such exceptions: it is a major release, and everything
-  below is covered by that.
+  `build.sbt`, so nothing is waived silently. A major release — `3.0.0`, `4.0.0` — has no such exceptions: its
+  migration guide below is what the major version covers.
+
+## Migrating from 3.x to 4.0.0
+
+`4.0.0` keeps `Scala 3.9 LTS`. It is a major release because a handful of shapes changed and a few calls now refuse
+what they used to accept quietly; each is a section below. The ones ordinary calling code is likely to meet are
+`findPage` returning a `KeysetPage`, `watchAttempting` returning `ChangeEvent[DecodeResult[A]]`, and an `Update` that
+changes one path twice being refused. The testkit changed its constructors.
+
+### An update that changes one path twice is refused
+
+One operator document holds one change per path, so `Update.inc(n, 1).and(Update.inc(n, 2))` used to render as
+`{"$inc": {"n": 2}}` — the first change lost without a word. Rendering it now throws `IllegalArgumentException`
+naming the path. So does an update whose paths overlap across operators — `set(a)` with `unset(a)`, `unset(a)` with
+`set(a.b)`, a `$rename` onto a path something else sets — which the server refused anyway, as a write error.
+
+If you relied on the last change winning, keep only that change.
+
+### `Update` has a `Pipeline` case
+
+Pipeline updates are `Update.pipeline(stages*)`, taken by `updateOne`, `updateMany`, `findOneAndUpdate` and a bulk
+`UpdateOne`/`UpdateMany`. They are a new case of the `Update` enum, so an exhaustive match over it needs one more
+branch. `toBson` on a pipeline throws — it is a list of stages, not an operator document — and `toPipeline` is where
+its stages come from. A pipeline and an operator update do not combine.
+
+### `distinct` answers with an array's elements
+
+`distinct[B](field: Field[A, B], ...)` became `distinct[C, B](field: Field[A, C], ...)(using DistinctOf[C, B], ...)`.
+Over a field typed as a collection, `B` is its element type — what the server answers with — so a call that used to
+be typed `List[List[String]]` and fail to decode is now `List[String]` and works. A scalar field is unchanged.
+A call that named the type argument explicitly, `distinct[String](...)`, names both now or neither.
+
+### `watchAttempting` yields `ChangeEvent[DecodeResult[A]]`
+
+It used to be `DecodeResult[ChangeEvent[A]]`, which lost the whole event, resume token included, when its document
+did not decode. Now the event always arrives and the decode result is on the document:
+
+```scala
+// 3.x
+collection.watchAttempting().collect { case Right(event) => event.fullDocument }
+
+// 4.0
+collection.watchAttempting().map(_.fullDocument.flatMap(_.toOption))
+```
+
+`watchAsAttempting` on the client and the database changed the same way.
+
+### `ChangeEvent` gained `namespace` and `destination`
+
+The collection an event happened in, and where a rename moved it to, as `Option[Namespace]`. `ChangeEvent` is a case
+class, so code that constructs one positionally — test fixtures, mostly — has two more arguments to pass.
+
+### Operators that apply to one kind of field compile only on it
+
+`regex` needs a field that holds text (`String`, `Option[String]`, a collection of strings), `mod` a numeric one, and
+`hasSize`, `Update.popFirst` and `Update.popLast` a collection. On any other field they no longer compile. A call that
+stops compiling was rendering a filter or update the server accepts and that does nothing; `Filter.Regex(path, ...)`
+and the other AST cases remain for the rare field whose type does not say what it holds.
+
+### Limits, skips and batch sizes are checked
+
+A `limit` or `batchSize` below one throws, and so does a negative `skip` — on `FindQuery`, `CountOptions`,
+`WatchOptions`, `Stage.limit`/`skip`/`sample` and a repository `Page`. MongoDB reads a `limit` of 0 as no limit and a
+negative one as a single batch, which is rarely what the number meant. Leave the option unset for the server's
+default.
+
+### `findPage` returns a `KeysetPage`
+
+`findPage(limit, after, filter)` returned the rows; it now returns `KeysetPage(items, next)`, where `next` is the key
+to pass as `after` — `None` on the last page. It also takes `descending`:
+
+```scala
+// 3.x
+val first = users.findPage(100)
+val next  = users.findPage(100, after = Some(first.last.id))
+
+// 4.0
+val first = users.findPage(100)
+val next  = users.findPage(100, after = first.next)
+```
+
+### `WireCodec.spellsAs` is gone
+
+It was asked nothing since `getDirectCollection` lost its `naming` parameter in 3.0. A codec that overrode it can
+drop the override; `fieldNaming` is what a collection reads.
+
+### The fake streams through the `RsBridge`
+
+`FakeMongoCollection` and `FakeRepository` no longer take an `emit` function; they take the runtime's `RsBridge` from
+scope, as a real client does:
+
+```scala
+// 3.x
+FakeMongoCollection[IO, S, User](codec, users => fs2.Stream.emits(users))
+FakeRepository[IO, S, User, String](users => fs2.Stream.emits(users), batchSize = 100)
+
+// 4.0
+FakeMongoCollection[IO, S, User](codec)
+FakeRepository[IO, S, User, String](batchSize = 100)
+```
+
+A stream now reads the collection when it runs rather than when it is built, and `aggregate`, `distinct` and
+`selectAs` stream too.
+
+### The fake answers more like the server
+
+Tests that leaned on the fake's old behaviour may need adjusting. A duplicate `_id` in `insertMany` or a `bulkWrite`
+is a `MongoError.BulkWriteFailed` naming the command, rather than a `DuplicateKey`; a unique index is enforced; a
+collation is refused rather than ignored; a `findOneAnd*` whose projection leaves a document the codec cannot read
+fails rather than answering `None`; an update that changes nothing reports `modifiedCount = 0`; and a replacement
+keeps the replaced document's `_id`. Each of these is checked against a real server by a parity spec.
+
+### Behaviour that changed under the same signatures
+
+These need no code change, but they are worth knowing when upgrading a running service:
+
+* A sum type's codec, and a codec mapped with `imap`/`iemap`, report the naming they write with, so a direct
+  collection of either now spells its queries as it spells its documents. Queries that used to find nothing on a
+  `snake_case` enum entity, or on an entity codec wrapped in `iemap`, now find what they should.
+* A batched repository write that fails in a later batch reports the failing command by its position in the whole
+  sequence, and `BulkWriteFailed.result` counts the earlier batches.
+* A transaction commit that ran out of `maxCommitTime` is no longer retried, and whole-transaction retries pause
+  briefly between attempts, as the driver specification requires.
+* A `findOneAndUpdate` projection you pass to a repository wins over its `defaultProjection`.
+* `Effect` has a `sleep` with a default implementation; every runtime module overrides it.
+
+### What it buys
+
+A few more of the things the API promised are now true at compile time or at the call site rather than on the
+server, and the testkit agrees with the server in the places tests most often lean on.
 
 ## Migrating from 2.x to 3.0.0
 
@@ -180,24 +309,6 @@ given WireCodec[Legacy] = new WireCodec[Legacy]:
 ```
 
 `getCollection` is unchanged and still takes the parameter.
-
-### `aggregate` takes a decoder
-
-`aggregate[B]` now requires `BsonDocumentDecoder[B]` instead of `BsonDocumentCodec[B]`. Every codec is a decoder, so
-existing calls compile unchanged; a read model that only decodes no longer needs an encoder written for it. Only an
-implementation of `MongoCollection` outside this library has to follow.
-
-### `getDirectCollection` takes its codec before its name
-
-The clauses were swapped so the `naming` parameter can default to the codec's own:
-
-```scala
-def getDirectCollection[A](using WireCodec[A], ClassTag[A])(collectionName: String, naming: FieldNaming = codec.fieldNaming)
-```
-
-Calls are unchanged — `database.getDirectCollection[Person]("people")` still compiles, and now spells field names
-the way the codec wrote them instead of defaulting to `identity`. Only an implementation of `MongoDatabase` outside
-this library has to follow. If you were passing `naming` to match a `WireCodecConfig`, you can drop it.
 
 ### `WireCodec` is no longer derived automatically
 

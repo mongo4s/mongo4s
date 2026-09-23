@@ -8,6 +8,84 @@ Notable changes per release. Breaking changes and how to migrate are in
 This file starts at `2.0.0`. `1.0.0` was released without one, and `1.1.0` was never published — its changes are
 part of `2.0.0` below.
 
+## 4.0.0
+
+### Added
+
+- **Pipeline updates.** `Update.pipeline(stages*)` computes from the document's own values — `$addFields`,
+  `$project`, `$replaceRoot` or a `Stage.raw` — and is taken by `updateOne`, `updateMany`, `findOneAndUpdate` and a
+  bulk `UpdateOne`/`UpdateMany`. `Update.Raw` could not carry one, since a pipeline is a list of stages rather than a
+  document.
+- **`MongoClient.withSession` and `SessionOptions`.** A session without a transaction — causally consistent, or a
+  snapshot that reads one point in time — given to every call in the body and closed however it ends.
+  `startSession` takes the same options.
+- **The `findOneAnd*` options carry `collation`, `hint`, `maxTime` and `comment`**, and the update and replace ones
+  `bypassDocumentValidation`, which the plain writes already had.
+- **`ChangeEvent.namespace` and `destination`** — the database and collection an event happened in, and where a
+  rename moved it. At the database and client level this is how an event says which collection it came from.
+- `Index.expiringAtFieldTime`, a `TTL` of zero asked for on purpose: each document expires at the time its indexed
+  field holds.
+- `BaseMongoRepository.createDirect`, the `getDirectCollection` counterpart of `create`.
+- `findPage` walks backwards with `descending = true`.
+- `MongoError.BulkWriteFailed.result`, what the writes that did land wrote.
+- `Effect.sleep`, with a default implementation and the runtime's own scheduler on all four backends.
+
+### Changed
+
+- **An `Update` that changes one path twice is refused** when it renders, rather than keeping only the last change —
+  one operator document holds one change per path. So is one whose paths overlap across operators, which the server
+  refused anyway. The fake refuses the same updates.
+- **`findPage` returns a `KeysetPage(items, next)`.** `next` is the key the following page starts after, or `None` on
+  the last page; the repository reads one row past the page to know which.
+- **`watchAttempting` yields `ChangeEvent[DecodeResult[A]]`** instead of `DecodeResult[ChangeEvent[A]]`, so an event
+  whose document does not decode still arrives, with its resume token, and a consumer can checkpoint past it.
+- **`distinct` over an array field answers with its elements' type**, which is what the server answers with; it was
+  typed as the array and failed to decode.
+- **`regex`, `mod`, `hasSize` and `popFirst`/`popLast` compile only on the fields they apply to** — text, numbers,
+  collections — rather than rendering something the server accepts and that does nothing.
+- **A `limit` or `batchSize` below one and a negative `skip` are refused** where they are set. MongoDB reads a `limit`
+  of 0 as no limit at all.
+- **`FakeMongoCollection` and `FakeRepository` stream through the runtime's `RsBridge`** instead of taking an `emit`
+  function. Streams read the collection when they run, and `aggregate`, `distinct` and `selectAs` stream too.
+- A chain of `&&` or `||` renders as one flat `$and`/`$or`.
+- `WireCodec.spellsAs` is removed; nothing had asked it since `getDirectCollection` stopped taking a naming.
+
+### Fixed
+
+- **A sum type's codec reported identity naming whatever it wrote**, and a codec mapped with `imap`/`iemap` dropped
+  the naming of the one underneath. On a direct collection the codec decides how queries spell fields, so a
+  `snake_case` enum entity, or an entity codec wrapped in `iemap` to validate what it reads, got camelCase filters
+  and updates that matched nothing.
+- **`emap`/`iemap` over an `Option` codec could not read what it wrote**: the empty value was left out of the
+  document, and reading the missing field back failed.
+- **A repository write that failed in a later batch named the failing command by its position in that batch**, and
+  its partial result left out the batches before it. The failure now describes the whole write, as the driver does
+  for its own batches — for `bulkWrite`, `insertMany` and `upsertMany`.
+- **A transaction commit that ran out of `maxCommitTime` was retried until the retry window closed**, because the
+  driver labels it as possibly committed. It is reported instead, and whole-transaction retries pause with jitter
+  between attempts, as the driver specification requires.
+- **A transaction body that threw while being built left the transaction open**; it is aborted. The default
+  `Effect.bracketCase` — which kyo and rapid use — released nothing when `use` threw the same way.
+- **Cancelling or timing out a `unit` call left its subscription running** on cats-effect and kyo.
+- **`Repository.findOneAndUpdate` replaced the projection you passed** with its `defaultProjection`.
+- **zio and rapid asked a cursor for a whole buffer to answer `one` or `option`**; they ask for the two rows those
+  read, as cats-effect and kyo do.
+- A `maxTime`, `maxCommitTime` or `maxAwaitTime` under a millisecond truncated to 0 — for `maxTime`, no limit at all.
+  It is refused where it is set.
+- `Either`'s codec let a branch with a field named `_type` overwrite the discriminator, and wrote a document it could
+  not read back. It refuses the branch, as a derived sealed trait does.
+- `BsonDecoder[BigDecimal]` threw on a non-finite `Double` instead of returning a `Left`.
+- The document codec bridge caught fatal errors and interruptions along with decoding failures.
+- `selectAs` rendered its field names and looked up their decoders again for every field of every document.
+- `Repository.exists` counted every match; it stops at the first.
+- `FakeMongoCollection`: a duplicate within one `insertMany` was stored twice, an unordered `bulkWrite` stopped at
+  its first duplicate, and either reported a `DuplicateKey` where the server reports a `BulkWriteFailed` naming the
+  command; a unique index was recorded and not enforced, and named differently from the server's, so `dropIndex`
+  missed it; a stream was fixed when it was built; a `findOneAnd*` that could not decode its document answered
+  `None`; a collation was ignored; numbers compared through `Double`, so large `Long`s tied and `5L` did not equal
+  `5`; a replacement dropped the `_id` it replaced; and an update that changed nothing counted as modified. Each is
+  now checked against MongoDB 8.2 by a parity spec.
+
 ## 3.0.0
 
 ### Added
