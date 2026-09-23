@@ -2,7 +2,7 @@ package mongo4s.examples
 
 import cats.effect.IO
 import org.bson.types.ObjectId
-import org.bson.{BsonDocument, BsonInt32, BsonString, BsonTimestamp}
+import org.bson.{BsonArray, BsonDocument, BsonInt32, BsonString, BsonTimestamp}
 import com.mongodb.{ExplainVerbosity, WriteConcern}
 import com.mongodb.client.model.{Collation, TimeSeriesGranularity}
 import com.mongodb.client.model.changestream.FullDocument
@@ -98,7 +98,7 @@ object ReadmeSnippets:
 
   // $each modifiers keep the array capped and ordered on the server rather than in the application.
   val recentTags = tagsField.pushAll(List("vip"), PushOptions.default[String].sortedAscending.withSlice(10))
-  val combined   = Update.combine(setAge, birthday, tagged)
+  val combined   = Update.combine(setAge, tagged)
 
   // Raw carries operators the AST does not model, and merges with the typed ones rather than replacing them.
   val withBit = Update
@@ -106,6 +106,11 @@ object ReadmeSnippets:
     .and(
       Update.Raw[User](BsonDocument("$bit", BsonDocument("age", BsonDocument("and", BsonString("7")))))
     )
+
+  // A pipeline computes from the document's own values, which operators cannot.
+  val exclaimed = Update.pipeline(
+    Stage.addFields[User]("name" -> BsonDocument("$concat", BsonArray(java.util.List.of(BsonString("$name"), BsonString("!")))))
+  )
 
   // --- Array elements ---
 
@@ -185,6 +190,15 @@ object ReadmeSnippets:
       _       <- IO.delay(session.close())
     yield ()
 
+  def snapshotRead(client: MongoClient[IO, S], users: MongoCollection[IO, S, User]): IO[(Long, List[User])] =
+    client.withSession(
+      for
+        before <- users.count()
+        rows   <- users.find().all
+      yield (before, rows),
+      SessionOptions.snapshot,
+    )
+
   // --- Aggregation ---
 
   val pipeline = Seq(
@@ -217,6 +231,7 @@ object ReadmeSnippets:
       _      <- collection.createIndex(Index.ascending(Field.of[User, String](_.name)).descending(ageField).named("name_age"))
       _      <- collection.createIndex(Index.unique(Field.of[User, String](_.id)))
       _      <- collection.createIndex(Index.ascending(ageField).expiringAfter(30.days))
+      _      <- collection.createIndex(Index.ascending(Field.stored[User, java.time.Instant]("expiresAt")).expiringAtFieldTime)
       _      <- collection.createIndex(Index.ascending(ageField).where(adults))
       _      <- collection.createIndex(Index.empty[User].text(Field.of[User, String](_.name)).withSparse)
       _      <- collection.createIndex(Index.hashed(Field.of[User, String](_.id)))

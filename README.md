@@ -56,10 +56,10 @@ third-party codec library, no extra dependency beyond `mongo4s-core` itself:
 
 ```scala
 libraryDependencies ++= Seq(
-  "org.mongo4s" %% "mongo4s-cats"           % "3.0.0", // mongo4s-core + cats-effect integration
-  "org.mongo4s" %% "mongo4s-bson-direct"    % "3.0.0", // ast-free bson codecs
-  "org.mongo4s" %% "mongo4s-bson-cats-data" % "3.0.0", // if you need NonEmptyList etc. codec instances
-  "org.mongo4s" %% "mongo4s-repositories"   % "3.0.0", // if you need auto-generated CRUD repository ops for your model
+  "org.mongo4s" %% "mongo4s-cats"           % "4.0.0", // mongo4s-core + cats-effect integration
+  "org.mongo4s" %% "mongo4s-bson-direct"    % "4.0.0", // ast-free bson codecs
+  "org.mongo4s" %% "mongo4s-bson-cats-data" % "4.0.0", // if you need NonEmptyList etc. codec instances
+  "org.mongo4s" %% "mongo4s-repositories"   % "4.0.0", // if you need auto-generated CRUD repository ops for your model
 )
 ```
 
@@ -227,6 +227,10 @@ you only want containment.
 The comparisons have symbolic aliases where they read better — `===`, `=!=`, `>`, `>=`, `<`, `<=` — spelling the
 same `Filter` as `equalTo`/`notEqualTo`/`gt`/`gte`/`lt`/`lte`.
 
+An operator that only means something for one kind of field compiles only on that kind: `regex` on text — a
+`String`, an `Option[String]` or a collection of strings — `mod` on a number, `hasSize` on a collection. On any other
+field it is a compile error rather than a filter the server accepts and that matches nothing.
+
 `hasType` takes a `BsonTypeName`, not a string. The values are MongoDB's own `$type` aliases — `"object"` for a
 document, `"binData"`, `"javascriptWithScope"` — which are easy to misspell into a filter that silently matches
 nothing, so the enum spells them for you. `BsonTypeName.of(bsonValue)` names the type of a value you already have.
@@ -241,7 +245,8 @@ val bigOrder = itemsField.elemMatch(
 ```
 
 `Filter.and`/`or` fold `Filter.all` and `Filter.none` away rather than emitting a one-element `$and`. That is what
-makes an empty list safe: `field.in(Nil)` is `Filter.none`, not "match everything".
+makes an empty list safe: `field.in(Nil)` is `Filter.none`, not "match everything". A chain — `a && b && c` — renders
+as one flat `$and` rather than each one nested inside the next.
 
 ### Updates
 
@@ -278,6 +283,28 @@ Update.set(nameField, "bob").and(Update.Raw[User](BsonDocument("$bit", BsonDocum
 
 Rendering never mutates the document you handed to `Raw`, so the same value can be reused across updates and
 rendered under more than one `FieldNaming`.
+
+One operator document holds one change per path, so merging cannot keep two: `Update.inc(n, 1).and(Update.inc(n, 2))`
+would send only the second. An update that changes a path twice is refused when it renders, rather than losing the
+first change. So is one whose paths overlap across operators — `set(name)` with `unset(name)`, or `unset(notes)` with
+a `set` on `notes.0.rank` — which the server would refuse anyway, one round trip later.
+
+#### Updating from the document's own values
+
+An update that computes from the document itself — a field built from two others, a value run through an
+aggregation expression — is a pipeline, not operators. `Update.pipeline` takes the stages the server accepts in one
+(`$addFields`, `$project`, `$replaceRoot`, or a `Stage.raw`) and refuses any other:
+
+```scala
+val exclaimed = Update.pipeline(
+  Stage.addFields[User]("name" -> BsonDocument("$concat", BsonArray(java.util.List.of(BsonString("$name"), BsonString("!")))))
+)
+
+collection.updateMany(Filter.all, exclaimed)
+```
+
+`updateOne`, `updateMany`, `findOneAndUpdate` and a bulk `UpdateOne`/`UpdateMany` all take one. Two pipelines `and`
+into one; a pipeline and an operator update do not combine, because the server takes one or the other.
 
 #### Pushing onto arrays
 
@@ -358,6 +385,9 @@ collection.findOneAndUpdate(filter, update, FindOneAndUpdateOptions.default[User
 collection.findOneAndUpdate(filter, update, FindOneAndUpdateOptions.upsert[User].withSort(Sort.asc(ageField)))
 ```
 
+They carry `collation`, `hint`, `maxTime` and `comment` as well, and the update and replace ones
+`bypassDocumentValidation`, the same as the plain writes.
+
 An update that would produce no operators throws instead of sending `{}` — MongoDB rejects it, and failing at the
 call site beats a write that silently does nothing.
 
@@ -375,7 +405,8 @@ collection.bulkWrite(
 ```
 
 Commands run in the order given; `ordered = false` lets the server carry on past one that fails instead of stopping
-there. `BulkWriteResult.upsertedIds` is keyed by each command's position in the sequence.
+there. `BulkWriteResult.upsertedIds` is keyed by each command's position in the sequence, and so is a failure: a
+`MongoError.BulkWriteFailed` names each command that failed by its index, and its `result` is what the others wrote.
 
 ### Queries
 
@@ -400,6 +431,13 @@ collection
 `projection`, `skip` and `limit` replace. `first` reads one document rather than the query's `limit`. The same
 `hint`/`collation`/`maxTime`/`batchSize`/`comment` options are on `aggregate`, which adds `allowDiskUse`, and
 `collation`/`maxTime`/`batchSize` on `distinct`.
+
+The numbers are checked where you write them, because MongoDB reads the edge cases as something else: a `limit` or
+`batchSize` below one — 0 is no limit at all, and a negative one a single batch — a negative `skip`, and a `maxTime`
+under a millisecond, which truncates to 0 and so to no time limit. Each throws at the builder, naming the value.
+
+`distinct` over a field typed as an array answers with the elements' type, because that is what the server answers
+with — `distinct(Field.of[User, List[String]](_.tags))` is a `DistinctQuery` of `String`, one value per distinct tag.
 
 `Projection` keeps inclusion and exclusion apart, because MongoDB rejects a projection mixing them. They are separate
 types — `Projection.empty` starts neutral and the first `include` or `exclude` commits it — so chaining `exclude` onto
@@ -567,6 +605,11 @@ val everything: S[DecodeResult[User]] = collection.find().attempting.stream
 `watchAttempting` on a collection's `watch` — `watchAsAttempting` at the client and database level, where the
 element type is named at the call site. Transport errors still fail the effect — only decoding is made per-document.
 
+A change stream is the one place the decode result sits *inside* the element: `watchAttempting` gives a
+`ChangeEvent[DecodeResult[A]]`, so an event whose document does not decode still arrives whole — its operation, its
+namespace, its key and, above all, its resume token. A consumer can set the bad document aside and still checkpoint
+past it, instead of reading it again on every restart.
+
 ### Errors the server raises
 
 A failed write does not arrive as a driver exception. `mongo4s` translates every failure the driver reports into
@@ -672,6 +715,10 @@ The two shapes differ by one `using` clause and by whether a rollback takes the 
 because a missing implicit is exactly what the default is there to supply. If you prefer passing a value, open the
 session yourself with `client.startSession` and use `session.withTransaction`.
 
+The same holds for a call **built** before the transaction and only run inside it. A call takes its session when it
+is written, not when it runs, so `val write = users.insertOne(user)` outside the block commits on its own even when
+`write` runs inside it. Write the call inside the body, or build it in a function that takes the session.
+
 It commits on success and rolls back on failure **and on cancellation**: `Effect[F]` carries a `guaranteeCase` that
 sees how the action ended, so an interrupted transaction does not linger on the server until it is reaped. A
 rollback that itself fails is attached as a suppressed exception rather than replacing the error that caused it.
@@ -692,6 +739,11 @@ client.withTransaction(body, TransactionOptions.withoutRetries) // report the fi
 `TransactionOptions` also carries the transaction's own `readConcern`, `writeConcern`, `readPreference` and
 `maxCommitTime`. Errors the server did not label are never retried — a failure in your own code fails the
 transaction immediately, exactly as before.
+
+Two rules follow the driver specification for this API. Between one attempt of the whole transaction and the next
+there is a short random pause — up to 5 ms, growing by half each attempt to a ceiling of 500 ms — so two clients
+that conflicted do not retry in lockstep and conflict again. And a commit that ran out of `maxCommitTime` is not
+asked again, even though the server labels it as possibly committed: a limit you set is not one to keep retrying past.
 
 The deadline is measured with `Effect.monotonic`, which has a default implementation reading `System.nanoTime`; the
 `cats` and `zio` backends override it with their runtime's own clock, so `TestControl`/`TestClock` can drive the
@@ -714,6 +766,26 @@ yield ()
 `MongoSession.startTransaction`/`commitTransaction`/`abortTransaction` are there for the fully manual path, where
 you pass the session explicitly with `(using Some(session))` at each call site. Nothing is automatic on that path —
 including the rollback.
+
+A session is useful without a transaction too — to read your own writes causally, or to read one point in time from
+a snapshot. `client.withSession` opens one, gives it to every call in the body the same way, and closes it however
+the body ends:
+
+```scala
+import mongo4s.operations.SessionOptions
+
+client.withSession(
+  for
+    before <- users.count()
+    rows   <- users.find().all // the same point in time as the count, whatever is written meanwhile
+  yield (before, rows),
+  SessionOptions.snapshot,
+)
+```
+
+`SessionOptions` carries `causallyConsistent`, `snapshot` and the `TransactionOptions` a session's transactions
+start with; a session cannot be both a snapshot and causally consistent, so asking for both throws. `startSession`
+takes the same options when you want the session's lifetime in your own hands.
 
 Transactions need a replica set or sharded cluster.
 
@@ -899,7 +971,12 @@ collection's `FieldNaming` leaves it alone. `withWildcardProjection` narrows whi
 `withCollation` attaches one to any index.
 
 `expireAfterSeconds` is a whole number on the server, so a sub-second `TTL` is rejected rather than silently truncated
-to "expire immediately".
+to "expire immediately". When "immediately" is what you mean — each document carries its own expiry time and should
+go when that time comes — say so with `expiringAtFieldTime`, which is a `TTL` of zero asked for on purpose:
+
+```scala
+collection.createIndex(Index.ascending(expiresAtField).expiringAtFieldTime)
+```
 
 From a repository, `ensureKeyIndex` builds the unique index the `PrimaryKey` describes, without you restating its
 fields.
@@ -949,6 +1026,8 @@ Every event is a `ChangeEvent[A]`, not a bare `BsonDocument`:
 ```scala
 final case class ChangeEvent[A](
   operationType: OperationType, // com.mongodb's own enum — INSERT/UPDATE/DELETE/...
+  namespace: Option[Namespace],   // the database and collection it happened in
+  destination: Option[Namespace], // where a rename moved the collection to
   documentKey: Option[BsonDocument],
   fullDocument: Option[A],
   fullDocumentBeforeChange: Option[A],
@@ -963,6 +1042,9 @@ final case class ChangeEvent[A](
 `MongoCollection.watch` decodes through the collection's own codec, so `fullDocument`/`fullDocumentBeforeChange`
 come back as `Option[A]`. `MongoClient.watch`/`MongoDatabase.watch` span more than one document shape, so they
 default to `ChangeEvent[BsonDocument]` — use `watchAs[A]` when you know the events all decode the same way.
+
+At those two levels `namespace` is how you tell which collection an event came from — `Namespace(database,
+collection)`, with no collection for an event about the whole database, such as its drop.
 
 Everything else is `WatchOptions[A]`:
 
@@ -1022,7 +1104,13 @@ collection.watch(insertsOnly)
 
 A change stream never completes on its own — take from it, or interrupt it. A document that does not decode ends it
 with an error; `watchAttempting` — `watchAsAttempting` at the client and database level — reports the failure and
-carries on instead, which is what you want for a long-lived subscription.
+carries on instead, which is what you want for a long-lived subscription. Its elements are
+`ChangeEvent[DecodeResult[A]]`: the failure is on the document, and the event around it — resume token included —
+still arrives, so a consumer can checkpoint past a document it could not read.
+
+`fullDocument = UPDATE_LOOKUP` is a second read per update event, done by the server while it builds the event, and
+the whole document on the wire. A consumer that only needs to know what changed can ask for
+`FullDocument.DEFAULT` and read `updateDescription` instead.
 
 ## BSON codecs
 
@@ -1160,10 +1248,15 @@ given WireCodecConfig = WireCodecConfig.SnakeCase.withDiscriminatorNaming(FieldN
 ```
 
 `getDirectCollection` takes no `naming` of its own: the codec is what writes the field names, so it is what decides
-how a query spells them. A derived `WireCodec` reports the `WireCodecConfig` it was built with; a hand-written one
-says so by overriding `fieldNaming`. `getCollection` still takes the parameter, because a `BsonDocumentCodec` from
+how a query spells them. A derived `WireCodec` — a product, an enum or a sealed trait — reports the
+`WireCodecConfig` it was built with, and so does one mapped from it with `imap` or `iemap`; a hand-written one says
+so by overriding `fieldNaming`. `getCollection` still takes the parameter, because a `BsonDocumentCodec` from
 `medeia`, `calypso` or `zio-bson` carries its own naming configuration that mongo4s cannot read; there the parameter
 still has to match the codec.
+
+A collection has one naming, so the entity and everything nested in it should be derived under the same
+`WireCodecConfig`. A nested type derived under a different one writes its own spelling, but `Field.of(_.nested.field)`
+renders every segment through the root's; reach such a field with `Field.stored` and its stored path.
 
 `FieldNaming` applies per *derived* segment only. Stored names — `Field.stored`, a `PrimaryKey`'s field names, a
 `$lookup`'s foreign field, map keys — are used verbatim. `FieldNaming.snakeCase` splits on every capital, so
@@ -1232,6 +1325,11 @@ hand-rolled `WireCodec.instance(...)` for the common case of one type wrapping a
 calls to write by hand, and the wrap/unwrap logic lives in exactly one place instead of being duplicated across the
 encode and decode sides.
 
+Both keep what the codec underneath knows about an absent field: a wrapper over an `Option` leaves the field out of
+the document when it is empty, and reads the missing field back as that same empty value — through `iemap` too, as
+long as the validation accepts it. They keep the codec's naming as well, so a derived entity wrapped in `iemap` to
+validate what it reads still has its queries spelled the way it writes.
+
 Resolution order matters when a type qualifies for more than one instance. An existing `BsonEncoder`/`BsonDecoder`
 pair — hand-written, or coming from `mongo4s-bson-medeia`/`-zio`/`-calypso` — is bridged into a `WireCodec` and takes
 precedence over automatic `Mirror` derivation, so a case class carrying those instances resolves without needing
@@ -1284,7 +1382,8 @@ val result: Either[ValidationError, Approved] = ...
 A scalar branch (no fields to inline, e.g. a bare `String`) keeps a `"value"` field, since a bare BSON scalar can't
 also carry the discriminator in the same slot. The two branches must resolve to distinguishable type names —
 `Either[Foo, Foo]`, or two differently-named types that happen to share a runtime class name once generics are
-erased, throws when the codec is summoned rather than risking a silent wrong-branch decode later.
+erased, throws when the codec is summoned rather than risking a silent wrong-branch decode later. So does a branch
+with a field of its own named `_type`, which inlined next to the discriminator would overwrite it.
 
 The discriminator is `ClassTag[A].runtimeClass.getSimpleName` — for `Int`/`Long`/`Double`/`Boolean`/etc, that's the *JVM
 primitive's* name (`"int"`, not `"Integer"`), since `ClassTag[Int]`'s `runtimeClass` is the primitive class,
@@ -1367,11 +1466,24 @@ meaning — it stops at the first failure and what came before it stays applied.
 command, because the point of `ordered = false` is that the server applies everything it can, and batching would
 stop at the first batch that failed instead.
 
+A failure in a later batch is reported as the whole write, the way the driver reports its own internal batches:
+`BulkWriteFailed` names the failing command by its position in the sequence you passed, not within its batch, and
+its `result` counts what the earlier batches wrote. `insertMany` and `upsertMany` batch the same way and report the
+same way.
+
+`findMany(keys)` is one `$in` per batch, so it answers the way a query does: in no particular order, without the
+keys that matched nothing, and once per document however often its key was asked for. Key the result by
+`pk.key` when you need it lined up with the input.
+
+A `findOneAndUpdate` projection you pass wins over the repository's `defaultProjection`; the default applies when you
+pass none.
+
 ```scala
-BaseMongoRepository(collection)                              // over a collection you already have
-BaseMongoRepository.create[F, S, E, K](db, "collection")     // reads return the document as stored, _id included
-BaseMongoRepository.withoutId[F, S, E, K](db, "collection")  // strips _id from reads — for entities that do not model it
-BaseMongoRepository.objectId[F, S, E](db, "collection")      // WithId[ObjectId, E], auto _id round-trip
+BaseMongoRepository(collection)                                // over a collection you already have
+BaseMongoRepository.create[F, S, E, K](db, "collection")       // reads return the document as stored, _id included
+BaseMongoRepository.createDirect[F, S, E, K](db, "collection") // the same over getDirectCollection and a WireCodec
+BaseMongoRepository.withoutId[F, S, E, K](db, "collection")    // strips _id from reads — for entities that do not model it
+BaseMongoRepository.objectId[F, S, E](db, "collection")        // WithId[ObjectId, E], auto _id round-trip
 ```
 
 `create` is the default, and it is the right one far more often than it looks: none of the four codec backends
@@ -1401,11 +1513,16 @@ collection shifts everything after it, so a walk can miss rows it never saw. `fi
 what comes *after* a key rather than for an offset:
 
 ```scala
-val firstPage = users.findPage(100)
-val nextPage  = users.findPage(100, after = Some(pk.key(firstPage.last)))
+val firstPage = users.findPage(100)                    // KeysetPage(items, next)
+val nextPage  = users.findPage(100, after = firstPage.next)
 
 users.findPage(100, after = Some(lastKey), filter = adults) // narrowed, still paged by key
+users.findPage(20, descending = true)                       // newest key first
 ```
+
+A page is a `KeysetPage[E, K]`: its `items`, and `next` — the key to pass as `after` for the page that follows, or
+`None` when there is none. The repository asks for one row more than the page holds to know which, so the last page
+is reported as last rather than discovered by fetching an empty one.
 
 The repository already knows the key's fields, so it builds both halves itself: the sort that gives the page an
 order, and the comparison that steps past the cursor. For a compound key that comparison is lexicographic — an
@@ -1413,7 +1530,9 @@ order, and the comparison that steps past the cursor. For a compound key that co
 subtly wrong by hand. `ensureKeyIndex` builds the index that makes the whole walk a range scan.
 
 The cursor is the key of the last row you handled, so a crash resumes from there rather than from an offset that no
-longer means the same thing.
+longer means the same thing. The walk is only as sound as the key: it has to be unique, it has to compare the way
+the server orders it — keep one BSON type per key field, since a mixed-type field sorts by type before value — and it
+should be indexed, which is what `ensureKeyIndex` is for.
 
 `ensureKeyIndex` builds the unique index the `PrimaryKey` describes. `WithId[Id, E]` wraps an entity with a
 separately-typed id (`type Oid[E] = WithId[ObjectId, E]`) and ships its own `PrimaryKey`/`BsonDocumentCodec`
@@ -1427,7 +1546,7 @@ repository call can join a [transaction](#sessions--transactions) the same way a
 directly, not reimplementing what's already there.
 
 For unit tests, `FakeMongoCollection` (in `mongo4s-testkit`, a published module — add it as
-`"org.mongo4s" %% "mongo4s-testkit" % "3.0.0" % Test`) implements `MongoCollection` in memory. The exact same
+`"org.mongo4s" %% "mongo4s-testkit" % "4.0.0" % Test`) implements `MongoCollection` in memory. The exact same
 `Filter`/`Update`/`Field` AST the real driver interprets is interpreted against an in-memory buffer instead, so
 repository logic is testable without a running MongoDB.
 
@@ -1443,14 +1562,27 @@ dotted path descends through an array of documents — `$regex` searches rather 
 refuses a duplicate one — through `insertOne`, `insertMany`, a `bulkWrite` insert, and an upsert that inserts, so
 `wasUpserted` and `upsertedIds` say what the server would say.
 
+Numbers compare the way the server compares them: an `Int64` of 5 equals an `Int32` of 5 and a `Double` of 5.0,
+`Long`s past `Double`'s precision sort exactly, and `NaN` sorts below every number. A duplicate in `insertMany` or a
+`bulkWrite` is a `BulkWriteFailed` naming the command, after the writes before it — and, unordered, the writes after
+it too. A unique index is enforced, sparse and partial ones included, and is named as the server names it
+(`email_1`), so `dropIndex` finds it. A replacement keeps the `_id` of the document it replaces, an update that
+changes nothing counts as matched but not modified, and a `findOneAnd*` whose projection leaves a document the codec
+cannot read fails, as the real collection does, rather than answering `None`.
+
+The fake streams through the same `RsBridge` the real collection does, and reads the collection when the stream
+runs, not when it is built — a stream set up before an insert sees the insert. `aggregate`, `distinct` and
+`selectAs` stream as well as `find`.
+
 Every update operator is simulated — `$set`, `$unset`, `$inc`, `$mul`, `$min`, `$max`, `$rename`, `$currentDate`,
 `$push` with its `$each`/`$position`/`$slice`/`$sort` modifiers, `$pull`, `$pullAll`, `$pop` and `$addToSet` — and
 `$setOnInsert` correctly does nothing on an update that matches.
 
 Everything else throws `UnsupportedOperationException` naming what was asked for, rather than quietly answering
 wrong — a fake that lies is worse than no fake. That includes `watch`, `explain`, `$text` and ranking by
-`$meta textScore`, `$expr`, the geospatial operators, `Filter.Raw`, `Stage.Raw`, `Update.Raw`, an update carrying
-`arrayFilters`, every aggregation stage outside the list above, and the `$addToSet` *accumulator*, which is refused
+`$meta textScore`, `$expr`, the geospatial operators, `Filter.Raw`, `Stage.Raw`, `Update.Raw`, a pipeline update, a
+collation anywhere it is accepted, an update carrying `arrayFilters`, a unique index over an array field, every
+aggregation stage outside the list above, and the `$addToSet` *accumulator*, which is refused
 on purpose: MongoDB leaves the order of its result undefined, so no fake can be faithful to it. Replace-based upserts — what `upsert`/`upsertMany` go through — insert on a miss the way the
 server does; an `update`-based `UpdateOptions.upsert` that matches nothing throws instead of guessing what the
 operators would have built.
@@ -1462,7 +1594,8 @@ against a real server anyway.
 
 `FakeRepository` is the same idea one layer up: a real `BaseMongoRepository` over a `FakeMongoCollection`, so the
 repository logic under test is the one that ships. `repository.fake` reaches the collection underneath, for seeding
-and for `snapshot`.
+and for `snapshot`. Both take the runtime's `Effect` and `RsBridge` from scope — the same givens a real client uses —
+so `FakeRepository[IO, S, User, String]()` and `FakeMongoCollection[IO, S, User](codec)` are all there is to it.
 
 ## Runtime backends
 
@@ -1475,6 +1608,10 @@ and `given RsBridge[F, S]` (Reactive-Streams `Publisher` → `F`/`S`):
 | `mongo4s-zio` | `zio.Task` | `zio.stream.ZStream` | via `zio-interop-reactivestreams` |
 | `mongo4s-kyo` | `A < (Async & Abort[Throwable])` | `kyo.Stream` | via `kyo-reactive-streams` |
 | `mongo4s-rapid` | `rapid.Task` | `rapid.Stream` | |
+
+Beyond the members a runtime has to supply, `Effect` carries defaults it may override with its own: `monotonic` and
+`sleep` — the pause between transaction retries — read the runtime's clock and scheduler on all four backends
+instead of `System.nanoTime` and a blocked thread.
 
 `MongoClient.fromClient`/`fromSettings`/`fromConnectionString` return a bare `F[MongoClient[F, S]]` — you own calling
 `.close`. Every runtime module also ships `MongoClientResource` with the same three constructor names, wrapped in
@@ -1551,7 +1688,7 @@ the other single-result publishers that it guards.
 Published for `Scala 3.9 LTS` under `org.mongo4s`:
 
 ```scala
-"org.mongo4s" %% "mongo4s-<module>" % "3.0.0"
+"org.mongo4s" %% "mongo4s-<module>" % "4.0.0"
 ```
 
 | | Module | Notes |
@@ -1579,10 +1716,17 @@ Binary compatibility within a major version is checked by [MiMa](https://github.
 new `Effect`/`RsBridge` methods carry default implementations, and deprecations get at least one minor release before
 removal. `mongo4s-kyo` sits outside the promise while kyo is on a release candidate.
 
-`3.0.0` moves the whole build onto `Scala 3.9 LTS` and drops `3.3 LTS`. `TASTy` is not forward compatible, and that
-is a break MiMa cannot see, which is why it takes a major release rather than a minor. What it buys is one Scala
+`4.0.0` changes shapes MiMa would flag, and behaviour a recompile alone would not reveal: an `Update` that changes one
+path twice is refused rather than keeping only the last change, `findPage` returns a `KeysetPage` with its next
+cursor, `watchAttempting` keeps the event whose document failed, `distinct` over an array answers with its elements,
+the operators that only apply to one kind of field stop compiling on the others, and the testkit's fake streams
+through the `RsBridge` instead of taking an `emit` function. Each has a migration note in
+[COMPATIBILITY.md](COMPATIBILITY.md).
+
+`3.0.0` moved the whole build onto `Scala 3.9 LTS` and dropped `3.3 LTS`. `TASTy` is not forward compatible, and that
+is a break MiMa cannot see, which is why it took a major release rather than a minor. What it buys is one Scala
 version across every module: the three that used to be pinned to a fast-release `3.8` are on the LTS line with the
-rest. It carries API changes of its own — compound `PrimaryKey`s became named tuples, `WireCodec` no longer
+rest. It carried API changes of its own — compound `PrimaryKey`s became named tuples, `WireCodec` no longer
 derives itself unasked, and driver exceptions arrive as `MongoError` — each with a migration note in
 [COMPATIBILITY.md](COMPATIBILITY.md).
 
