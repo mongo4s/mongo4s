@@ -551,7 +551,7 @@
         </nav>
 
         <div class="install">
-            <pre><code>libraryDependencies += "org.mongo4s" %% "mongo4s-cats" % "3.0.0"</code></pre>
+            <pre><code>libraryDependencies += "org.mongo4s" %% "mongo4s-cats" % "4.0.0"</code></pre>
             <p class="install-note">On another runtime, swap the module: <code>mongo4s-zio</code>,
                 <code>mongo4s-kyo</code> or <code>mongo4s-rapid</code>. Codecs and repositories are separate
                 modules — see <a href="#start">Quick start</a>.</p>
@@ -591,10 +591,10 @@
     <p>Pick a runtime. The default codec (<code>bson-direct</code>) derives straight from your case class — AST-free, no
         third-party codec library, no extra dependency beyond <code>mongo4s-core</code> itself:</p>
     <pre><code>libraryDependencies ++= Seq(
-    "org.mongo4s" %% "mongo4s-cats"           % "3.0.0", // mongo4s-core + cats-effect integration
-    "org.mongo4s" %% "mongo4s-bson-direct"    % "3.0.0", // ast-free bson codecs
-    "org.mongo4s" %% "mongo4s-bson-cats-data" % "3.0.0", // if you need NonEmptyList etc. codec instances
-    "org.mongo4s" %% "mongo4s-repositories"   % "3.0.0", // if you need auto-generated CRUD repository ops for your model
+    "org.mongo4s" %% "mongo4s-cats"           % "4.0.0", // mongo4s-core + cats-effect integration
+    "org.mongo4s" %% "mongo4s-bson-direct"    % "4.0.0", // ast-free bson codecs
+    "org.mongo4s" %% "mongo4s-bson-cats-data" % "4.0.0", // if you need NonEmptyList etc. codec instances
+    "org.mongo4s" %% "mongo4s-repositories"   % "4.0.0", // if you need auto-generated CRUD repository ops for your model
 )</code></pre>
     <pre><code>import cats.effect.{IO, IOApp}
 
@@ -711,9 +711,11 @@ itemsField.elemMatch(skuField.equalTo("abc") &amp;&amp; qtyField.gt(2))  // one 
     <p class="muted">
         <code>Filter.and</code>/<code>or</code> fold <code>Filter.all</code> and <code>Filter.none</code> away rather
         than emitting a one-element <code>$and</code>. That is what makes an empty list safe:
-        <code>field.in(Nil)</code> is <code>Filter.none</code>, not "match everything". The comparisons have symbolic
+        <code>field.in(Nil)</code> is <code>Filter.none</code>, not "match everything", and a chain
+        <code>a &amp;&amp; b &amp;&amp; c</code> renders as one flat <code>$and</code>. The comparisons have symbolic
         aliases where they read better — <code>===</code>, <code>=!=</code>, <code>&gt;</code>, <code>&gt;=</code>,
-        <code>&lt;</code>, <code>&lt;=</code>.
+        <code>&lt;</code>, <code>&lt;=</code>. An operator that only means something for one kind of field compiles only
+        on it: <code>regex</code> on text, <code>mod</code> on a number, <code>hasSize</code> on a collection.
     </p>
     <pre><code>ageField.set(31)                   // $set
 ageField.inc(1)                    // $inc — also $mul, $min, $max
@@ -727,11 +729,24 @@ Update.rename(oldField, newField)  // $rename — also currentDate, popFirst/pop
         <code>Field[User, Option[Long]]</code> — because <code>None</code> has no numeric encoding, and the obvious
         stand-in, <code>$inc</code> by zero, is a write that quietly does nothing. <code>Update.combine</code> merges
         operators of the same name into one sub-document; <code>Update.Raw</code> carries operators the AST does not
-        model and merges the same way, without mutating the document you handed it. <code>bulkWrite</code> takes a
+        model and merges the same way, without mutating the document you handed it. One operator document holds one
+        change per path, so an update that changes a path twice is refused when it renders rather than losing the
+        first change, and so is one whose paths overlap across operators. <code>bulkWrite</code> takes a
         <code>Seq[WriteCommand[E]]</code> — <code>InsertOne</code>/<code>ReplaceOne</code>/<code>UpdateOne</code>/<code>UpdateMany</code>/<code>DeleteOne</code>/<code>DeleteMany</code>,
         carrying the same <code>Filter</code> and <code>Update</code> values, run in the order given unless
-        <code>ordered = false</code>.
+        <code>ordered = false</code>. A <code>BulkWriteFailed</code> names each failing command by its position, and its
+        <code>result</code> is what the others wrote.
     </p>
+    <p>
+        An update that computes from the document's own values is a pipeline, not operators.
+        <code>Update.pipeline</code> takes the stages the server accepts in one — <code>$addFields</code>,
+        <code>$project</code>, <code>$replaceRoot</code> or a <code>Stage.raw</code> — and every update call takes it:
+    </p>
+    <pre><code>val exclaimed = Update.pipeline(
+  Stage.addFields[User]("name" -&gt; BsonDocument("$concat", BsonArray(java.util.List.of(BsonString("$name"), BsonString("!")))))
+)
+
+collection.updateMany(Filter.all, exclaimed)</code></pre>
     <p>
         The positional operators are path segments, so <code>/</code> builds them. <code>$[]</code> updates every
         element and needs nothing else; <code>$[identifier]</code> updates only what an <em>array filter</em> selects,
@@ -770,7 +785,9 @@ collection.count(filter, CountOptions.default.withSkip(20).withLimit(10))</code>
         The <code>findOneAnd*</code> trio works the same way, except its options carry the entity type because
         <code>sort</code> and <code>projection</code> do. <code>returnUpdated</code> defaults to true, and
         <code>returningPrevious</code> asks for the document as it was:
-        <code>findOneAndUpdate(filter, update, FindOneAndUpdateOptions.default[User].returningPrevious)</code>.
+        <code>findOneAndUpdate(filter, update, FindOneAndUpdateOptions.default[User].returningPrevious)</code>. They
+        carry <code>collation</code>, <code>hint</code>, <code>maxTime</code> and <code>comment</code> too, and the
+        update and replace ones <code>bypassDocumentValidation</code>.
     </p>
     <p><code>find</code> returns a builder; nothing is sent until <code>first</code>, <code>all</code>,
         <code>stream</code> or <code>attempting</code>:</p>
@@ -793,6 +810,12 @@ collection.count(filter, CountOptions.default.withSkip(20).withLimit(10))</code>
         <code>Projection</code> keeps inclusion and exclusion apart, since MongoDB rejects a projection mixing them.
         They are separate types, so chaining <code>exclude</code> onto an inclusion projection does not compile.
         <code>_id</code> is the exception, via <code>withoutId</code>.
+    </p>
+    <p class="muted">
+        The numbers are checked where you write them, because MongoDB reads the edge cases as something else: a
+        <code>limit</code> or <code>batchSize</code> below one — 0 is no limit at all — a negative <code>skip</code>,
+        and a <code>maxTime</code> under a millisecond, which truncates to no time limit. <code>distinct</code> over a
+        field typed as an array answers with the elements' type, because that is what the server answers with.
     </p>
 
     <h3 id="results">Results, and reads that survive bad documents</h3>
@@ -831,7 +854,9 @@ val everything: S[DecodeResult[User]] = collection.find().attempting.stream</cod
         <code>DecodeResult[A]</code> is <code>Either[BsonError, A]</code>. It's on <code>find</code>,
         <code>aggregate</code> and <code>distinct</code>, and as <code>watchAttempting</code> on a collection's
         <code>watch</code> — <code>watchAsAttempting</code> at the client and database level. Transport errors still
-        fail the effect — only decoding is made per-document.
+        fail the effect — only decoding is made per-document. On a change stream the result sits on the document,
+        inside the event — <code>ChangeEvent[DecodeResult[A]]</code> — so an event whose document fails still arrives
+        with its resume token, and a consumer can checkpoint past it.
     </p>
 
     <h3 id="errors">Errors the server raises</h3>
@@ -981,6 +1006,27 @@ client.withTransaction(body, TransactionOptions.withoutRetries) // report the fi
         override with their runtime's own clock, so <code>TestControl</code>/<code>TestClock</code> can drive the
         retry window in a test without waiting on a real one.
     </p>
+    <p class="muted">
+        Two rules follow the driver specification. Between attempts of the whole transaction there is a short random
+        pause, up to 5 ms growing by half each attempt to a 500 ms ceiling, so clients that conflicted do not retry in
+        lockstep; and a commit that ran out of <code>maxCommitTime</code> is not asked again. A call takes its session
+        when it is <em>written</em>, not when it runs, so <code>val write = users.insertOne(user)</code> built outside
+        the block commits on its own even when it runs inside.
+    </p>
+    <p>
+        A session is useful without a transaction too — to read your own writes causally, or one point in time from a
+        snapshot. <code>client.withSession</code> gives it to every call in the body and closes it however the body
+        ends:
+    </p>
+    <pre><code>import mongo4s.operations.SessionOptions
+
+client.withSession(
+  for
+    before &lt;- users.count()
+    rows   &lt;- users.find().all // the same point in time as the count
+  yield (before, rows),
+  SessionOptions.snapshot,
+)</code></pre>
 
     <h3 id="aggregation">Aggregation pipelines</h3>
     <p>
@@ -1100,7 +1146,7 @@ collection.createIndex(Index.ascending(createdAtField).expiringAfter(30.days))  
 collection.createIndex(Index.ascending(ageField).where(ageField.gte(18)))          // partial
 collection.createIndex(Index.empty[User].text(bioField).withSparse)
 collection.createIndex(Index.hashed(idField))                                      // sharding
-collection.createIndex(Index.geo2dsphere(Field.stored[User, Any]("location")))     // also geo2d
+collection.createIndex(Index.geo2DSphere(Field.stored[User, Any]("location")))     // also geo2D
 collection.createIndex(Index.ascending(ageField).withHidden)                       // ignored by the planner
 collection.createIndex(Index.ascending(Field.stored[User, Any]("$**")))            // wildcard
 
@@ -1110,8 +1156,10 @@ collection.dropIndex("name_age")</code></pre>
         Keys are ordered — a compound index is only usable by queries that respect that order.
         <code>createIndex</code> returns the name the server gave it, and is idempotent, so it's safe on every start.
         <code>expireAfterSeconds</code> is a whole number on the server, so a sub-second TTL is rejected rather than
-        silently truncated to "expire immediately". From a repository, <code>ensureKeyIndex</code> builds the unique
-        index the <code>PrimaryKey</code> describes without you restating its fields.
+        silently truncated to "expire immediately"; when immediately is what you mean — each document carries its own
+        expiry time — <code>expiringAtFieldTime</code> asks for a TTL of zero on purpose. From a repository,
+        <code>ensureKeyIndex</code> builds the unique index the <code>PrimaryKey</code> describes without you restating
+        its fields.
     </p>
 
     <h3>Change streams</h3>
@@ -1123,18 +1171,22 @@ collection.dropIndex("name_age")</code></pre>
     </p>
     <pre><code>final case class ChangeEvent[A](
   operationType: OperationType,                // com.mongodb's own enum — INSERT/UPDATE/DELETE/...
+  namespace: Option[Namespace],                // the database and collection it happened in
+  destination: Option[Namespace],              // where a rename moved the collection to
   documentKey: Option[BsonDocument],
   fullDocument: Option[A],
   fullDocumentBeforeChange: Option[A],
   updateDescription: Option[UpdateDescription], // updated/removed field paths, for UPDATE events
   resumeToken: BsonDocument,
   clusterTime: Option[BsonTimestamp],
+  wallTime: Option[BsonDateTime],              // when the change was applied, in server wall-clock time
+  splitEvent: Option[SplitEvent],              // set only on a fragment of an event too large for one message
 )</code></pre>
     <p class="muted">
         <code>MongoCollection.watch</code> decodes through the collection's own codec (<code>ChangeEvent[A]</code>);
         <code>MongoClient</code>/<code>MongoDatabase.watch</code> span more than one document shape so they default to
         <code>ChangeEvent[BsonDocument]</code> — use <code>watchAs[A]</code> when you know the events all decode the
-        same way.
+        same way. At those two levels <code>namespace</code> is how an event says which collection it came from.
     </p>
     <p>Everything else is <code>WatchOptions[A]</code>:</p>
     <pre><code>import mongo4s.changestream.WatchOptions
@@ -1171,16 +1223,19 @@ collection.watch(WatchOptions.resumeAfter[User](savedToken))</code></pre>
         event needs <code>"fullDocument.age"</code>. Use <code>Stage.raw</code>, or <code>Field.stored</code> for a
         path under <code>fullDocument</code>:
     </p>
-    <pre><code>val insertsOnly = WatchOptions[User](
-  pipeline = Seq(Stage.raw(BsonDocument("$match", BsonDocument("operationType", BsonString("insert")))))
-)
+    <pre><code>val insertsOnly = WatchOptions
+  .default[User]
+  .withPipeline(Seq(Stage.raw(BsonDocument("$match", BsonDocument("operationType", BsonString("insert"))))))
 
 collection.watch(insertsOnly)</code></pre>
     <p class="muted">
         A change stream never completes on its own — take from it, or interrupt it. A document that does not decode
         ends it with an error; <code>watchAttempting</code> — <code>watchAsAttempting</code> at the client and
         database level — reports the failure and carries on instead, which is what you want for a long-lived
-        subscription. All three levels need a replica set or sharded cluster.
+        subscription. Its elements are <code>ChangeEvent[DecodeResult[A]]</code>, so the event around a bad document,
+        resume token included, still arrives. <code>UPDATE_LOOKUP</code> is a second read per update event and the
+        whole document on the wire; a consumer that only needs what changed can ask for <code>FullDocument.DEFAULT</code>
+        and read <code>updateDescription</code>. All three levels need a replica set or sharded cluster.
     </p>
 
     <h2 id="codecs">BSON codecs</h2>
@@ -1323,10 +1378,12 @@ final case class Person(firstName: String, lastName: String) derives WireCodec /
         options can be added in a minor release without breaking binary compatibility. <code>getDirectCollection</code>
         takes no <code>naming</code> of its own: the codec
         is what writes the field names, so it is what decides how a query spells them, and a derived
-        <code>WireCodec</code> reports the <code>WireCodecConfig</code> it was built with.
+        <code>WireCodec</code> — a product, an enum or a sealed trait, or one mapped from it with <code>imap</code>/
+        <code>iemap</code> — reports the <code>WireCodecConfig</code> it was built with.
         <code>getCollection</code> still takes the parameter, because a <code>BsonDocumentCodec</code> from
         medeia, calypso or zio-bson carries its own naming configuration mongo4s cannot read; there it still has
-        to match the codec.
+        to match the codec. A collection has one naming, so derive the entity and what it contains under one
+        <code>WireCodecConfig</code>; a nested type derived under another is reached with <code>Field.stored</code>.
         <code>encodeEmptyCasesAsString = true</code> writes a parameterless case as a bare BSON string instead of a
         <code>{"_type": "..."}</code> document — only safe when nested inside another document, not at the root.
     </p>
@@ -1380,7 +1437,9 @@ object Provider:
         <code>BsonError.InvalidValue</code>) replace a hand-rolled <code>WireCodec.instance(...)</code> for the
         common case of one type wrapping another: no <code>BsonWriter</code>/<code>BsonReader</code> calls to write
         by hand, and the wrap/unwrap logic lives in exactly one place instead of being duplicated across the encode
-        and decode sides.
+        and decode sides. Both keep what the codec underneath knows: a wrapper over an <code>Option</code> leaves the
+        empty value out of the document and reads the missing field back as that value, and a derived entity wrapped
+        to validate what it reads keeps its naming.
     </p>
 
     <p>
@@ -1441,7 +1500,8 @@ val result: Either[ValidationError, Approved] = ...</code></pre>
         since a bare BSON scalar can't also carry the discriminator in the same slot. The two branches must resolve
         to distinguishable type names — <code>Either[Foo, Foo]</code>, or two differently-named types that happen to
         share a runtime class name once generics are erased, throws when the codec is summoned rather than risking a
-        silent wrong-branch decode later.
+        silent wrong-branch decode later. So does a branch with a field of its own named <code>_type</code>, which
+        inlined next to the discriminator would overwrite it.
     </p>
     <p class="muted">
         The discriminator is <code>ClassTag[A].runtimeClass.getSimpleName</code> — for
@@ -1525,10 +1585,11 @@ final case class Team(members: NonEmptyList[String]) derives MedeiaDocumentCodec
         batched
         by <code>batchSize</code> (default 500), over any <code>MongoCollection[F, S, E]</code>, from either codec path:
     </p>
-    <pre><code>BaseMongoRepository(collection)                              // over a collection you already have
-BaseMongoRepository.create[F, S, E, K](db, "collection")     // reads return the document as stored, _id included
-BaseMongoRepository.withoutId[F, S, E, K](db, "collection")  // strips _id from reads — for entities that do not model it
-BaseMongoRepository.objectId[F, S, E](db, "collection")      // WithId[ObjectId, E], auto _id round-trip</code></pre>
+    <pre><code>BaseMongoRepository(collection)                                // over a collection you already have
+BaseMongoRepository.create[F, S, E, K](db, "collection")       // reads return the document as stored, _id included
+BaseMongoRepository.createDirect[F, S, E, K](db, "collection") // the same over getDirectCollection and a WireCodec
+BaseMongoRepository.withoutId[F, S, E, K](db, "collection")    // strips _id from reads — for entities that do not model it
+BaseMongoRepository.objectId[F, S, E](db, "collection")        // WithId[ObjectId, E], auto _id round-trip</code></pre>
     <p class="muted">
         <code>create</code> is the default, and it is the right one more often than it looks: none of the four
         codec backends rejects a document carrying an <code>_id</code> the entity does not model &mdash; medeia,
@@ -1555,6 +1616,13 @@ users.deleteByField(ageField, 30)                 // likewise</code></pre>
         <code>InsertOneResult</code>/<code>InsertManyResult</code> &mdash; that is where the server's own
         <code>_id</code> still lives.
     </p>
+    <p class="muted">
+        A batched write that fails in a later batch is reported as the whole write, the way the driver reports its own
+        batches: <code>BulkWriteFailed</code> names the failing command by its position in the sequence you passed, and
+        its <code>result</code> counts what the earlier batches wrote. <code>findMany(keys)</code> answers the way a
+        query does &mdash; in no particular order, without the keys that matched nothing. A <code>findOneAndUpdate</code>
+        projection you pass wins over the repository's <code>defaultProjection</code>.
+    </p>
     <p>Paging goes through <code>Page</code>:</p>
     <pre><code>import mongo4s.repositories.Page
 
@@ -1563,11 +1631,20 @@ users.getByFilter(adults, Page.first(100))  // same, as a stream</code></pre>
     <p class="muted">
         Skip-based paging re-scans what it skips, so it degrades on deep pages &mdash; and a row deleted earlier
         shifts everything after it, so a walk can miss rows it never saw. <code>findPage</code> avoids both by asking
-        for what comes <em>after</em> a key rather than for an offset:
-        <code>users.findPage(100, after = Some(lastKey), filter = adults)</code>. The repository already knows the
-        key's fields, so it builds both halves itself &mdash; the sort that gives the page an order, and the
-        comparison that steps past the cursor, lexicographic for a compound key. <code>ensureKeyIndex</code> builds
-        the index that makes the whole walk a range scan.
+        for what comes <em>after</em> a key rather than for an offset. The repository already knows the key's fields,
+        so it builds both halves itself &mdash; the sort that gives the page an order, and the comparison that steps
+        past the cursor, lexicographic for a compound key. <code>ensureKeyIndex</code> builds the index that makes the
+        whole walk a range scan.
+    </p>
+    <pre><code>val firstPage = users.findPage(100)                    // KeysetPage(items, next)
+val nextPage  = users.findPage(100, after = firstPage.next)
+
+users.findPage(100, after = Some(lastKey), filter = adults) // narrowed, still paged by key
+users.findPage(20, descending = true)                       // newest key first</code></pre>
+    <p class="muted">
+        <code>next</code> is the key the following page starts after, or <code>None</code> on the last page &mdash; the
+        repository reads one row past the page to know which. The key has to be unique, one BSON type per field, and
+        indexed.
     </p>
     <p>
         <code>ensureKeyIndex</code> builds the unique index the <code>PrimaryKey</code> describes.
@@ -1585,14 +1662,19 @@ users.getByFilter(adults, Page.first(100))  // same, as a stream</code></pre>
     </p>
     <p>
         For unit tests, <code>FakeMongoCollection</code> (in <code>mongo4s-testkit</code>, a published module — add it
-        as <code>"org.mongo4s" %% "mongo4s-testkit" % "3.0.0" % Test</code>) implements
+        as <code>"org.mongo4s" %% "mongo4s-testkit" % "4.0.0" % Test</code>) implements
         <code>MongoCollection</code> in memory — the exact
         same <code>Filter</code>/<code>Update</code>/<code>Field</code> AST the real driver interprets is interpreted
         against an in-memory buffer instead, so repository logic is testable without a running MongoDB. Filters,
-        updates, sorting, paging and projections are simulated; <code>aggregate</code>, <code>distinct</code>,
-        <code>watch</code>, <code>$text</code>, <code>$expr</code>, <code>Filter.Raw</code> and an update carrying
-        <code>arrayFilters</code> throw <code>UnsupportedOperationException</code> naming what was asked for, rather
-        than quietly answering wrong.
+        every update operator, sorting, paging, projections, <code>distinct</code> and a subset of
+        <code>aggregate</code> are simulated, and so are unique indexes, the way a bulk write reports a duplicate, and
+        how the server compares numbers of different widths &mdash; each checked against a real server by a parity
+        spec. <code>watch</code>, <code>explain</code>, <code>$text</code>, <code>$expr</code>, <code>Filter.Raw</code>,
+        a pipeline update, a collation and an update carrying <code>arrayFilters</code> throw
+        <code>UnsupportedOperationException</code> naming what was asked for, rather than quietly answering wrong.
+        It streams through the runtime's <code>RsBridge</code>, reading the collection when the stream runs, so
+        <code>FakeMongoCollection[IO, S, User](codec)</code> and <code>FakeRepository[IO, S, User, String]()</code> are
+        all it takes.
         Replace-based upserts — what <code>upsert</code>/<code>upsertMany</code> go through — insert on a miss the way
         the server does; an <code>update</code>-based <code>UpdateOptions.upsert</code> that matches nothing throws
         instead of
@@ -1635,6 +1717,12 @@ users.getByFilter(adults, Page.first(100))  // same, as a stream</code></pre>
             <td></td>
         </tr>
     </table>
+    <p class="muted">
+        Beyond the members a runtime has to supply, <code>Effect</code> carries defaults it may override:
+        <code>monotonic</code> and <code>sleep</code> &mdash; the pause between transaction retries &mdash; read the
+        runtime's own clock and scheduler on all four backends instead of <code>System.nanoTime</code> and a blocked
+        thread.
+    </p>
     <p>
         <code>MongoClient.fromClient</code>/<code>fromSettings</code>/<code>fromConnectionString</code> return a bare
         <code>F[MongoClient[F, S]]</code> — you own calling <code>.close</code>. Every runtime module also ships
@@ -1695,7 +1783,7 @@ given RsBridgeConfig = RsBridgeConfig(
 
     <h2 id="modules">Modules</h2>
     <p>Published for Scala 3 under <code>org.mongo4s</code>:</p>
-    <pre><code>"org.mongo4s" %% "mongo4s-&lt;module&gt;" % "3.0.0"</code></pre>
+    <pre><code>"org.mongo4s" %% "mongo4s-&lt;module&gt;" % "4.0.0"</code></pre>
     <table>
         <tr>
             <th>Kind</th>
@@ -1774,27 +1862,30 @@ given RsBridgeConfig = RsBridgeConfig(
         <li>Deprecations get at least one minor release before removal.</li>
     </ul>
     <p>
-        <strong>3.0.0 is a breaking release.</strong> <code>WireCodec</code> no longer derives itself for
-        any case class it meets: a field whose type has no codec is a compile error naming the type, instead of a
-        codec derived behind your back. Driver exceptions no longer reach your code &mdash;
-        <code>MongoWriteException</code> and friends arrive as <code>MongoError</code>, with the driver's own
-        exception still reachable on <code>cause</code>. <code>Repository</code>'s condition methods now say what
-        they take (<code>findByField</code>, <code>updateByFilter</code>, <code>deleteByFilter</code>,
-        <code>getByFilter</code>), and its inserts return the entity's key instead of a raw
-        <code>BsonValue</code>. <code>Scala 3.9 LTS</code> is required. The compiler catches every change; none
-        is silent.
+        <strong>4.0.0 is a breaking release.</strong> An <code>Update</code> that changes one path twice is refused
+        rather than keeping only the last change. <code>findPage</code> returns a <code>KeysetPage</code> with the key
+        the next page starts after. <code>watchAttempting</code> yields <code>ChangeEvent[DecodeResult[A]]</code>, so an
+        event whose document fails keeps its resume token. <code>distinct</code> over an array answers with its
+        elements, and <code>regex</code>, <code>mod</code>, <code>hasSize</code> and <code>popFirst</code>/
+        <code>popLast</code> compile only on the fields they apply to. The testkit's fake streams through the
+        <code>RsBridge</code> instead of taking an <code>emit</code> function.
     </p>
     <p class="muted">
-        The full 2.x → 3.0 migration guide, including the corrected behaviours, is in
+        <code>3.0.0</code> was the last breaking release before it: <code>WireCodec</code> stopped deriving itself for
+        any case class it met, driver exceptions arrive as <code>MongoError</code>, <code>Repository</code>'s condition
+        methods say what they take, and its inserts return the entity's key.
+    </p>
+    <p class="muted">
+        The full migration guides, 3.x → 4.0 and 2.x → 3.0, including the corrected behaviours, are in
         <a href="https://github.com/mongo4s/mongo4s/blob/main/COMPATIBILITY.md">COMPATIBILITY.md</a>; what changed in
         each release is in <a href="https://github.com/mongo4s/mongo4s/blob/main/CHANGELOG.md">CHANGELOG.md</a>; what
         is not covered yet and how it will land is in
         <a href="https://github.com/mongo4s/mongo4s/blob/main/ROADMAP.md">ROADMAP.md</a>.
     </p>
     <p class="muted">
-        <code>3.0.0</code> moves the whole build onto <strong>Scala 3.9 LTS</strong> and drops
+        <code>3.0.0</code> moved the whole build onto <strong>Scala 3.9 LTS</strong> and dropped
         <code>3.3 LTS</code>. <code>TASTy</code> is not forward compatible, and that is a break MiMa cannot see,
-        which is why it takes a major rather than a minor. What it buys is one Scala version across every
+        which is why it took a major rather than a minor. What it buys is one Scala version across every
         module: <code>mongo4s-bson-calypso</code>, <code>mongo4s-kyo</code> and <code>mongo4s-rapid</code>,
         which used to be pinned to a fast-release <code>3.8</code>, are on the LTS line with the rest.
         <code>mongo4s-kyo</code> depends on a kyo release candidate and sits outside the binary compatibility
@@ -2390,6 +2481,13 @@ findOne     1.45–1.97 ms/op</code></pre>
         shadowed the derived codec, so the collection wrote a shape nobody had asked for and no error was raised.
         Both behaviours are pinned by integration specs.
     </p>
+    <p class="muted">
+        On a direct collection the codec also decides how queries spell fields, which only holds if every codec tells
+        the truth about its naming. A derived sum type used to report identity whatever it wrote, and
+        <code>imap</code>/<code>iemap</code> forgot the naming of the codec underneath &mdash; both wrote
+        <code>first_name</code> and let queries say <code>firstName</code>. Both carry it now, and a law spec checks that
+        the naming a codec reports is the spelling it writes.
+    </p>
 
     <h3 id="design-astfree">The AST-free path</h3>
     <p>
@@ -2440,11 +2538,20 @@ findOne     1.45–1.97 ms/op</code></pre>
         never declared, and rendering it twice under different namings emitted both spellings. An update that would
         render empty throws rather than sending <code>{}</code>.
     </p>
+    <p>
+        <strong>Merging cannot keep two changes to one path, so it refuses to try.</strong> A sub-document holds one
+        value per key, and the second <code>$inc</code> on a path used to replace the first silently &mdash; while the
+        fake, applying both, answered differently. An update touching a path twice, or overlapping paths across
+        operators, is refused at render, and the fake renders before it applies. A pipeline update is a case of
+        <code>Update</code> rather than a separate type, so everything that takes an update takes one; it renders as
+        stages and is refused where the two forms would mix.
+    </p>
     <p class="muted">
         Numeric operators go through <code>NumericOf[C, A]</code>, so an <code>Option[Long]</code> field takes a plain
         <code>Long</code>. There is deliberately no <code>NumericValue[Option[A]]</code>: <code>None</code> has no
         numeric encoding, and the obvious stand-in — <code>$inc</code> by zero — is a write that silently does
-        nothing.
+        nothing. The same capability pattern now bounds <code>regex</code> (<code>TextOf</code>), <code>mod</code> and
+        <code>hasSize</code>/<code>$pop</code>, which used to render filters the server accepts and that match nothing.
     </p>
 
     <h3 id="design-reads">Reads: strict by default, lenient on request</h3>
@@ -2453,9 +2560,11 @@ findOne     1.45–1.97 ms/op</code></pre>
         means the model and the collection disagree, and finding out immediately beats processing 99 documents and
         silently dropping one. But a collection written by more than one version of more than one service will
         contain documents this version cannot read, and failing a whole page over one of them is useless — so
-        <code>attempting</code> reports each document as <code>Either[BsonError, A]</code>, and
-        <code>watchAttempting</code> does the same for change streams. Transport errors still fail the effect; only
-        decoding is made recoverable, because only decoding is a per-document property.
+        <code>attempting</code> reports each document as <code>Either[BsonError, A]</code>. Transport errors still fail
+        the effect; only decoding is made recoverable, because only decoding is a per-document property.
+        <code>watchAttempting</code> puts the result on the event's documents rather than around the event, because
+        wrapping the event lost its resume token with it &mdash; and a durable consumer that cannot checkpoint past a bad
+        document reads it again after every restart.
     </p>
 
     <h3 id="design-streaming">Streaming</h3>
@@ -2493,6 +2602,14 @@ findOne     1.45–1.97 ms/op</code></pre>
         is still there, and nothing is automatic on it, including the rollback: the safe version should be the easy
         one, not the only one.
     </p>
+    <p class="muted">
+        <strong>The retry rules are the specification's.</strong> A commit that ran out of <code>maxCommitTime</code>
+        carries the "unknown commit result" label &mdash; the driver adds it &mdash; so it used to be asked again until
+        the retry window closed, which turned the limit into a delay; it is reported instead. A whole-transaction retry
+        pauses first, for a jittered interval growing from 5 ms to a 500 ms ceiling, which needed a sleep
+        <code>Effect</code> did not have. And the body is built inside the protection, not before it: one that threw
+        before returning an <code>F</code> used to escape the finalizer and leave the transaction open.
+    </p>
 
     <h3 id="design-watch">Change streams</h3>
     <p>
@@ -2524,16 +2641,25 @@ findOne     1.45–1.97 ms/op</code></pre>
         <code>combine</code> deliberately does not rebase indices; a caller splitting one logical write into batches
         calls <code>shiftUpsertedIds(offset)</code> per batch first, since only the caller knows how many commands
         preceded it. Getting this wrong collapsed every batch onto index 0 — a bug that only appears once a write
-        exceeds one batch, which is to say in production and not in tests.
+        exceeds one batch, which is to say in production and not in tests. The same rebasing was later found missing
+        for failures: a batched failure now describes the whole write, as the driver's own batching does &mdash; global
+        indices, and a result counting everything that landed.
     </p>
     <p>
         Because <code>Filter</code>/<code>Update</code> are an AST rather than driver builders, they can be
         interpreted twice: into real <code>Bson</code> for the server, and against an in-memory buffer.
-        <code>FakeMongoCollection</code> is that second interpreter — filters, updates, sorting, paging and
-        projections are simulated, while <code>aggregate</code>, <code>distinct</code>, <code>watch</code>,
-        <code>$text</code>, <code>$expr</code>, <code>Filter.Raw</code> and an update carrying <code>arrayFilters</code>
+        <code>FakeMongoCollection</code> is that second interpreter — filters, every update operator, sorting, paging,
+        projections, <code>distinct</code> and a subset of <code>aggregate</code> are simulated, each checked against
+        a real server by a parity spec, while <code>watch</code>, <code>explain</code>, <code>$text</code>,
+        <code>$expr</code>, <code>Filter.Raw</code>, a pipeline update and an update carrying <code>arrayFilters</code>
         throw <code>UnsupportedOperationException</code> naming what was asked for rather than quietly answering
         wrong. A fake that lies is worse than no fake.
+    </p>
+    <p class="muted">
+        The fake streams through the <code>RsBridge</code> rather than an <code>emit</code> function the caller
+        supplies. <code>emit</code> took the results as a list, computed when the stream was built, so a stream set up
+        before an insert missed it &mdash; the one thing a cursor never does &mdash; and nothing but <code>find</code>
+        could stream, because nobody supplied an emitter for the other types.
     </p>
     <p class="muted">
         It ships as its own published module, <code>mongo4s-testkit</code>, so it is usable from a consumer's own
@@ -2573,9 +2699,21 @@ findOne     1.45–1.97 ms/op</code></pre>
             but worth knowing: rapid decides <code>Step.Stop</code> inside <code>transform</code>, so it needs element
             n+1 before it stops. On an infinite change stream carrying exactly n events it blocks forever.
         </li>
-        <li><strong>A circe bridge.</strong> There is no <code>mongo4s-bson-circe</code> module. A
-            <code>BsonDocumentCodec[A]</code> built from circe's <code>Encoder</code>/<code>Decoder</code> is short to
-            hand-write, but a model already on circe has no first-class path today. This is a gap, not a decision.
+        <li><strong>A circe bridge.</strong> There is no <code>mongo4s-bson-circe</code> module, and there is not going
+            to be one. circe is a JSON codec: routing an entity through it is the same trip the benchmarks measure at
+            2.5–5× slower on decode, the cost mongo4s exists to remove. A model already on circe should get a
+            <code>BsonDocumentCodec[A]</code> written against BSON directly.
+        </li>
+        <li><strong>Streaming bulk inputs.</strong> <code>insertMany</code> and <code>bulkWrite</code> take a
+            <code>Seq</code>. Taking an <code>S</code> would need <code>RsBridge</code> to fold a stream into
+            <code>F</code>, which the four runtimes share no shape for, and the loop it saves is three lines in each.
+        </li>
+        <li><strong>Simulating pipeline updates in the fake.</strong> They compute with aggregation expressions, which
+            the fake does not evaluate; it refuses them by name.
+        </li>
+        <li><strong>Copying every <code>BsonDocument</code> the API accepts.</strong> Raw filters, stages, hints and
+            resume tokens are taken as given: mongo4s never writes into them. <code>Update.Raw</code> is the exception,
+            cloned because rendering used to write into it.
         </li>
     </ul>
 
