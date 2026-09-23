@@ -8,12 +8,14 @@ import org.testcontainers.containers.MongoDBContainer
 
 import cats.effect.IO
 import com.mongodb.client.model.Collation
+import org.bson.{BsonDocument, BsonInt32, BsonString}
 
 import mongo4s.cats.CatsStream
 import mongo4s.operations.*
 import mongo4s.{Field, MongoClient}
 import mongo4s.bson.direct.WireCodec
 
+import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
 import mongo4s.bson.BsonInstances.given
 
@@ -92,5 +94,71 @@ final class WriteOptionsItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Bef
         matched shouldBe 1L
         found shouldBe Some(Note("1", "changed"))
       }
+    }
+  }
+
+  "the findOneAnd* options" should {
+    "carry a collation, so a case-insensitive match finds what a plain one misses" in {
+      val caseInsensitive = Collation.builder().locale("en").collationStrength(com.mongodb.client.model.CollationStrength.SECONDARY).build()
+
+      val program =
+        for
+          notes  <- seeded("find_one_collated")
+          missed <- notes.findOneAndUpdate(bodyField.equalTo("beta"), Update.set(bodyField, "changed"))
+          found  <- notes.findOneAndUpdate(
+                      bodyField.equalTo("beta"),
+                      Update.set(bodyField, "changed"),
+                      FindOneAndUpdateOptions.default[Note].withCollation(caseInsensitive),
+                    )
+        yield (missed, found)
+
+      program.asserting { (missed, found) =>
+        missed shouldBe None
+        found shouldBe Some(Note("2", "changed"))
+      }
+    }
+
+    "carry a hint to the server, which refuses one naming an index that does not exist" in {
+      val program =
+        for
+          notes  <- seeded("find_one_hinted")
+          failed <- notes.findOneAndDelete(idField.equalTo("1"), FindOneAndDeleteOptions.default[Note].withHint(BsonDocument("missing", BsonInt32(1)))).attempt
+          kept   <- notes.count()
+        yield (failed.isLeft, kept)
+
+      program.asserting((failed, kept) => (failed, kept) shouldBe (true, 3L))
+    }
+
+    "carry bypassDocumentValidation, letting a replacement past the validator that refuses it otherwise" in {
+      val program =
+        for
+          client   <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database <- client.getDatabase("write_options_it")
+          _        <- database.createCollection("validated", CreateCollectionOptions.default.withValidator(BsonDocument("body", BsonDocument("$ne", BsonString("forbidden")))))
+          notes    <- database.getDirectCollection[Note]("validated")
+          _        <- notes.insertOne(Note("1", "alpha"))
+          refused  <- notes.findOneAndReplace(idField.equalTo("1"), Note("1", "forbidden")).attempt
+          allowed  <- notes.findOneAndReplace(
+                        idField.equalTo("1"),
+                        Note("1", "forbidden"),
+                        FindOneAndReplaceOptions.default[Note].withBypassDocumentValidation(true),
+                      )
+        yield (refused.isLeft, allowed)
+
+      program.asserting((refused, allowed) => (refused, allowed) shouldBe (true, Some(Note("1", "forbidden"))))
+    }
+
+    "carry a maxTime and a comment without changing the result" in {
+      val program =
+        for
+          notes   <- seeded("find_one_limited")
+          updated <- notes.findOneAndUpdate(
+                       idField.equalTo("3"),
+                       Update.set(bodyField, "changed"),
+                       FindOneAndUpdateOptions.default[Note].withMaxTime(5.seconds).withComment("it-spec"),
+                     )
+        yield updated
+
+      program.asserting(_ shouldBe Some(Note("3", "changed")))
     }
   }

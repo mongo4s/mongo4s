@@ -176,6 +176,7 @@ final class FakeMongoCollection[F[*], S[*], E](
   ): F[Option[E]] =
     F.delay {
       requireNoArrayFilters(options.arrayFilters, "findOneAndUpdate")
+      requireNoCollation(options.collation, "findOneAndUpdate")
 
       firstMatching(filter, options.sort) match
         case None if options.upsert => throw UnsupportedOperationException("FakeMongoCollection: findOneAndUpdate with upsert is not simulated")
@@ -190,6 +191,8 @@ final class FakeMongoCollection[F[*], S[*], E](
       session: Option[ClientSession]
   ): F[Option[E]] =
     F.delay {
+      requireNoCollation(options.collation, "findOneAndReplace")
+
       firstMatching(filter, options.sort) match
         case None if options.upsert => throw UnsupportedOperationException("FakeMongoCollection: findOneAndReplace with upsert is not simulated")
         case None                   => None
@@ -201,6 +204,8 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   def findOneAndDelete(filter: Filter[E], options: FindOneAndDeleteOptions[E])(using session: Option[ClientSession]): F[Option[E]] =
     F.delay {
+      requireNoCollation(options.collation, "findOneAndDelete")
+
       firstMatching(filter, options.sort).flatMap { existing =>
         storage -= existing
         decodeProjected(existing, options.projection)

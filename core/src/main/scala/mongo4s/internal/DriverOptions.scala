@@ -71,6 +71,12 @@ private[mongo4s] object DriverOptions:
     if !options.projection.isEmpty then driverOptions.projection(options.projection.toBson(naming)): Unit
     if options.arrayFilters.nonEmpty then driverOptions.arrayFilters(options.arrayFilters.map(_.toBson(naming)).asJava): Unit
 
+    options.collation.foreach(value => driverOptions.collation(value))
+    options.hint.foreach(value => driverOptions.hint(value))
+    options.maxTime.foreach(value => driverOptions.maxTime(value.toMillis, TimeUnit.MILLISECONDS))
+    options.comment.foreach(value => driverOptions.comment(value))
+    options.bypassDocumentValidation.foreach(value => driverOptions.bypassDocumentValidation(value))
+
     driverOptions
   end findOneAndUpdate
 
@@ -82,6 +88,12 @@ private[mongo4s] object DriverOptions:
     if !options.sort.isEmpty then driverOptions.sort(options.sort.toBson(naming)): Unit
     if !options.projection.isEmpty then driverOptions.projection(options.projection.toBson(naming)): Unit
 
+    options.collation.foreach(value => driverOptions.collation(value))
+    options.hint.foreach(value => driverOptions.hint(value))
+    options.maxTime.foreach(value => driverOptions.maxTime(value.toMillis, TimeUnit.MILLISECONDS))
+    options.comment.foreach(value => driverOptions.comment(value))
+    options.bypassDocumentValidation.foreach(value => driverOptions.bypassDocumentValidation(value))
+
     driverOptions
   end findOneAndReplace
 
@@ -90,6 +102,11 @@ private[mongo4s] object DriverOptions:
 
     if !options.sort.isEmpty then driverOptions.sort(options.sort.toBson(naming)): Unit
     if !options.projection.isEmpty then driverOptions.projection(options.projection.toBson(naming)): Unit
+
+    options.collation.foreach(value => driverOptions.collation(value))
+    options.hint.foreach(value => driverOptions.hint(value))
+    options.maxTime.foreach(value => driverOptions.maxTime(value.toMillis, TimeUnit.MILLISECONDS))
+    options.comment.foreach(value => driverOptions.comment(value))
 
     driverOptions
   end findOneAndDelete
