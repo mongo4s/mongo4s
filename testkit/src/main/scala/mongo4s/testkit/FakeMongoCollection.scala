@@ -4,8 +4,9 @@ import scala.annotation.unused
 import scala.collection.mutable
 
 import com.mongodb.bulk.BulkWriteError
+import com.mongodb.MongoCommandException
 import com.mongodb.client.model.Collation
-import org.bson.{BsonArray, BsonDateTime, BsonDocument, BsonDouble, BsonInt32, BsonInt64, BsonNull, BsonObjectId, BsonValue}
+import org.bson.{BsonArray, BsonBoolean, BsonDateTime, BsonDocument, BsonDouble, BsonInt32, BsonInt64, BsonNull, BsonObjectId, BsonString, BsonValue}
 import com.mongodb.{ExplainVerbosity, MongoBulkWriteException, MongoWriteException, ReadConcern, ReadPreference, ServerAddress, WriteConcern, WriteError}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
@@ -26,6 +27,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     extends MongoCollection[F, S, E]:
 
   private val storage        = mutable.ArrayBuffer.empty[BsonDocument]
+  private val IdIndex        = "_id_"
   private val createdIndexes = mutable.ArrayBuffer.empty[Index[E]]
 
   def withReadConcern(concern: ReadConcern): MongoCollection[F, S, E]          = this
@@ -324,20 +326,43 @@ final class FakeMongoCollection[F[*], S[*], E](
     FakeDistinctQuery(field.path, filter, decoder)
 
   def createIndex(index: Index[E])(using session: Option[ClientSession]): F[String] =
-    F.delay {
-      requireBuildable(index)
-
-      createdIndexes += index
-      indexName(index)
-    }
+    F.map(createIndexes(List(index)))(_.head)
 
   def createIndexes(indexes: Seq[Index[E]])(using session: Option[ClientSession]): F[List[String]] =
     F.delay {
-      indexes.foreach(requireBuildable)
+      val missing = indexes.filterNot(alreadyBuilt)
+      missing.foreach(requireBuildable)
 
-      createdIndexes ++= indexes
+      createdIndexes ++= missing
       indexes.iterator.map(indexName).toList
     }
+
+  private def alreadyBuilt(index: Index[E]): Boolean =
+    val name = indexName(index)
+
+    createdIndexes.find(indexName(_) == name) match
+      case Some(existing) if existing.keys != index.keys         =>
+        throw commandFailure(86, "IndexKeySpecsConflict", s"An existing index has the same name as the requested index but different keys: $name")
+      case Some(existing) if !sameSpecification(existing, index) =>
+        throw commandFailure(85, "IndexOptionsConflict", s"An existing index has the same name as the requested index but different options: $name")
+      case Some(_)                                               => true
+      case None                                                  =>
+        createdIndexes.find(sameSpecification(_, index)).foreach { existing =>
+          throw commandFailure(85, "IndexOptionsConflict", s"Index already exists with a different name: ${indexName(existing)}")
+        }
+        false
+  end alreadyBuilt
+
+  private def sameSpecification(one: Index[E], other: Index[E]): Boolean =
+    one.keys == other.keys && one.collation == other.collation && described(one.named("")) == described(other.named(""))
+
+  private def commandFailure(code: Int, codeName: String, message: String): Throwable =
+    MongoError.translate(
+      MongoCommandException(
+        BsonDocument("ok", BsonDouble(0)).append("errmsg", BsonString(message)).append("code", BsonInt32(code)).append("codeName", BsonString(codeName)),
+        ServerAddress(),
+      )
+    )
 
   private def requireBuildable(index: Index[E]): Unit =
     if index.unique && index.collation.nonEmpty
@@ -394,11 +419,34 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   def listIndexes(using session: Option[ClientSession]): F[List[BsonDocument]] =
     F.delay {
-      createdIndexes.map(_.keysToBson(naming)).toList
+      val onId = BsonDocument("v", BsonInt32(2)).append("key", BsonDocument(BsonField.Id, BsonInt32(1))).append("name", BsonString(IdIndex))
+
+      onId :: createdIndexes.map(described).toList
     }
+
+  private def described(index: Index[E]): BsonDocument =
+    val description = BsonDocument("v", BsonInt32(2)).append("key", index.keysToBson(naming)).append("name", BsonString(indexName(index)))
+
+    List(
+      Option.when(index.unique)("unique" -> BsonBoolean.TRUE),
+      Option.when(index.sparse)("sparse" -> BsonBoolean.TRUE),
+      index.expireAfter.map(duration => "expireAfterSeconds" -> BsonInt32(duration.toSeconds.toInt)),
+      index.partialFilter.map(filter => "partialFilterExpression" -> filter.toBson(naming)),
+      Option.when(index.hidden)("hidden" -> BsonBoolean.TRUE),
+      index.wildcardProjection.map(projection => "wildcardProjection" -> projection),
+    ).flatten.foreach((key, value) => description.append(key, value))
+
+    description
+  end described
 
   def dropIndex(indexName: String)(using session: Option[ClientSession]): F[Unit] =
     F.delay {
+      if indexName == IdIndex
+      then throw commandFailure(72, "InvalidOptions", "cannot drop _id index")
+
+      if !createdIndexes.exists(this.indexName(_) == indexName)
+      then throw commandFailure(27, "IndexNotFound", s"index not found with name [$indexName]")
+
       createdIndexes.filterInPlace(index => this.indexName(index) != indexName)
     }
 

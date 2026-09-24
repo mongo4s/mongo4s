@@ -346,7 +346,85 @@ final class FakeFidelityParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matcher
         yield (bulkOutcome(failed), stored)
       }
     }
+
+    "agree on building none of the indexes when one of them cannot be built" in {
+      val emailF = Field.stored[BsonDocument, String]("email")
+      val seed   = List(keyed("a").head.append("email", BsonString("x@y")), keyed("b").head.append("email", BsonString("x@y")))
+
+      agree("indexes_all_or_nothing", seed) { collection =>
+        for
+          failed  <- collection.createIndexes(List(Index.ascending(nameF).named("fine"), Index.ascending(emailF).withUnique.named("clash"))).attempt
+          indexes <- collection.listIndexes
+        yield (failed.left.toOption.map(_.getClass.getSimpleName), indexNames(indexes))
+      }
+    }
+
+    "agree on the names createIndexes reports, an index that already exists included" in {
+      agree("indexes_existing", keyed("a")) { collection =>
+        for
+          _       <- collection.createIndex(Index.ascending(ageF).named("by_age"))
+          names   <- collection.createIndexes(List(Index.ascending(ageF).named("by_age"), Index.ascending(nameF)))
+          indexes <- collection.listIndexes
+        yield (names, indexNames(indexes))
+      }
+    }
+
+    "agree on refusing an index whose name is taken by a different one" in {
+      agree("indexes_name_taken", keyed("a")) { collection =>
+        for
+          _      <- collection.createIndex(Index.ascending(ageF).named("taken"))
+          failed <- collection.createIndex(Index.ascending(nameF).named("taken")).attempt
+        yield codeOf(failed)
+      }
+    }
+
+    "agree on refusing an index that already exists under another name" in {
+      agree("indexes_other_name", keyed("a")) { collection =>
+        for
+          _      <- collection.createIndex(Index.ascending(ageF).named("first"))
+          failed <- collection.createIndex(Index.ascending(ageF).named("second")).attempt
+        yield codeOf(failed)
+      }
+    }
+
+    "agree on how listIndexes describes each index" in {
+      val indexes = List(
+        Index.ascending(nameF).withUnique.withSparse.named("by_name"),
+        Index.descending(ageF).where(ageF.gte(18)).named("adults"),
+        Index.ascending(seenF).expiringAfter(2.hours).named("expiring"),
+        Index.ascending(priceF).withHidden,
+      )
+
+      agree("indexes_described", keyed("a")) { collection =>
+        collection.createIndexes(indexes) >> collection.listIndexes.map(_.sortBy(_.getString("name").getValue))
+      }
+    }
+
+    "agree that dropIndexes keeps only the index on _id" in {
+      agree("indexes_dropped", keyed("a")) { collection =>
+        for
+          _       <- collection.createIndexes(List(Index.ascending(nameF), Index.ascending(ageF)))
+          _       <- collection.dropIndexes
+          indexes <- collection.listIndexes
+        yield indexNames(indexes)
+      }
+    }
+
+    "agree on refusing to drop an index that does not exist, and the one on _id" in {
+      agree("indexes_undroppable", keyed("a")) { collection =>
+        for
+          missing <- collection.dropIndex("nope").attempt
+          id      <- collection.dropIndex("_id_").attempt
+        yield (codeOf(missing), codeOf(id))
+      }
+    }
   }
+
+  private def indexNames(indexes: List[BsonDocument]): List[String] =
+    indexes.map(_.getString("name").getValue).sorted
+
+  private def codeOf(outcome: Either[Throwable, Any]): Option[Int] =
+    outcome.left.toOption.collect { case failed: MongoError => failed.code }
 
   private def keyed(ids: String*): List[BsonDocument] = ids.toList.map(id => BsonDocument("_id", BsonString(id)))
 
