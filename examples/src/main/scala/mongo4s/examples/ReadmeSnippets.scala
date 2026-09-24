@@ -14,6 +14,7 @@ import mongo4s.repositories.{BaseMongoRepository, Page}
 import mongo4s.bson.{BsonDocumentCodec, BsonTypeName, DecodeResult, FieldNaming}
 import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec, WireCodecConfig}
 import mongo4s.operations.*
+import mongo4s.operations.geometry.Geometry
 import mongo4s.{Field, MongoClient, MongoCollection, MongoDatabase, MongoError, PrimaryKey, RsBridgeConfig, WithId, withTransaction}
 
 import scala.concurrent.duration.given
@@ -111,6 +112,8 @@ object ReadmeSnippets:
   val exclaimed = Update.pipeline(
     Stage.addFields[User]("name" -> BsonDocument("$concat", BsonArray(java.util.List.of(BsonString("$name"), BsonString("!")))))
   )
+
+  val scoreDropped = Update.pipeline(Stage.unset(Field.of[User, Option[Long]](_.score)))
 
   // --- Array elements ---
 
@@ -221,6 +224,21 @@ object ReadmeSnippets:
     )
   )
 
+  val trimmed = Seq(Stage.unset(ageField).and(Field.of[User, List[String]](_.tags)))
+
+  val nearest = Seq(
+    Stage.geoNear(
+      Field.stored[User, Geometry.Point]("location"),
+      Geometry.Point(13.405, 52.52),
+      "km",
+      GeoNearOptions.default[User].where(adults).withMaxDistance(5000).withDistanceMultiplier(0.001),
+    )
+  )
+
+  val spread  = Seq(Stage.bucketAuto(Field.of[User, String](_.name), 4)("count" -> Accumulator.count[User]))
+  val rounded = Seq(Stage.bucketAutoRounded(ageField, 5, BucketGranularity.R10)())
+  val popular = Seq(Stage.sortByCount(Field.of[User, String](_.name)))
+
   def aggregated(collection: MongoCollection[IO, S, User]): IO[List[User]] =
     collection.aggregate[User](pipeline).allowDiskUse(true).maxTime(10.seconds).all
 
@@ -240,6 +258,8 @@ object ReadmeSnippets:
       _      <- collection.createIndex(Index.ascending(Field.stored[User, Any]("$**")))
       listed <- collection.listIndexes
       _      <- collection.dropIndex("name_age")
+      _      <- collection.createIndexes(List(Index.ascending(Field.of[User, String](_.name)), Index.descending(ageField)))
+      _      <- collection.dropIndexes
     yield listed
 
   // --- Keyset paging ---
@@ -285,6 +305,10 @@ object ReadmeSnippets:
       _ <- database.createCollection("people", CreateCollectionOptions.default.withValidator(jsonSchema))
       _ <- database.createCollection("orders", CreateCollectionOptions.default.withClusteredIndex(ClusteredIndex.onId))
     yield ()
+
+  def archive(collection: MongoCollection[IO, S, User]): IO[Unit] = collection.renameCollection("people_archive")
+
+  def archiveOver(collection: MongoCollection[IO, S, User]): IO[Unit] = collection.renameCollection("people_archive", dropTarget = true)
 
   // --- Aggregation: a stage's own output is named raw ---
 

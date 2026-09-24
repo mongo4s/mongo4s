@@ -163,7 +163,8 @@ trait MongoCollection[F[*], S[*], A]:
   def createIndex(index: Index[A])(using session: Option[ClientSession] = None): F[String]
 
   def watch(options: WatchOptions[A] = WatchOptions.default[A])(using session: Option[ClientSession] = None)(using Streamable[S, ChangeEvent[A]]): S[ChangeEvent[A]]
-// count, estimatedCount, insertMany, updateMany, deleteMany, bulkWrite, listIndexes, dropIndex, drop, ...
+// count, estimatedCount, insertMany, updateMany, deleteMany, bulkWrite, createIndexes, listIndexes, dropIndex,
+// dropIndexes, renameCollection, drop, ...
 ```
 
 Every method that reaches the server takes an optional `ClientSession` and defaults to `None`, so none of that is
@@ -220,9 +221,9 @@ point is refused rather than sent for the server to reject. `$geoWithin` also ta
 `GeoShape.Centre`, `CenterSphere` and `Box`.
 
 `$near` sorts by distance and needs a geospatial index; distances are in metres for GeoJSON. The server refuses it
-inside `$or` and inside an aggregation `$match` — `$geoNear` as a pipeline's first stage is the tool there, and it
-goes through `Stage.raw` for now. `$geoWithin` needs neither an index nor a sort, so it is the cheaper choice when
-you only want containment.
+inside `$or` and inside an aggregation `$match` — `Stage.geoNear`, as a pipeline's first stage, is the tool there
+(see [Nearest first](#nearest-first)). `$geoWithin` needs neither an index nor a sort, so it is the cheaper choice
+when you only want containment.
 
 The comparisons have symbolic aliases where they read better — `===`, `=!=`, `>`, `>=`, `<`, `<=` — spelling the
 same `Filter` as `equalTo`/`notEqualTo`/`gt`/`gte`/`lt`/`lte`.
@@ -293,7 +294,7 @@ a `set` on `notes.0.rank` — which the server would refuse anyway, one round tr
 
 An update that computes from the document itself — a field built from two others, a value run through an
 aggregation expression — is a pipeline, not operators. `Update.pipeline` takes the stages the server accepts in one
-(`$addFields`, `$project`, `$replaceRoot`, or a `Stage.raw`) and refuses any other:
+(`$addFields`, `$project`, `$unset`, `$replaceRoot`, or a `Stage.raw`) and refuses any other:
 
 ```scala
 val exclaimed = Update.pipeline(
@@ -820,9 +821,17 @@ val byAge = Seq(
 )
 ```
 
-`Stage` covers `$match`/`$project`/`$sort`/`$limit`/`$skip`/`$count`/`$unwind`/`$lookup`/`$group`/`$addFields`/
-`$replaceRoot`/`$facet`/`$sample`/`$unionWith`/`$bucket`/`$densify`/`$setWindowFields`/`$out`/`$merge`,
-with `Stage.raw(document)` as the escape hatch for anything else.
+`Stage` covers `$match`/`$project`/`$sort`/`$limit`/`$skip`/`$count`/`$unwind`/`$lookup`/`$graphLookup`/`$group`/
+`$addFields`/`$unset`/`$replaceRoot`/`$facet`/`$sample`/`$sortByCount`/`$unionWith`/`$bucket`/`$bucketAuto`/
+`$densify`/`$setWindowFields`/`$geoNear`/`$out`/`$merge`, with `Stage.raw(document)` as the escape hatch for anything
+else.
+
+`$unset` drops fields by name — the pipeline's spelling of an excluding `$project`. It takes one field, and more with
+`and`, because several fields of unrelated types have no single `Field` type to share:
+
+```scala
+Stage.unset(ageField).and(tagsField)
+```
 
 `$lookup` has two forms. `Stage.lookup` is the equality join on `localField`/`foreignField`; `Stage.lookupWith` takes
 a sub-pipeline that runs against the foreign collection, with `let` binding values from the outer document:
@@ -866,6 +875,29 @@ Stage.merge[Order](
 )
 ```
 
+#### Nearest first
+
+`$geoNear` is `$near` as a stage: it sorts by distance, writes each document's distance into a field you name, and —
+unlike `$near` — lets any other stage follow. The server takes it only as a pipeline's first stage, and only over a
+geospatial index:
+
+```scala
+Stage.geoNear(locationField, Geometry.Point(13.405, 52.52), "distance")
+
+Stage.geoNear(
+  locationField,
+  Geometry.Point(13.405, 52.52),
+  "km",
+  GeoNearOptions.default[Place].where(openField.equalTo(true)).withMaxDistance(5000).withDistanceMultiplier(0.001),
+)
+```
+
+The point is GeoJSON, so distances are in metres: `withDistanceMultiplier` rescales what is written, not what
+`withMinDistance`/`withMaxDistance` read, and a negative distance is refused before the server sees it. The field is
+always sent as `key`, which the server needs as soon as a collection has more than one geospatial index, and
+`withIncludeLocs` names a field to receive the location that matched. Legacy `2d` coordinate pairs are not modelled —
+`Stage.raw` carries them.
+
 #### Bucketing, filling gaps and windows
 
 `$bucket` takes its boundaries as values of the field being grouped, so they are typed rather than raw BSON, and
@@ -873,6 +905,22 @@ Stage.merge[Order](
 
 ```scala
 Stage.bucketBy(ageField, Seq(0, 20, 40), default = Some(BsonString("other")))("count" -> Accumulator.count[Person])
+```
+
+`$bucketAuto` picks the boundaries itself, aiming for the number of buckets asked for with about as many documents in
+each. `bucketAutoRounded` also rounds them to a preferred-number series — `R5` to `R80`, `1-2-5`, `E6` to `E192`, or
+powers of two — which the server only does for numbers, so it compiles only on a numeric field:
+
+```scala
+Stage.bucketAuto(nameField, 4)("count" -> Accumulator.count[Person])
+Stage.bucketAutoRounded(ageField, 5, BucketGranularity.R10)()
+```
+
+`$sortByCount` is the `$group`-then-`$sort` written by hand everywhere: one `{_id: value, count: n}` per value, most
+frequent first, ties in no particular order:
+
+```scala
+Stage.sortByCount(cityField)
 ```
 
 `$densify` fills the gaps in a series, so every step is present whether or not a document was written for it —
@@ -961,10 +1009,15 @@ collection.createIndex(Index.ascending(Field.stored[User, Any]("$**"))) // wildc
 
 collection.listIndexes // F[List[BsonDocument]], as the server reports them
 collection.dropIndex("name_age")
+
+collection.createIndexes(List(Index.ascending(nameField), Index.descending(ageField))) // one command
+collection.dropIndexes // every index but the one on _id
 ```
 
 Keys are ordered — a compound index is only usable by queries that respect that order. `createIndex` returns the
-name the server gave it, and is idempotent, so it's safe on every start.
+name the server gave it, and is idempotent, so it's safe on every start. `createIndexes` builds several in one
+command and returns their names in the order given; the server builds them together, so if one cannot be built, none
+is.
 
 A wildcard index needs no API of its own: `$**` is an ordinary stored path, so `Field.stored` builds it and the
 collection's `FieldNaming` leaves it alone. `withWildcardProjection` narrows which fields such an index covers, and
@@ -1010,6 +1063,17 @@ truncating to zero means "expire immediately".
 
 `ClusteredIndex.onId` is the only clustered key offered because `_id` is the only one the server clusters on today.
 Anything else this API does not model is still reachable through `database.runCommand`.
+
+`renameCollection` moves a collection to a new name in the same database. It refuses to replace an existing
+collection unless `dropTarget` says to, and the handle it was called on keeps pointing at the old name — now empty —
+so open the collection again under the new one:
+
+```scala
+collection.renameCollection("people_archive")
+collection.renameCollection("people_archive", dropTarget = true)
+```
+
+A move across databases is an admin command, so it goes through `runCommand` on the `admin` database.
 
 ### Change streams
 
@@ -1551,8 +1615,8 @@ For unit tests, `FakeMongoCollection` (in `mongo4s-testkit`, a published module 
 repository logic is testable without a running MongoDB.
 
 Filters, updates, sorting, paging and projections are simulated, and so is a subset of `aggregate`:
-`$match`, `$sort`, `$skip`, `$limit`, `$project`, `$count` and `$group` with `$sum`, `$avg`, `$min`, `$max`,
-`$first`, `$last` and `$push`. That covers the pipelines most service code writes, so aggregating no longer forces a
+`$match`, `$sort`, `$skip`, `$limit`, `$project`, `$unset`, `$count`, `$sortByCount` and `$group` with `$sum`,
+`$avg`, `$min`, `$max`, `$first`, `$last` and `$push`. That covers the pipelines most service code writes, so aggregating no longer forces a
 test to reach for Docker.
 
 `distinct` is simulated too, array fields flattened into their elements the way the server does, and so is `$slice`
@@ -1566,7 +1630,10 @@ Numbers compare the way the server compares them: an `Int64` of 5 equals an `Int
 `Long`s past `Double`'s precision sort exactly, and `NaN` sorts below every number. A duplicate in `insertMany` or a
 `bulkWrite` is a `BulkWriteFailed` naming the command, after the writes before it — and, unordered, the writes after
 it too. A unique index is enforced, sparse and partial ones included, and is named as the server names it
-(`email_1`), so `dropIndex` finds it. A replacement keeps the `_id` of the document it replaces, an update that
+(`email_1`), so `dropIndex` finds it. `listIndexes` describes each index as the server does — `v`, `key`, `name` and
+its options, after the `_id_` index — creating one that already exists changes nothing, one that clashes with an
+existing index's name or keys fails with the server's code, `createIndexes` builds all or none, and `dropIndex`
+refuses an index that is not there, and `_id_`. A replacement keeps the `_id` of the document it replaces, an update that
 changes nothing counts as matched but not modified, and a `findOneAnd*` whose projection leaves a document the codec
 cannot read fails, as the real collection does, rather than answering `None`.
 
@@ -1579,7 +1646,8 @@ Every update operator is simulated — `$set`, `$unset`, `$inc`, `$mul`, `$min`,
 `$setOnInsert` correctly does nothing on an update that matches.
 
 Everything else throws `UnsupportedOperationException` naming what was asked for, rather than quietly answering
-wrong — a fake that lies is worse than no fake. That includes `watch`, `explain`, `$text` and ranking by
+wrong — a fake that lies is worse than no fake. That includes `watch`, `explain`, `renameCollection` — the fake
+holds a single namespace, with nowhere to move it — `$text` and ranking by
 `$meta textScore`, `$expr`, the geospatial operators, `Filter.Raw`, `Stage.Raw`, `Update.Raw`, a pipeline update, a
 collation anywhere it is accepted, an update carrying `arrayFilters`, a unique index over an array field, every
 aggregation stage outside the list above, and the `$addToSet` *accumulator*, which is refused
@@ -1720,8 +1788,9 @@ removal. `mongo4s-kyo` sits outside the promise while kyo is on a release candid
 path twice is refused rather than keeping only the last change, `findPage` returns a `KeysetPage` with its next
 cursor, `watchAttempting` keeps the event whose document failed, `distinct` over an array answers with its elements,
 the operators that only apply to one kind of field stop compiling on the others, and the testkit's fake streams
-through the `RsBridge` instead of taking an `emit` function. Each has a migration note in
-[COMPATIBILITY.md](COMPATIBILITY.md).
+through the `RsBridge` instead of taking an `emit` function. `MongoCollection` gains members an implementation of your
+own has to provide, `Stage` gains cases an exhaustive match has to cover, and the fake's `listIndexes` answers the
+way the server does. Each has a migration note in [COMPATIBILITY.md](COMPATIBILITY.md).
 
 `3.0.0` moved the whole build onto `Scala 3.9 LTS` and dropped `3.3 LTS`. `TASTy` is not forward compatible, and that
 is a break MiMa cannot see, which is why it took a major release rather than a minor. What it buys is one Scala

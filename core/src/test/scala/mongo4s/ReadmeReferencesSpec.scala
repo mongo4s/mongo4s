@@ -10,6 +10,7 @@ object ReadmeReferencesSpec:
   /** The library objects whose members the README names, and the source that defines them. */
   val known: Map[String, String] = Map(
     "Accumulator"              -> "core/src/main/scala/mongo4s/operations/Accumulator.scala",
+    "BucketGranularity"        -> "core/src/main/scala/mongo4s/operations/BucketGranularity.scala",
     "CountOptions"             -> "core/src/main/scala/mongo4s/operations/CountOptions.scala",
     "CreateCollectionOptions"  -> "core/src/main/scala/mongo4s/operations/CreateCollectionOptions.scala",
     "DeleteOptions"            -> "core/src/main/scala/mongo4s/operations/DeleteOptions.scala",
@@ -23,6 +24,7 @@ object ReadmeReferencesSpec:
     "FindOneAndDeleteOptions"  -> "core/src/main/scala/mongo4s/operations/FindOneAndDeleteOptions.scala",
     "FindOneAndReplaceOptions" -> "core/src/main/scala/mongo4s/operations/FindOneAndReplaceOptions.scala",
     "FindOneAndUpdateOptions"  -> "core/src/main/scala/mongo4s/operations/FindOneAndUpdateOptions.scala",
+    "GeoNearOptions"           -> "core/src/main/scala/mongo4s/operations/GeoNearOptions.scala",
     "Index"                    -> "core/src/main/scala/mongo4s/operations/Index.scala",
     "MergeOptions"             -> "core/src/main/scala/mongo4s/operations/MergeOptions.scala",
     "MongoClient"              -> "core/src/main/scala/mongo4s/MongoClient.scala",
