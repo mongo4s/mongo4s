@@ -14,7 +14,6 @@ full API applies.
 | | Why it is not here yet | Workaround today |
 | --- | --- | --- |
 | **GridFS** | A module of its own, with its own streaming story on four runtimes. Nobody has asked for it. | The driver's `GridFSBuckets` over `client.underlying`. |
-| **`$geoNear`** | The aggregation stage, as opposed to the query operators, which are covered. It must be a pipeline's first stage and carries its own output field and distance multiplier, so it is a stage rather than a filter. | `Stage.raw`. |
 | **Atlas `$search`** | A large, fast-moving surface that only runs on Atlas, so nothing here could exercise it. Typing it from the outside would be guesswork with no way to check the guess. | `Stage.raw`. |
 | **Client-level `bulkWrite`** | MongoDB 8.0 can write across collections and databases in one command, but the write is addressed by namespace, and this library is built on typed collections and repositories — there is no obvious shape that keeps both. It is also not a transaction, so it buys a round trip rather than atomicity. Waiting for a real feature request to say what the shape should be. | Per-collection `bulkWrite`, or a transaction where the writes must land together. |
 | **Streaming bulk inputs** | `insertMany` and `bulkWrite` take a `Seq`; taking an `S` would need `RsBridge` to fold a stream into `F`, which the four runtimes share no shape for. | Chunk the stream with your runtime and `insertMany` each chunk. |

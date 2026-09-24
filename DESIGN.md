@@ -461,7 +461,14 @@ where the two forms would have to mix: the server takes one or the other, never 
 **An operator that only applies to one kind of field says so in its signature.** `regex` asks for `TextOf`, `mod`
 for `NumericOf`, `hasSize` and `$pop` for `ElementOf` — the same capability pattern the array and numeric operators
 already used. What the missing bounds allowed was a filter the server accepts and that matches nothing, which is the
-failure mode the typed AST is there to rule out.
+failure mode the typed AST is there to rule out. A stage option works the same way: `$bucketAuto` only rounds its
+boundaries to a `granularity` over numbers, so `bucketAutoRounded` asks for `NumericValue` and the plain
+`bucketAuto` takes any field.
+
+**A stage that takes several fields takes them one at a time.** Scala 3 will not form `Field[E, ?]` over an opaque
+alias, so a vararg of fields of unrelated types has no type to be. `Stage.unset(a).and(b)` builds its list the way
+`Sort` and `Projection` do, and cannot be empty by construction; `$densify` and `$setWindowFields`, which came first,
+take `FieldPath`s instead.
 
 Numeric operators go through `NumericOf[C, A]`, mirroring `ElementOf[C, A]`, so an `Option[Long]` field takes a plain
 `Long`. There is deliberately **no** `NumericValue[Option[A]]`: `None` has no numeric encoding, and the obvious
@@ -650,6 +657,12 @@ the one thing a cursor never does. It also meant `aggregate`, `distinct` and `se
 because nobody supplied an emitter for their types. A `Publisher` that computes its values on subscription, handed
 to the bridge the runtime already provides, fixes both and removes a parameter every caller had to get right.
 
+**The fake's indexes answer as the server's do.** `listIndexes` used to list bare key documents, so a test that read
+an index's `name` or `unique` flag read nothing, and passed or failed for reasons of its own. Re-creating an index
+recorded it twice, a clash with an existing name or key pattern went through, and `dropIndex` of a missing index was
+silent. Adding `createIndexes` and `dropIndexes` was the point to fix all of it, each case pinned by a parity spec
+with the server's own error codes.
+
 ## Evolving the API
 
 Three commitments, and the mechanics that make each one keepable:
@@ -703,6 +716,14 @@ answer.
 
 **Simulating pipeline updates in the fake.** A pipeline update computes from the document with aggregation
 expressions, and the fake does not evaluate expressions. It refuses them by name.
+
+**Simulating `$bucketAuto`, `$geoNear` and `renameCollection` in the fake.** `$bucketAuto`'s boundaries come out of
+the server's own balancing, which a fake would have to copy rule for rule to agree with; `$geoNear` needs the
+spherical distances the fake does not compute for `$near` either; and a rename needs a second namespace, which a
+single-collection fake does not have. Each is refused by name.
+
+**Checking where `$geoNear` sits in a pipeline.** The server refuses it anywhere but first, with a message naming
+it. A check in `aggregate` would restate that rule without adding anything to it.
 
 **Copying every `BsonDocument` the API accepts.** `Filter.Raw`, `Stage.Raw`, hints and resume tokens are taken as
 given, not cloned: mongo4s never writes into them, so aliasing only matters if the caller mutates a document after
