@@ -9,7 +9,7 @@ import org.scalatest.concurrent.{Signaler, ThreadSignaler, TimeLimits}
 
 import org.reactivestreams.{Publisher, Subscriber, Subscription}
 
-import com.mongodb.{MongoException, ServerAddress, WriteError, MongoWriteException}
+import com.mongodb.{ServerAddress, WriteError, MongoWriteException}
 
 import mongo4s.{MongoError, RsBridge, RsBridgeConfig, RsBridgeError, Streamable}
 

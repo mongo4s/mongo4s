@@ -120,7 +120,6 @@ final class SelectSpec extends AnyWordSpec, Matchers:
       collection
 
     "read an omitted field as None, the same answer find gives for the same document" in {
-      import SelectSpec.Contact.given
       val whole    = contacts.find().all.unsafeRunSync().map(_.nick)
       val selected = contacts.find().selectAs[(id: String, nick: Option[String])].all.unsafeRunSync().map(_.nick)
 

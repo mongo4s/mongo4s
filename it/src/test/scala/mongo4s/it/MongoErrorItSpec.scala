@@ -15,7 +15,6 @@ import mongo4s.{Field, MongoClient, MongoCollection, MongoError}
 
 import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
-import mongo4s.bson.BsonInstances.given
 
 final class MongoErrorItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAfterAll:
 

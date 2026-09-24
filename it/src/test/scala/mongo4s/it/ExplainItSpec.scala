@@ -7,8 +7,8 @@ import cats.effect.testing.scalatest.AsyncIOSpec
 import org.testcontainers.containers.MongoDBContainer
 
 import cats.effect.IO
-import org.bson.{BsonDocument, BsonInt32, BsonString}
 import com.mongodb.ExplainVerbosity
+import org.bson.{BsonDocument, BsonString}
 
 import mongo4s.cats.CatsStream
 import mongo4s.operations.{Index, Sort, Stage}

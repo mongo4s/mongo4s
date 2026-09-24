@@ -7,13 +7,13 @@ import cats.effect.testing.scalatest.AsyncIOSpec
 import org.testcontainers.containers.MongoDBContainer
 
 import cats.effect.{IO, Ref}
+import org.bson.{BsonDocument, BsonString}
 import com.mongodb.reactivestreams.client.ClientSession
-import org.bson.{BsonDocument, BsonInt32, BsonString}
 
 import mongo4s.bson.*
 import mongo4s.cats.CatsStream
 import mongo4s.operations.SessionOptions
-import mongo4s.{MongoClient, MongoCollection, withTransaction}
+import mongo4s.{MongoClient, MongoCollection}
 
 import scala.concurrent.duration.given
 import mongo4s.bson.BsonInstances.given

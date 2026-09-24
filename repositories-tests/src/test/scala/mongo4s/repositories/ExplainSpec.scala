@@ -11,7 +11,6 @@ import mongo4s.cats.CatsStream
 import mongo4s.operations.Stage
 import mongo4s.testkit.FakeMongoCollection
 
-import mongo4s.bson.BsonInstances.given
 import mongo4s.cats.CatsInstances.given
 
 final class ExplainSpec extends AnyWordSpec, Matchers:
