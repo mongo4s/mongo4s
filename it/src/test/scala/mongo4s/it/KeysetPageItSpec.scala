@@ -8,7 +8,6 @@ import org.testcontainers.containers.MongoDBContainer
 
 import cats.effect.IO
 
-import mongo4s.bson.FieldNaming
 import mongo4s.bson.direct.WireCodec
 import mongo4s.cats.CatsStream
 import mongo4s.repositories.BaseMongoRepository

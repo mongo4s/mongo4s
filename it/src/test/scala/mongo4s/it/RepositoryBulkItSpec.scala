@@ -7,7 +7,6 @@ import cats.effect.testing.scalatest.AsyncIOSpec
 import org.testcontainers.containers.MongoDBContainer
 
 import cats.effect.IO
-import org.bson.BsonDocument
 
 import mongo4s.bson.direct.WireCodec
 import mongo4s.cats.CatsStream
