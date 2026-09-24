@@ -68,6 +68,28 @@ final class AggregationStagesItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers
     }
   }
 
+  "$bucketAuto" should {
+    "split the documents evenly into the number of buckets asked for" in {
+      val program =
+        for
+          collection <- seeded("bucket_auto")
+          buckets    <- collection.aggregate[BsonDocument](Seq(Stage.bucketAuto(ageField, 2)("count" -> Accumulator.count[Person]))).all
+        yield buckets.map(b => (b.getDocument("_id").getNumber("min").intValue, b.getDocument("_id").getNumber("max").intValue, b.getNumber("count").intValue))
+
+      program.timeout(30.seconds).asserting(_ shouldBe List((5, 25, 2), (25, 35, 2)))
+    }
+
+    "round the boundaries to the series the granularity names" in {
+      val program =
+        for
+          collection <- seeded("bucket_auto_rounded")
+          buckets    <- collection.aggregate[BsonDocument](Seq(Stage.bucketAutoRounded(ageField, 2, BucketGranularity.R5)())).all
+        yield buckets.map(b => (b.getDocument("_id").getNumber("min").doubleValue, b.getDocument("_id").getNumber("max").doubleValue))
+
+      program.timeout(30.seconds).asserting(_ shouldBe List((4.0, 16.0), (16.0, 40.0)))
+    }
+  }
+
   "$sortByCount" should {
     "count each value and put the most frequent first" in {
       val program =

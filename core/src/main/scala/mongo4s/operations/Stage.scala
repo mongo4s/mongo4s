@@ -1,8 +1,10 @@
 package mongo4s.operations
 
+import scala.annotation.unused
+
 import org.bson.*
 
-import mongo4s.{Field, FieldPath}
+import mongo4s.{Field, FieldPath, NumericValue}
 import mongo4s.bson.{BsonEncoder, BsonField, FieldNaming}
 
 import scala.jdk.CollectionConverters.given
@@ -54,6 +56,13 @@ enum Stage[E](val key: String):
       default: Option[BsonValue],
       output: List[(String, Accumulator[E])],
   ) extends Stage[E]("$bucket")
+
+  case BucketAuto(
+      groupBy: FieldPath,
+      buckets: Int,
+      output: List[(String, Accumulator[E])],
+      granularity: Option[BucketGranularity],
+  ) extends Stage[E]("$bucketAuto")
 
   case Densify(
       path: FieldPath,
@@ -160,6 +169,20 @@ enum Stage[E](val key: String):
 
       BsonDocument(key, bucket)
 
+    case Stage.BucketAuto(groupBy, buckets, output, granularity) =>
+      val bucket = BsonDocument("groupBy", BsonString("$" + groupBy.render(naming)))
+        .append("buckets", BsonInt32(buckets))
+
+      if output.nonEmpty
+      then
+        val fields = BsonDocument()
+        output.foreach((name, accumulator) => fields.append(name, accumulator.toBson(naming)))
+        bucket.append("output", fields): Unit
+
+      granularity.foreach(value => bucket.append("granularity", BsonString(value.wireName)): Unit)
+
+      BsonDocument(key, bucket)
+
     case Stage.Densify(path, partitionBy, range) =>
       val densify = BsonDocument("field", BsonString(path.render(naming)))
 
@@ -252,6 +275,14 @@ object Stage:
 
     Bucket(field.path, boundaries.toList.map(encoder.encode), default, output.toList)
   end bucketBy
+
+  def bucketAuto[E, A](field: Field[E, A], buckets: Int)(output: (String, Accumulator[E])*): Stage[E] =
+    BucketAuto(field.path, Bounds.atLeastOne(buckets, "$bucketAuto buckets", "which MongoDB refuses"), output.toList, None)
+
+  def bucketAutoRounded[E, A](field: Field[E, A], buckets: Int, granularity: BucketGranularity)(
+      output: (String, Accumulator[E])*
+  )(using @unused numeric: NumericValue[A]): Stage[E] =
+    BucketAuto(field.path, Bounds.atLeastOne(buckets, "$bucketAuto buckets", "which MongoDB refuses"), output.toList, Some(granularity))
 
   def densify[E, A](field: Field[E, A], range: DensifyRange, partitionBy: Seq[FieldPath] = Seq.empty): Stage[E] =
     Densify(field.path, partitionBy.toList, range)

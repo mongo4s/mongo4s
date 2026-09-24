@@ -149,6 +149,24 @@ final class StageSpec extends AnyWordSpec, Matchers:
       Stage.sortByCount(Field.of[Order, String](_.userId)).toBson(FieldNaming.snakeCase).toJson shouldBe """{"$sortByCount": "$user_id"}"""
     }
 
+    "render $bucketAuto with the number of buckets and its output accumulators" in {
+      val stage = Stage.bucketAuto(Field.of[Order, String](_.userId), 4)("count" -> Accumulator.count[Order])
+
+      stage.toBson(FieldNaming.snakeCase).toJson shouldBe
+        """{"$bucketAuto": {"groupBy": "$user_id", "buckets": 4, "output": {"count": {"$sum": 1}}}}"""
+    }
+
+    "render a rounded $bucketAuto with its granularity, over a numeric field only" in {
+      Stage.bucketAutoRounded(Field.of[Order, Int](_.itemCount), 3, BucketGranularity.OneTwoFive)().toBson(FieldNaming.snakeCase).toJson shouldBe
+        """{"$bucketAuto": {"groupBy": "$item_count", "buckets": 3, "granularity": "1-2-5"}}"""
+
+      "Stage.bucketAutoRounded(Field.of[StageSpec.Order, String](_.userId), 3, BucketGranularity.R5)()" shouldNot typeCheck
+    }
+
+    "refuse a $bucketAuto with no buckets to fill" in {
+      an[IllegalArgumentException] should be thrownBy Stage.bucketAuto(Field.of[Order, Int](_.itemCount), 0)()
+    }
+
     "refuse a $bucket that cannot make a single bucket" in {
       an[IllegalArgumentException] should be thrownBy
         Stage.bucketBy(Field.of[Order, Int](_.itemCount), Seq(0))()
