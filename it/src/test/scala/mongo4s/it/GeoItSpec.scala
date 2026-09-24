@@ -10,11 +10,12 @@ import cats.effect.IO
 import org.bson.{BsonDocument, BsonString}
 
 import mongo4s.cats.CatsStream
-import mongo4s.operations.Index
 import mongo4s.{Field, MongoClient, MongoCollection}
+import mongo4s.operations.{GeoNearOptions, Index, Stage}
 
 import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
+import mongo4s.bson.BsonInstances.given
 import mongo4s.operations.geometry.{GeoShape, Geometry}
 
 final class GeoItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAfterAll:
@@ -118,5 +119,50 @@ final class GeoItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAft
         yield namesOf(found)
 
       program.timeout(30.seconds).asserting(_ shouldBe List("nearby"))
+    }
+  }
+
+  "$geoNear" should {
+    "put the nearest first and write each distance, in meters, into the field it was given" in {
+      val program =
+        for
+          collection <- seeded("geo_near")
+          found      <- collection.aggregate[BsonDocument](Seq(Stage.geoNear(location, berlin, "distance"))).all
+        yield found.map(document => document.getString("name").getValue -> document.getDouble("distance").getValue)
+
+      program.timeout(30.seconds).asserting { found =>
+        found.map(_._1) shouldBe List("nearby", "faraway")
+        found.head._2 should (be > 1000.0 and be < 1500.0)
+      }
+    }
+
+    "stop at maxDistance, keep only what the query matches, and scale the distance it writes" in {
+      val name    = Field.stored[BsonDocument, String]("name")
+      val options = GeoNearOptions.default[BsonDocument]
+
+      val program =
+        for
+          collection <- seeded("geo_near_options")
+          close      <- collection.aggregate[BsonDocument](Seq(Stage.geoNear(location, berlin, "distance", options.withMaxDistance(5000)))).all
+          far        <- collection
+                          .aggregate[BsonDocument](Seq(Stage.geoNear(location, berlin, "km", options.where(name.equalTo("faraway")).withDistanceMultiplier(0.001))))
+                          .all
+        yield (namesOf(close), far.map(_.getDouble("km").getValue))
+
+      program.timeout(30.seconds).asserting { (close, far) =>
+        close shouldBe List("nearby")
+        far should have size 1
+        far.head should (be > 30.0 and be < 40.0)
+      }
+    }
+
+    "be refused by the server anywhere but first in the pipeline" in {
+      val program =
+        for
+          collection <- seeded("geo_near_second")
+          failed     <- collection.aggregate[BsonDocument](Seq(Stage.limit(10), Stage.geoNear(location, berlin, "distance"))).all.attempt
+        yield failed.left.toOption.map(_.getMessage)
+
+      program.timeout(30.seconds).asserting(_.map(_.contains("$geoNear")) shouldBe Some(true))
     }
   }

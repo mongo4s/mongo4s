@@ -4,6 +4,7 @@ import scala.annotation.unused
 
 import org.bson.*
 
+import mongo4s.operations.geometry.Geometry
 import mongo4s.{Field, FieldPath, NumericValue}
 import mongo4s.bson.{BsonEncoder, BsonField, FieldNaming}
 
@@ -75,6 +76,13 @@ enum Stage[E](val key: String):
       sortBy: Sort[E],
       output: List[(String, WindowOutput[E])],
   ) extends Stage[E]("$setWindowFields")
+
+  case GeoNear(
+      near: Geometry.Point,
+      path: FieldPath,
+      distanceField: String,
+      options: GeoNearOptions[E],
+  ) extends Stage[E]("$geoNear")
 
   case Out(collection: String, options: OutOptions)     extends Stage[E]("$out")
   case Merge(collection: String, options: MergeOptions) extends Stage[E]("$merge")
@@ -212,6 +220,19 @@ enum Stage[E](val key: String):
 
       BsonDocument(key, windowFields)
 
+    case Stage.GeoNear(near, path, distanceField, options) =>
+      val geoNear = BsonDocument("near", near.toBson)
+        .append("distanceField", BsonString(distanceField))
+        .append("key", BsonString(path.render(naming)))
+
+      options.query.foreach(filter => geoNear.append("query", filter.toBson(naming)): Unit)
+      options.minDistance.foreach(value => geoNear.append("minDistance", BsonDouble(value)): Unit)
+      options.maxDistance.foreach(value => geoNear.append("maxDistance", BsonDouble(value)): Unit)
+      options.distanceMultiplier.foreach(value => geoNear.append("distanceMultiplier", BsonDouble(value)): Unit)
+      options.includeLocs.foreach(value => geoNear.append("includeLocs", BsonString(value)): Unit)
+
+      BsonDocument(key, geoNear)
+
     case Stage.Out(collection, options)   => BsonDocument(key, Stage.outTarget(collection, options))
     case Stage.Merge(collection, options) => BsonDocument(key, Stage.mergeTarget(collection, options))
     case Stage.Raw(document)              => document
@@ -294,6 +315,9 @@ object Stage:
 
     SetWindowFields(partitionBy, sortBy, output.toList)
   end setWindowFields
+
+  def geoNear[E, A](field: Field[E, A], near: Geometry.Point, distanceField: String, options: GeoNearOptions[E] = GeoNearOptions.default[E]): Stage[E] =
+    GeoNear(near, field.path, distanceField, options)
 
   def out[E](collection: String, options: OutOptions = OutOptions.default): Stage[E] = Out(collection, options)
 

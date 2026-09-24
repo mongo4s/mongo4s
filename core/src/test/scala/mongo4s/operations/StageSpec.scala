@@ -7,6 +7,7 @@ import org.bson.{BsonDocument, BsonInt32, BsonString}
 
 import mongo4s.Field
 import mongo4s.bson.FieldNaming
+import mongo4s.operations.geometry.Geometry
 
 import mongo4s.bson.BsonInstances.given
 
@@ -165,6 +166,30 @@ final class StageSpec extends AnyWordSpec, Matchers:
 
     "refuse a $bucketAuto with no buckets to fill" in {
       an[IllegalArgumentException] should be thrownBy Stage.bucketAuto(Field.of[Order, Int](_.itemCount), 0)()
+    }
+
+    "render $geoNear with the key it searches, and its options only when they are set" in {
+      val location = Field.stored[Order, Geometry.Point]("location")
+      val centre   = Geometry.Point(13.4, 52.5): Geometry.Point
+
+      Stage.geoNear(location, centre, "distance").toBson(FieldNaming.identity).toJson shouldBe
+        """{"$geoNear": {"near": {"type": "Point", "coordinates": [13.4, 52.5]}, "distanceField": "distance", "key": "location"}}"""
+
+      val options = GeoNearOptions
+        .default[Order]
+        .where(Field.of[Order, Int](_.itemCount).gte(1))
+        .withMaxDistance(500)
+        .withDistanceMultiplier(0.001)
+        .withIncludeLocs("at")
+
+      Stage.geoNear(location, centre, "distance", options).toBson(FieldNaming.snakeCase).toJson should include(
+        """"query": {"item_count": {"$gte": 1}}, "maxDistance": 500.0, "distanceMultiplier": 0.001, "includeLocs": "at""""
+      )
+    }
+
+    "refuse a negative $geoNear distance before the server is asked" in {
+      an[IllegalArgumentException] should be thrownBy GeoNearOptions.default[Order].withMaxDistance(-1)
+      an[IllegalArgumentException] should be thrownBy GeoNearOptions.default[Order].withMinDistance(Double.NaN)
     }
 
     "refuse a $bucket that cannot make a single bucket" in {
