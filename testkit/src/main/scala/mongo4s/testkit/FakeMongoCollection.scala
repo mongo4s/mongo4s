@@ -746,6 +746,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Stage.Count(fieldName)        =>
       if documents.isEmpty then Nil else List(BsonDocument(fieldName, BsonInt32(documents.size)))
     case Stage.Group(by, accumulators) => grouped(documents, by, accumulators)
+    case Stage.SortByCount(path)       => grouped(documents, Some(path), List("count" -> Accumulator.count[E])).sortBy(-_.getInt32("count").getValue)
     case other                         =>
       throw UnsupportedOperationException(s"FakeMongoCollection: ${stageName(other)} is not simulated")
 

@@ -145,6 +145,10 @@ final class StageSpec extends AnyWordSpec, Matchers:
         """{"$unset": ["item_count", "user_id"]}"""
     }
 
+    "render $sortByCount as the field's value, through the naming policy" in {
+      Stage.sortByCount(Field.of[Order, String](_.userId)).toBson(FieldNaming.snakeCase).toJson shouldBe """{"$sortByCount": "$user_id"}"""
+    }
+
     "refuse a $bucket that cannot make a single bucket" in {
       an[IllegalArgumentException] should be thrownBy
         Stage.bucketBy(Field.of[Order, Int](_.itemCount), Seq(0))()

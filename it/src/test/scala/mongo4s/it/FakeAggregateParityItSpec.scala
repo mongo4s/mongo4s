@@ -126,6 +126,14 @@ final class FakeAggregateParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matche
         .asserting((fromServer, fromFake) => fromFake shouldBe fromServer)
     }
 
+    "produce the same $sortByCount counts, including their BSON type" in {
+      val count = Field.stored[Person, Int]("count")
+
+      parity("sort_by_count", Stage.sortByCount(age), Stage.sortBy(Sort.desc(count).asc(Field.stored[Person, Int]("_id"))))
+        .timeout(30.seconds)
+        .asserting((fromServer, fromFake) => fromFake shouldBe fromServer)
+    }
+
     "produce the same $unset output" in {
       parity("unset", Stage.unset(age).and(city), Stage.sortBy(Sort.asc(name)))
         .timeout(30.seconds)

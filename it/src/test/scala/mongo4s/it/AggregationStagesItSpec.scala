@@ -68,6 +68,19 @@ final class AggregationStagesItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers
     }
   }
 
+  "$sortByCount" should {
+    "count each value and put the most frequent first" in {
+      val program =
+        for
+          collection <- seeded("sort_by_count")
+          _          <- collection.insertMany(List(Person("erin", 15), Person("finn", 15), Person("gus", 25)))
+          counted    <- collection.aggregate[BsonDocument](Seq(Stage.sortByCount(ageField))).all
+        yield counted.map(c => c.getNumber("_id").intValue -> c.getNumber("count").intValue)
+
+      program.timeout(30.seconds).asserting(_.take(2) shouldBe List(15 -> 3, 25 -> 2))
+    }
+  }
+
   "$densify" should {
     "fill in the steps no document was written for" in {
       val program =

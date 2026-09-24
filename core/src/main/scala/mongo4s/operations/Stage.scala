@@ -44,6 +44,7 @@ enum Stage[E](val key: String):
   case Unset(paths: List[FieldPath])                                              extends Stage[E]("$unset")
   case ReplaceRoot(path: FieldPath)                                               extends Stage[E]("$replaceRoot")
   case Sample(size: Int)                                                          extends Stage[E]("$sample")
+  case SortByCount(path: FieldPath)                                               extends Stage[E]("$sortByCount")
   case UnionWith(collection: String)                                              extends Stage[E]("$unionWith")
   case Facet(facets: List[(String, List[Stage[E]])])                              extends Stage[E]("$facet")
 
@@ -135,6 +136,7 @@ enum Stage[E](val key: String):
 
     case Stage.ReplaceRoot(path)     => BsonDocument(key, BsonDocument("newRoot", BsonString("$" + path.render(naming))))
     case Stage.Sample(size)          => BsonDocument(key, BsonDocument("size", BsonInt32(size)))
+    case Stage.SortByCount(path)     => BsonDocument(key, BsonString("$" + path.render(naming)))
     case Stage.UnionWith(collection) => BsonDocument(key, BsonString(collection))
 
     case Stage.Facet(facets) =>
@@ -238,6 +240,8 @@ object Stage:
 
   def sample[E](size: Int): Stage[E]             = Sample(Bounds.atLeastOne(size, "$sample size", "which MongoDB refuses"))
   def unionWith[E](collection: String): Stage[E] = UnionWith(collection)
+
+  def sortByCount[E, A](field: Field[E, A]): Stage[E] = SortByCount(field.path)
 
   def facet[E](facets: (String, List[Stage[E]])*): Stage[E] = Facet(facets.toList)
 
