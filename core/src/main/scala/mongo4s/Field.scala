@@ -1,5 +1,6 @@
 package mongo4s
 
+import scala.annotation.unused
 import scala.annotation.targetName
 
 import mongo4s.bson.{BsonEncoder, BsonTypeName}
@@ -106,5 +107,5 @@ object Field:
     def intersects(geometry: Geometry): Filter[E] = Filter.GeoIntersects(field.path, geometry)
 
   extension [E, A](field: Field[E, A])
-    def hasType(bsonType: BsonTypeName): Filter[E]                               = Filter.Type(field.path, bsonType)
-    def mod[N](divisor: Long, remainder: Long)(using NumericOf[A, N]): Filter[E] = Filter.Mod(field.path, divisor, remainder)
+    def hasType(bsonType: BsonTypeName): Filter[E]                                                = Filter.Type(field.path, bsonType)
+    def mod[N](divisor: Long, remainder: Long)(using @unused numeric: NumericOf[A, N]): Filter[E] = Filter.Mod(field.path, divisor, remainder)
