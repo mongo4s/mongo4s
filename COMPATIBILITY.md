@@ -36,6 +36,12 @@ Pipeline updates are `Update.pipeline(stages*)`, taken by `updateOne`, `updateMa
 branch. `toBson` on a pipeline throws — it is a list of stages, not an operator document — and `toPipeline` is where
 its stages come from. A pipeline and an operator update do not combine.
 
+### `MongoCollection` and `Stage` grew
+
+`MongoCollection` has three new abstract members — `createIndexes`, `dropIndexes` and `renameCollection` — so a class
+of your own that implements it has three more to write; code that only calls it is unaffected. `Stage` has four new
+cases — `GeoNear`, `Unset`, `SortByCount` and `BucketAuto` — which an exhaustive match over it has to handle.
+
 ### `distinct` answers with an array's elements
 
 `distinct[B](field: Field[A, B], ...)` became `distinct[C, B](field: Field[A, C], ...)(using DistinctOf[C, B], ...)`.
@@ -122,6 +128,11 @@ is a `MongoError.BulkWriteFailed` naming the command, rather than a `DuplicateKe
 collation is refused rather than ignored; a `findOneAnd*` whose projection leaves a document the codec cannot read
 fails rather than answering `None`; an update that changes nothing reports `modifiedCount = 0`; and a replacement
 keeps the replaced document's `_id`. Each of these is checked against a real server by a parity spec.
+
+`listIndexes` describes each index the way the server does — `v`, `key`, `name` and its options, after the `_id_`
+index — where it used to list bare key documents, so a test that read an entry as the keys reads its `key` now.
+Creating an index that already exists changes nothing rather than recording it twice, one that clashes with an
+existing index's name or keys fails, and `dropIndex` of an index that is not there, or of `_id_`, fails.
 
 ### Behaviour that changed under the same signatures
 

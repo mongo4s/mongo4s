@@ -13,9 +13,16 @@ part of `2.0.0` below.
 ### Added
 
 - **Pipeline updates.** `Update.pipeline(stages*)` computes from the document's own values — `$addFields`,
-  `$project`, `$replaceRoot` or a `Stage.raw` — and is taken by `updateOne`, `updateMany`, `findOneAndUpdate` and a
-  bulk `UpdateOne`/`UpdateMany`. `Update.Raw` could not carry one, since a pipeline is a list of stages rather than a
-  document.
+  `$project`, `$unset`, `$replaceRoot` or a `Stage.raw` — and is taken by `updateOne`, `updateMany`,
+  `findOneAndUpdate` and a bulk `UpdateOne`/`UpdateMany`. `Update.Raw` could not carry one, since a pipeline is a
+  list of stages rather than a document.
+- **`$geoNear`, `$unset`, `$sortByCount` and `$bucketAuto` stages.** `Stage.geoNear` sorts by distance and writes it
+  into a field you name, with `GeoNearOptions` for a query, distance bounds, a multiplier and `includeLocs`.
+  `Stage.unset` drops fields, one and then more with `and`. `bucketAutoRounded` rounds `$bucketAuto`'s boundaries to
+  a `BucketGranularity` series, and compiles only on a numeric field, the only kind the server rounds.
+- **`createIndexes`, `dropIndexes` and `renameCollection`** on `MongoCollection`. `createIndexes` sends one command
+  and returns the names in the order given; `renameCollection` refuses to replace an existing collection unless
+  `dropTarget` is set.
 - **`MongoClient.withSession` and `SessionOptions`.** A session without a transaction — causally consistent, or a
   snapshot that reads one point in time — given to every call in the body and closed however it ends.
   `startSession` takes the same options.
@@ -47,6 +54,10 @@ part of `2.0.0` below.
   of 0 as no limit at all.
 - **`FakeMongoCollection` and `FakeRepository` stream through the runtime's `RsBridge`** instead of taking an `emit`
   function. Streams read the collection when they run, and `aggregate`, `distinct` and `selectAs` stream too.
+- **`MongoCollection` has three new abstract members and `Stage` four new cases**, so an implementation of your own
+  and an exhaustive match over stages have more to cover.
+- **The fake's `listIndexes` describes each index the way the server does** — `v`, `key`, `name` and its options,
+  after the `_id_` index — rather than listing bare key documents.
 - A chain of `&&` or `||` renders as one flat `$and`/`$or`.
 - `WireCodec.spellsAs` is removed; nothing had asked it since `getDirectCollection` stopped taking a naming.
 
@@ -83,8 +94,10 @@ part of `2.0.0` below.
   command; a unique index was recorded and not enforced, and named differently from the server's, so `dropIndex`
   missed it; a stream was fixed when it was built; a `findOneAnd*` that could not decode its document answered
   `None`; a collation was ignored; numbers compared through `Double`, so large `Long`s tied and `5L` did not equal
-  `5`; a replacement dropped the `_id` it replaced; and an update that changed nothing counted as modified. Each is
-  now checked against MongoDB 8.2 by a parity spec.
+  `5`; a replacement dropped the `_id` it replaced; an update that changed nothing counted as modified; creating an
+  index that already existed recorded it twice, and one that clashed with an existing index's name or keys was
+  accepted; and `dropIndex` of an index that was not there, or of `_id_`, did nothing. Each is now checked against
+  MongoDB 8.2 by a parity spec.
 
 ## 3.0.0
 
