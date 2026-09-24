@@ -41,6 +41,7 @@ enum Stage[E](val key: String):
 
   case Group(by: Option[FieldPath], accumulators: List[(String, Accumulator[E])]) extends Stage[E]("$group")
   case AddFields(fields: List[(String, BsonValue)])                               extends Stage[E]("$addFields")
+  case Unset(paths: List[FieldPath])                                              extends Stage[E]("$unset")
   case ReplaceRoot(path: FieldPath)                                               extends Stage[E]("$replaceRoot")
   case Sample(size: Int)                                                          extends Stage[E]("$sample")
   case UnionWith(collection: String)                                              extends Stage[E]("$unionWith")
@@ -126,6 +127,11 @@ enum Stage[E](val key: String):
         key,
         fields.foldLeft(BsonDocument())((acc, entry) => acc.append(entry._1, entry._2))
       )
+
+    case Stage.Unset(paths) =>
+      paths match
+        case List(path) => BsonDocument(key, BsonString(path.render(naming)))
+        case _          => BsonDocument(key, BsonArray(paths.map(path => BsonString(path.render(naming)): BsonValue).asJava))
 
     case Stage.ReplaceRoot(path)     => BsonDocument(key, BsonDocument("newRoot", BsonString("$" + path.render(naming))))
     case Stage.Sample(size)          => BsonDocument(key, BsonDocument("size", BsonInt32(size)))
@@ -223,6 +229,10 @@ object Stage:
   def groupAll[E](accumulators: (String, Accumulator[E])*): Stage[E] = Group(None, accumulators.toList)
 
   def addFields[E](fields: (String, BsonValue)*): Stage[E] = AddFields(fields.toList)
+
+  def unset[E, A](field: Field[E, A]): Unset[E] = new Unset(List(field.path))
+
+  extension [E](stage: Unset[E]) def and[A](field: Field[E, A]): Unset[E] = new Unset(stage.paths :+ field.path)
 
   def replaceRoot[E, A](field: Field[E, A]): Stage[E] = ReplaceRoot(field.path)
 

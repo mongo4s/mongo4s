@@ -125,4 +125,10 @@ final class FakeAggregateParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matche
         .timeout(30.seconds)
         .asserting((fromServer, fromFake) => fromFake shouldBe fromServer)
     }
+
+    "produce the same $unset output" in {
+      parity("unset", Stage.unset(age).and(city), Stage.sortBy(Sort.asc(name)))
+        .timeout(30.seconds)
+        .asserting((fromServer, fromFake) => fromFake shouldBe fromServer)
+    }
   }

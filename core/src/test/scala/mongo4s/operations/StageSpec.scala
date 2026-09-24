@@ -138,6 +138,13 @@ final class StageSpec extends AnyWordSpec, Matchers:
         """{"$bucket": {"groupBy": "$item_count", "boundaries": [0, 10, 100], "default": "more", "output": {"count": {"$sum": 1}}}}"""
     }
 
+    "render $unset as a name for one field and as an array for several, through the naming policy" in {
+      Stage.unset(Field.of[Order, Int](_.itemCount)).toBson(FieldNaming.snakeCase).toJson shouldBe """{"$unset": "item_count"}"""
+
+      Stage.unset(Field.of[Order, Int](_.itemCount)).and(Field.of[Order, String](_.userId)).toBson(FieldNaming.snakeCase).toJson shouldBe
+        """{"$unset": ["item_count", "user_id"]}"""
+    }
+
     "refuse a $bucket that cannot make a single bucket" in {
       an[IllegalArgumentException] should be thrownBy
         Stage.bucketBy(Field.of[Order, Int](_.itemCount), Seq(0))()

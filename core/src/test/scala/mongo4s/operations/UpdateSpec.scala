@@ -137,6 +137,10 @@ final class UpdateSpec extends AnyWordSpec, Matchers:
       an[IllegalArgumentException] should be thrownBy json(Update.pipeline(shout).and(Update.set(nameField, "bob")))
     }
 
+    "take $unset, which the server allows in an update alongside $project" in {
+      Update.pipeline(Stage.unset(ageField)).toPipeline(FieldNaming.identity).map(_.map(_.toJson)) shouldBe Some(List("""{"$unset": "age"}"""))
+    }
+
     "refuse a stage the server does not take in an update" in {
       val thrown = the[IllegalArgumentException] thrownBy Update.pipeline(Stage.matching(nameField.equalTo("bob")))
       thrown.getMessage should include("$match")

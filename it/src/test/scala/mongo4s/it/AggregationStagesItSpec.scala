@@ -56,6 +56,18 @@ final class AggregationStagesItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers
     }
   }
 
+  "$unset" should {
+    "drop the fields it names from every document" in {
+      val program =
+        for
+          collection <- seeded("unset")
+          stripped   <- collection.aggregate[BsonDocument](Seq(Stage.unset(ageField).and(Field.stored[Person, Any]("_id")))).all
+        yield stripped.map(_.keySet)
+
+      program.timeout(30.seconds).asserting(_.distinct shouldBe List(java.util.Set.of("name")))
+    }
+  }
+
   "$densify" should {
     "fill in the steps no document was written for" in {
       val program =

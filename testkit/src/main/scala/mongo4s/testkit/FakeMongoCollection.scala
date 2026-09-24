@@ -742,6 +742,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Stage.Skip(n)                 => documents.drop(n)
     case Stage.Limit(n)                => documents.take(n)
     case Stage.ProjectStage(selected)  => documents.map(applyProjection(_, selected))
+    case Stage.Unset(paths)            => documents.map(document => paths.foldLeft(document)((acc, path) => unsetAt(acc, storedSegments(path))))
     case Stage.Count(fieldName)        =>
       if documents.isEmpty then Nil else List(BsonDocument(fieldName, BsonInt32(documents.size)))
     case Stage.Group(by, accumulators) => grouped(documents, by, accumulators)

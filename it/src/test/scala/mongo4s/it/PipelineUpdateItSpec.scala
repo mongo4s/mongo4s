@@ -71,4 +71,17 @@ final class PipelineUpdateItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, B
         after shouldBe List(Note("1", "alpha!"), Note("2", "beta!"))
       }
     }
+
+    "drop a field with an $unset stage" in {
+      val bodyField = Field.of[Note, String](_.body)
+
+      val program =
+        for
+          notes   <- seeded("unset")
+          _       <- notes.updateOne(idField.equalTo("1"), Update.pipeline(Stage.unset(bodyField)))
+          present <- notes.count(bodyField.exists)
+        yield present
+
+      program.timeout(30.seconds).asserting(_ shouldBe 1L)
+    }
   }
