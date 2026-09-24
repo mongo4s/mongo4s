@@ -24,6 +24,7 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
     override def isAbsent(value: Option[A]): Boolean = value.isEmpty
 
     override def defaultOnMissing: Option[Option[A]] = Some(None)
+  end optionWireCodec
 
   given listWireCodec: [A] => (inner: WireCodec[A]) => WireCodec[List[A]]:
     def encode(writer: BsonWriter, values: List[A]): Unit =
@@ -42,6 +43,7 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
       reader.readEndArray()
       builder.result()
     end decode
+  end listWireCodec
 
   given vectorWireCodec: [A] => (inner: WireCodec[A]) => WireCodec[Vector[A]]:
     def encode(writer: BsonWriter, values: Vector[A]): Unit =
@@ -60,6 +62,7 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
       reader.readEndArray()
       builder.result()
     end decode
+  end vectorWireCodec
 
   given seqWireCodec: [A] => (inner: WireCodec[A]) => WireCodec[Seq[A]]:
     def encode(writer: BsonWriter, values: Seq[A]): Unit =
@@ -78,6 +81,7 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
       reader.readEndArray()
       builder.result()
     end decode
+  end seqWireCodec
 
   given setWireCodec: [A] => (inner: WireCodec[A]) => WireCodec[Set[A]]:
     def encode(writer: BsonWriter, values: Set[A]): Unit =
@@ -96,6 +100,7 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
       reader.readEndArray()
       builder.result()
     end decode
+  end setWireCodec
 
   given mapWireCodec: [A] => (inner: WireCodec[A]) => WireCodec[Map[String, A]]:
     def encode(writer: BsonWriter, values: Map[String, A]): Unit =
@@ -120,6 +125,7 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
       reader.readEndDocument()
       builder.result()
     end decode
+  end mapWireCodec
 
   given arrayWireCodec: [A: ClassTag] => (inner: WireCodec[A]) => WireCodec[Array[A]]:
     def encode(writer: BsonWriter, values: Array[A]): Unit =
@@ -138,6 +144,7 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
       reader.readEndArray()
       builder.result()
     end decode
+  end arrayWireCodec
 
   given eitherWireCodec: [A, B] => (codecA: WireCodec[A], codecB: WireCodec[B], tagA: ClassTag[A], tagB: ClassTag[B]) => WireCodec[Either[A, B]]:
     private val nameA = tagA.runtimeClass.getSimpleName
@@ -196,3 +203,4 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
       reader.readEndDocument()
       result
     end decode
+  end eitherWireCodec

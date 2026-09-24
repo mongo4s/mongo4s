@@ -29,7 +29,12 @@ trait Repository[F[*], S[*], E, K]:
       session: Option[ClientSession] = None,
   ): F[List[E]]
 
-  def findPage(limit: Int, after: Option[K] = None, filter: Filter[E] = Filter.all, descending: Boolean = false)(using
+  def findPage(
+      limit: Int,
+      after: Option[K] = None,
+      filter: Filter[E] = Filter.all,
+      descending: Boolean = false,
+  )(using
       session: Option[ClientSession] = None,
   ): F[KeysetPage[E, K]]
 
