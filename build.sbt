@@ -318,11 +318,11 @@ lazy val it = project
   .in(file("it"))
   .settings(commonSettings)
   .settings(
-    name                     := "mongo4s-it",
-    publish / skip           := true,
-    mimaPreviousArtifacts    := Set.empty,
-    Test / fork              := true,
-    Test / parallelExecution := false,
+    name                  := "mongo4s-it",
+    publish / skip        := true,
+    mimaPreviousArtifacts := Set.empty,
+    Test / fork           := true,
+    parallelExecution     := false,
     Test / envVars ++= sys.env
       .get("DOCKER_HOST")
       .map("DOCKER_HOST" -> _)
