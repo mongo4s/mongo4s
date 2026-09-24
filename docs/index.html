@@ -740,7 +740,8 @@ Update.rename(oldField, newField)  // $rename — also currentDate, popFirst/pop
     <p>
         An update that computes from the document's own values is a pipeline, not operators.
         <code>Update.pipeline</code> takes the stages the server accepts in one — <code>$addFields</code>,
-        <code>$project</code>, <code>$replaceRoot</code> or a <code>Stage.raw</code> — and every update call takes it:
+        <code>$project</code>, <code>$unset</code>, <code>$replaceRoot</code> or a <code>Stage.raw</code> — and every
+        update call takes it:
     </p>
     <pre><code>val exclaimed = Update.pipeline(
   Stage.addFields[User]("name" -&gt; BsonDocument("$concat", BsonArray(java.util.List.of(BsonString("$name"), BsonString("!")))))
@@ -1054,8 +1055,21 @@ val byAge = Seq(
 )</code></pre>
     <p class="muted">
         <code>Stage</code> covers
-        <code>$match</code>/<code>$project</code>/<code>$sort</code>/<code>$limit</code>/<code>$skip</code>/<code>$count</code>/<code>$unwind</code>/<code>$lookup</code>/<code>$group</code>/<code>$addFields</code>/<code>$replaceRoot</code>/<code>$facet</code>/<code>$sample</code>/<code>$unionWith</code>/<code>$out</code>/<code>$merge</code>,
+        <code>$match</code>/<code>$project</code>/<code>$sort</code>/<code>$limit</code>/<code>$skip</code>/<code>$count</code>/<code>$unwind</code>/<code>$lookup</code>/<code>$graphLookup</code>/<code>$group</code>/<code>$addFields</code>/<code>$unset</code>/<code>$replaceRoot</code>/<code>$facet</code>/<code>$sample</code>/<code>$sortByCount</code>/<code>$unionWith</code>/<code>$bucket</code>/<code>$bucketAuto</code>/<code>$densify</code>/<code>$setWindowFields</code>/<code>$geoNear</code>/<code>$out</code>/<code>$merge</code>,
         with <code>Stage.raw(document)</code> as the escape hatch for anything else.
+    </p>
+    <pre><code>Stage.geoNear(locationField, Geometry.Point(13.405, 52.52), "distance")  // first stage only
+Stage.unset(ageField).and(tagsField)
+Stage.sortByCount(cityField)
+Stage.bucketAuto(nameField, 4)("count" -&gt; Accumulator.count[Person])
+Stage.bucketAutoRounded(ageField, 5, BucketGranularity.R10)()           // numeric fields only</code></pre>
+    <p class="muted">
+        <code>$geoNear</code> is <code>$near</code> as a stage: it sorts by distance and writes each distance, in
+        metres, into the field you name, and <code>GeoNearOptions</code> carries its query, distance bounds and
+        multiplier. The server takes it only as a pipeline's first stage, over a geospatial index.
+        <code>bucketAutoRounded</code> rounds the boundaries to a preferred-number series, which the server only does
+        for numbers, so it compiles only on a numeric field. <code>$unset</code> takes more fields with
+        <code>and</code>, because fields of unrelated types have no single <code>Field</code> type to share.
     </p>
     <p>
         <code>$lookup</code> has two forms: <code>Stage.lookup</code> is the equality join,
@@ -1151,10 +1165,17 @@ collection.createIndex(Index.ascending(ageField).withHidden)                    
 collection.createIndex(Index.ascending(Field.stored[User, Any]("$**")))            // wildcard
 
 collection.listIndexes  // F[List[BsonDocument]], as the server reports them
-collection.dropIndex("name_age")</code></pre>
+collection.dropIndex("name_age")
+
+collection.createIndexes(List(Index.ascending(nameField), Index.descending(ageField)))  // one command
+collection.dropIndexes                                                                // all but _id's
+collection.renameCollection("people_archive", dropTarget = true)</code></pre>
     <p class="muted">
         Keys are ordered — a compound index is only usable by queries that respect that order.
         <code>createIndex</code> returns the name the server gave it, and is idempotent, so it's safe on every start.
+        <code>createIndexes</code> returns the names in the order given, and the server builds them together, so if one
+        cannot be built, none is. <code>renameCollection</code> refuses to replace an existing collection unless
+        <code>dropTarget</code> says to, and leaves the handle it was called on pointing at the old, now empty, name.
         <code>expireAfterSeconds</code> is a whole number on the server, so a sub-second TTL is rejected rather than
         silently truncated to "expire immediately"; when immediately is what you mean — each document carries its own
         expiry time — <code>expiringAtFieldTime</code> asks for a TTL of zero on purpose. From a repository,
@@ -1667,10 +1688,11 @@ users.findPage(20, descending = true)                       // newest key first<
         same <code>Filter</code>/<code>Update</code>/<code>Field</code> AST the real driver interprets is interpreted
         against an in-memory buffer instead, so repository logic is testable without a running MongoDB. Filters,
         every update operator, sorting, paging, projections, <code>distinct</code> and a subset of
-        <code>aggregate</code> are simulated, and so are unique indexes, the way a bulk write reports a duplicate, and
-        how the server compares numbers of different widths &mdash; each checked against a real server by a parity
-        spec. <code>watch</code>, <code>explain</code>, <code>$text</code>, <code>$expr</code>, <code>Filter.Raw</code>,
-        a pipeline update, a collation and an update carrying <code>arrayFilters</code> throw
+        <code>aggregate</code> are simulated, and so are unique indexes, <code>listIndexes</code> as the server
+        describes them, the way a bulk write reports a duplicate, and how the server compares numbers of different
+        widths &mdash; each checked against a real server by a parity spec. <code>watch</code>, <code>explain</code>,
+        <code>renameCollection</code>, <code>$text</code>, <code>$expr</code>, <code>Filter.Raw</code>, a pipeline
+        update, a collation and an update carrying <code>arrayFilters</code> throw
         <code>UnsupportedOperationException</code> naming what was asked for, rather than quietly answering wrong.
         It streams through the runtime's <code>RsBridge</code>, reading the collection when the stream runs, so
         <code>FakeMongoCollection[IO, S, User](codec)</code> and <code>FakeRepository[IO, S, User, String]()</code> are
@@ -1868,7 +1890,9 @@ given RsBridgeConfig = RsBridgeConfig(
         event whose document fails keeps its resume token. <code>distinct</code> over an array answers with its
         elements, and <code>regex</code>, <code>mod</code>, <code>hasSize</code> and <code>popFirst</code>/
         <code>popLast</code> compile only on the fields they apply to. The testkit's fake streams through the
-        <code>RsBridge</code> instead of taking an <code>emit</code> function.
+        <code>RsBridge</code> instead of taking an <code>emit</code> function, and its <code>listIndexes</code> answers
+        the way the server does. <code>MongoCollection</code> gains members an implementation of your own has to
+        provide, and <code>Stage</code> cases an exhaustive match has to cover.
     </p>
     <p class="muted">
         <code>3.0.0</code> was the last breaking release before it: <code>WireCodec</code> stopped deriving itself for
@@ -2710,6 +2734,11 @@ findOne     1.45–1.97 ms/op</code></pre>
         </li>
         <li><strong>Simulating pipeline updates in the fake.</strong> They compute with aggregation expressions, which
             the fake does not evaluate; it refuses them by name.
+        </li>
+        <li><strong>Simulating <code>$bucketAuto</code>, <code>$geoNear</code> and <code>renameCollection</code> in the
+            fake.</strong> The first balances its buckets by the server's own rules, the second needs spherical
+            distances the fake does not compute, and the third a second namespace a single-collection fake does not
+            have. Each is refused by name.
         </li>
         <li><strong>Copying every <code>BsonDocument</code> the API accepts.</strong> Raw filters, stages, hints and
             resume tokens are taken as given: mongo4s never writes into them. <code>Update.Raw</code> is the exception,
