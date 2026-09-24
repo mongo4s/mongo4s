@@ -97,9 +97,12 @@ trait MongoCollection[F[*], S[*], A]:
   ): DistinctQuery[F, S, B]
 
   def createIndex(index: Index[A])(using session: Option[ClientSession] = None): F[String]
+  def createIndexes(indexes: Seq[Index[A]])(using session: Option[ClientSession] = None): F[List[String]]
   def listIndexes(using session: Option[ClientSession] = None): F[List[BsonDocument]]
   def dropIndex(name: String)(using session: Option[ClientSession] = None): F[Unit]
+  def dropIndexes(using session: Option[ClientSession] = None): F[Unit]
 
+  def renameCollection(to: String, dropTarget: Boolean = false)(using session: Option[ClientSession] = None): F[Unit]
   def drop(using session: Option[ClientSession] = None): F[Unit]
 
   def watch(options: WatchOptions[A] = WatchOptions.default[A])(using

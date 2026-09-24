@@ -148,6 +148,68 @@ final class IndexItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndA
     }
   }
 
+  "createIndexes" should {
+
+    "build every index in one command and return the names in the order they were given" in {
+      val program =
+        for
+          people  <- collection("several")
+          names   <- people.createIndexes(List(Index.ascending(nameField).named("by_name"), Index.descending(ageField)))
+          indexes <- people.listIndexes
+        yield (names, byName(indexes).keySet)
+
+      program.asserting { (names, existing) =>
+        names shouldBe List("by_name", "age_-1")
+        existing shouldBe Set("_id_", "by_name", "age_-1")
+      }
+    }
+
+    "build none of them when one cannot be built" in {
+      val program =
+        for
+          people  <- collection("all_or_nothing")
+          _       <- people.insertMany(List(Person("bob", 30), Person("bob", 31)))
+          failed  <- people.createIndexes(List(Index.ascending(ageField).named("fine"), Index.unique(nameField).named("clash"))).attempt
+          indexes <- people.listIndexes
+        yield (failed.isLeft, byName(indexes).keySet)
+
+      program.asserting { (failed, existing) =>
+        failed shouldBe true
+        existing shouldBe Set("_id_")
+      }
+    }
+
+    "leave an index that already exists as it is, and still report its name" in {
+      val program =
+        for
+          people <- collection("partly_existing")
+          _      <- people.createIndex(Index.ascending(ageField).named("by_age"))
+          names  <- people.createIndexes(List(Index.ascending(ageField).named("by_age"), Index.ascending(nameField)))
+        yield names
+
+      program.asserting(_ shouldBe List("by_age", "name_1"))
+    }
+
+    "return nothing for no indexes, without asking the server" in {
+      collection("no_indexes").flatMap(_.createIndexes(Nil)).asserting(_ shouldBe Nil)
+    }
+  }
+
+  "dropIndexes" should {
+
+    "drop every index except the one on _id" in {
+      val program =
+        for
+          people  <- collection("drop_all")
+          _       <- people.createIndexes(List(Index.ascending(nameField), Index.ascending(ageField)))
+          _       <- people.dropIndexes
+          indexes <- people.listIndexes
+        yield byName(indexes).keySet
+
+      program.asserting(_ shouldBe Set("_id_"))
+    }
+  }
+
   "Repository.ensureKeyIndex" should {
     import RepositoryItSpec.Person.given
 

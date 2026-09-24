@@ -2,7 +2,7 @@ package mongo4s.internal
 
 import java.util.concurrent.TimeUnit
 
-import com.mongodb.client.model.{IndexOptions, ReturnDocument}
+import com.mongodb.client.model.{IndexModel, IndexOptions, ReturnDocument}
 import com.mongodb.client.model.{CountOptions as DriverCountOptions, DeleteOptions as DriverDeleteOptions}
 import com.mongodb.client.model.{ReplaceOptions as DriverReplaceOptions, UpdateOptions as DriverUpdateOptions}
 import com.mongodb.client.model.{FindOneAndDeleteOptions as DriverFindOneAndDeleteOptions, FindOneAndReplaceOptions as DriverFindOneAndReplaceOptions}
@@ -122,5 +122,8 @@ private[mongo4s] object DriverOptions:
 
     options
   end index
+
+  def indexModel[A](index: Index[A], naming: FieldNaming): IndexModel =
+    IndexModel(index.keysToBson(naming), this.index(index, naming))
 
 end DriverOptions

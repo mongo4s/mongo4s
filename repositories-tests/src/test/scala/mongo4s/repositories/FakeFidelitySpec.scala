@@ -254,6 +254,16 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "renameCollection" should {
+    "be refused by name, since the fake holds a single namespace and has nowhere to move it" in {
+      val c       = fake(BsonDocument("name", BsonString("a")))
+      val refused = intercept[UnsupportedOperationException](c.renameCollection("elsewhere").unsafeRunSync())
+
+      refused.getMessage should include("renameCollection")
+      c.count().unsafeRunSync() shouldBe 1L
+    }
+  }
+
   "inserting" should {
     "stamp an _id the way the driver does, and report it" in {
       val c      = fake()

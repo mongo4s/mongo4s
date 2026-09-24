@@ -3,8 +3,8 @@ package mongo4s.internal
 import scala.annotation.unused
 
 import org.bson.BsonDocument
-import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
-import com.mongodb.client.model.{ReplaceOneModel, WriteModel}
+import com.mongodb.{MongoNamespace, ReadConcern, ReadPreference, WriteConcern}
+import com.mongodb.client.model.{RenameCollectionOptions, ReplaceOneModel, WriteModel}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 import com.mongodb.client.model.{BulkWriteOptions, DeleteManyModel, DeleteOneModel, InsertOneModel}
 
@@ -254,6 +254,20 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       rs.one(publisher)
     }
 
+  def createIndexes(indexes: Seq[Index[A]])(using session: Option[ClientSession]): F[List[String]] =
+    if indexes.isEmpty
+    then F.pure(Nil)
+    else
+      F.suspend {
+        val models = indexes.iterator.map(DriverOptions.indexModel(_, naming)).toList.asJava
+
+        val publisher = session match
+          case Some(s) => underlying.createIndexes(s, models)
+          case None    => underlying.createIndexes(models)
+
+        rs.list(publisher)
+      }
+
   def listIndexes(using session: Option[ClientSession]): F[List[BsonDocument]] =
     val publisher = session match
       case Some(s) => underlying.listIndexes(s, classOf[BsonDocument])
@@ -269,6 +283,26 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
 
     rs.unit(publisher)
   end dropIndex
+
+  def dropIndexes(using session: Option[ClientSession]): F[Unit] =
+    val publisher = session match
+      case Some(s) => underlying.dropIndexes(s)
+      case None    => underlying.dropIndexes()
+
+    rs.unit(publisher)
+  end dropIndexes
+
+  def renameCollection(to: String, dropTarget: Boolean)(using session: Option[ClientSession]): F[Unit] =
+    F.suspend {
+      val target  = MongoNamespace(underlying.getNamespace.getDatabaseName, to)
+      val options = RenameCollectionOptions().dropTarget(dropTarget)
+
+      val publisher = session match
+        case Some(s) => underlying.renameCollection(s, target, options)
+        case None    => underlying.renameCollection(target, options)
+
+      rs.unit(publisher)
+    }
 
   def drop(using session: Option[ClientSession]): F[Unit] =
     val publisher = session match

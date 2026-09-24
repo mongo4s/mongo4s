@@ -325,15 +325,26 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   def createIndex(index: Index[E])(using session: Option[ClientSession]): F[String] =
     F.delay {
-      if index.unique && index.collation.nonEmpty
-      then throw UnsupportedOperationException("FakeMongoCollection: a unique index with a collation is not simulated")
-
-      if index.unique
-      then storage.toList.foreach(document => requireUnique(index, document, Some(document)))
+      requireBuildable(index)
 
       createdIndexes += index
       indexName(index)
     }
+
+  def createIndexes(indexes: Seq[Index[E]])(using session: Option[ClientSession]): F[List[String]] =
+    F.delay {
+      indexes.foreach(requireBuildable)
+
+      createdIndexes ++= indexes
+      indexes.iterator.map(indexName).toList
+    }
+
+  private def requireBuildable(index: Index[E]): Unit =
+    if index.unique && index.collation.nonEmpty
+    then throw UnsupportedOperationException("FakeMongoCollection: a unique index with a collation is not simulated")
+
+    if index.unique
+    then storage.toList.foreach(document => requireUnique(index, document, Some(document)))
 
   private def indexName(index: Index[E]): String =
     index.name.getOrElse {
@@ -390,6 +401,11 @@ final class FakeMongoCollection[F[*], S[*], E](
     F.delay {
       createdIndexes.filterInPlace(index => this.indexName(index) != indexName)
     }
+
+  def dropIndexes(using session: Option[ClientSession]): F[Unit] = F.delay(createdIndexes.clear())
+
+  def renameCollection(to: String, dropTarget: Boolean)(using session: Option[ClientSession]): F[Unit] =
+    F.raiseError(UnsupportedOperationException("FakeMongoCollection: renameCollection is not simulated, the fake holds a single namespace"))
 
   def drop(using session: Option[ClientSession]): F[Unit] = F.delay { storage.clear(); createdIndexes.clear() }
 
