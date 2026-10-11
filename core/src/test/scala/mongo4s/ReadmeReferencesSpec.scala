@@ -23,6 +23,7 @@ object ReadmeReferencesSpec:
     "Filter"                   -> "core/src/main/scala/mongo4s/operations/Filter.scala",
     "FindOneAndDeleteOptions"  -> "core/src/main/scala/mongo4s/operations/FindOneAndDeleteOptions.scala",
     "FindOneAndReplaceOptions" -> "core/src/main/scala/mongo4s/operations/FindOneAndReplaceOptions.scala",
+    "FillOutput"               -> "core/src/main/scala/mongo4s/operations/FillOutput.scala",
     "FindOneAndUpdateOptions"  -> "core/src/main/scala/mongo4s/operations/FindOneAndUpdateOptions.scala",
     "GeoNearOptions"           -> "core/src/main/scala/mongo4s/operations/GeoNearOptions.scala",
     "Index"                    -> "core/src/main/scala/mongo4s/operations/Index.scala",
@@ -40,6 +41,7 @@ object ReadmeReferencesSpec:
     "Update"                   -> "core/src/main/scala/mongo4s/operations/Update.scala",
     "UpdateOptions"            -> "core/src/main/scala/mongo4s/operations/UpdateOptions.scala",
     "WatchOptions"             -> "core/src/main/scala/mongo4s/changestream/WatchOptions.scala",
+    "WindowFunction"           -> "core/src/main/scala/mongo4s/operations/Window.scala",
     "WireCodecConfig"          -> "bson/direct/src/main/scala/mongo4s/bson/direct/WireCodecConfig.scala",
     "WriteCommand"             -> "core/src/main/scala/mongo4s/operations/WriteCommand.scala",
   )

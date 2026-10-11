@@ -56,10 +56,10 @@ third-party codec library, no extra dependency beyond `mongo4s-core` itself:
 
 ```scala
 libraryDependencies ++= Seq(
-  "org.mongo4s" %% "mongo4s-cats"           % "4.0.0", // mongo4s-core + cats-effect integration
-  "org.mongo4s" %% "mongo4s-bson-direct"    % "4.0.0", // ast-free bson codecs
-  "org.mongo4s" %% "mongo4s-bson-cats-data" % "4.0.0", // if you need NonEmptyList etc. codec instances
-  "org.mongo4s" %% "mongo4s-repositories"   % "4.0.0", // if you need auto-generated CRUD repository ops for your model
+  "org.mongo4s" %% "mongo4s-cats"           % "4.1.0", // mongo4s-core + cats-effect integration
+  "org.mongo4s" %% "mongo4s-bson-direct"    % "4.1.0", // ast-free bson codecs
+  "org.mongo4s" %% "mongo4s-bson-cats-data" % "4.1.0", // if you need NonEmptyList etc. codec instances
+  "org.mongo4s" %% "mongo4s-repositories"   % "4.1.0", // if you need auto-generated CRUD repository ops for your model
 )
 ```
 
@@ -208,8 +208,10 @@ nameField.regex("^A")                    // $regex
 scoreField.exists                        // $exists
 scoreField.hasType(BsonTypeName.Int)     // $type
 totalField.mod(4, 1)                     // $mod
+flagsField.bitsAllSet(4)                 // $bitsAllSet — also $bitsAnySet, $bitsAllClear, $bitsAnyClear
 Filter.text[User]("scala")               // $text
 Filter.expr[User](someBsonDocument)      // $expr
+Filter.jsonSchema[User](schema)          // $jsonSchema
 locationField.near(berlin, maxDistance = Some(1500)) // $near — also $nearSphere
 locationField.within(GeoShape.Within(area))          // $geoWithin
 areaField.intersects(point)                          // $geoIntersects
@@ -229,8 +231,9 @@ The comparisons have symbolic aliases where they read better — `===`, `=!=`, `
 same `Filter` as `equalTo`/`notEqualTo`/`gt`/`gte`/`lt`/`lte`.
 
 An operator that only means something for one kind of field compiles only on that kind: `regex` on text — a
-`String`, an `Option[String]` or a collection of strings — `mod` on a number, `hasSize` on a collection. On any other
-field it is a compile error rather than a filter the server accepts and that matches nothing.
+`String`, an `Option[String]` or a collection of strings — `mod` on a number, `hasSize` on a collection, the `$bits`
+operators on an integer (`Int`, `Long` or either in an `Option`). On any other field it is a compile error rather than
+a filter the server accepts and that matches nothing.
 
 `hasType` takes a `BsonTypeName`, not a string. The values are MongoDB's own `$type` aliases — `"object"` for a
 document, `"binData"`, `"javascriptWithScope"` — which are easy to misspell into a filter that silently matches
@@ -258,7 +261,11 @@ nameField.unset                   // $unset
 tagsField.push("vip")             // $push — also $pull, $addToSet, and the $each variants
 Update.setOnInsert(nameField, "") // $setOnInsert, for merge-style upserts
 Update.rename(oldField, newField) // $rename — also currentDate, popFirst/popLast
+flagsField.bitOr(4)               // $bit — also bitAnd, bitXor
 ```
+
+`$bit` works on integers only, so it compiles on an `Int` or `Long` field — or either in an `Option` — and takes a
+mask of the field's own width. A missing field counts as zero, the way the server counts it.
 
 Numeric operators only apply to numeric fields, so `Update.inc(nameField, 1)` does not compile. An `Option`-typed
 field takes the unwrapped value — `scoreField.inc(5L)` on a `Field[User, Option[Long]]` — because `None` has no
@@ -277,9 +284,8 @@ is what the server compares. `$inc` and `$mul` stay numeric, since arithmetic is
 `$set`. `Update.Raw` carries operators the `AST` does not model and merges the same way:
 
 ```scala
-Update.set(nameField, "bob").and(Update.Raw[User](BsonDocument("$bit", BsonDocument("age",...)
-) ) )
-// {"$set": {"name": "bob"}, "$bit": {"age": ...}}
+Update.set(nameField, "bob").and(Update.Raw[User](BsonDocument("$currentDate", BsonDocument("seenAt", BsonDocument("$type", BsonString("timestamp"))))))
+// {"$set": {"name": "bob"}, "$currentDate": {"seenAt": {"$type": "timestamp"}}}
 ```
 
 Rendering never mutates the document you handed to `Raw`, so the same value can be reused across updates and
@@ -821,10 +827,30 @@ val byAge = Seq(
 )
 ```
 
+Beyond `sum`/`avg`/`min`/`max`/`first`/`last`/`push`/`addToSet`/`count`, the accumulators MongoDB added in 5.x
+and 7.0 are typed too:
+
+```scala
+Stage.groupBy(cityField)(
+  "best"   -> Accumulator.topN(Sort.desc(scoreField), nameField, 3), // also top, bottom, bottomN
+  "recent" -> Accumulator.lastN(nameField, 2),                      // also firstN, maxN, minN
+  "median" -> Accumulator.median(ageField),
+  "p90"    -> Accumulator.percentile(ageField, 0.9),
+  "spread" -> Accumulator.stdDevPop(ageField),                      // also stdDevSamp
+  "traits" -> Accumulator.mergeObjects(traitsField),
+)
+```
+
+`top`/`bottom` and their `N` forms rank by the `Sort` they are given and output one field; `firstN`/`lastN` follow
+the order the documents arrive in, so sort before the group if that order matters. `firstN`, `lastN` and the ranking
+forms keep a missing value as `null`, while `maxN`/`minN` skip it. `median`, `percentile` and the standard
+deviations compile only on a numeric field, and the first two always ask for the server's only method,
+`approximate`. An `n` below one, an empty sort and a percentile outside `0..1` are refused where they are written.
+
 `Stage` covers `$match`/`$project`/`$sort`/`$limit`/`$skip`/`$count`/`$unwind`/`$lookup`/`$graphLookup`/`$group`/
 `$addFields`/`$unset`/`$replaceRoot`/`$facet`/`$sample`/`$sortByCount`/`$unionWith`/`$bucket`/`$bucketAuto`/
-`$densify`/`$setWindowFields`/`$geoNear`/`$out`/`$merge`, with `Stage.raw(document)` as the escape hatch for anything
-else.
+`$densify`/`$fill`/`$setWindowFields`/`$geoNear`/`$redact`/`$out`/`$merge`, with `Stage.raw(document)` as the escape
+hatch for anything else.
 
 `$unset` drops fields by name — the pipeline's spelling of an excluding `$project`. It takes one field, and more with
 `and`, because several fields of unrelated types have no single `Field` type to share:
@@ -833,8 +859,22 @@ else.
 Stage.unset(ageField).and(tagsField)
 ```
 
-`$lookup` has two forms. `Stage.lookup` is the equality join on `localField`/`foreignField`; `Stage.lookupWith` takes
-a sub-pipeline that runs against the foreign collection, with `let` binding values from the outer document:
+`$redact` keeps, prunes or descends into each level of a document by an aggregation expression. The expression is
+not modelled, so the stage takes it as BSON; `Stage.Descend`, `Stage.Prune` and `Stage.Keep` are the three answers
+it can give:
+
+```scala
+Stage.redact[User](
+  BsonDocument("$cond", BsonDocument("if", BsonDocument("$eq", BsonArray(java.util.List.of(BsonString("$level"), BsonInt32(1)))))
+    .append("then", Stage.Prune)
+    .append("else", Stage.Descend))
+)
+```
+
+`$lookup` has three forms. `Stage.lookup` is the equality join on `localField`/`foreignField`; `Stage.lookupWith`
+takes a sub-pipeline that runs against the foreign collection, with `let` binding values from the outer document; and
+`Stage.lookupWithKeys` does both — joins on the keys, then narrows what joined with the sub-pipeline, the concise
+form MongoDB 5.0 added. Its keys are typed on both sides, so joining fields of different types does not compile:
 
 ```scala
 Stage.lookupWith[Order, User](
@@ -842,6 +882,14 @@ Stage.lookupWith[Order, User](
   pipeline = List(Stage.matching(Field.of[User, Int](_.age).gte(18))),
   as = "adults",
   let = Some(BsonDocument("owner", BsonString("$user_id"))),
+)
+
+Stage.lookupWithKeys[Order, User, String](
+  from = "users",
+  localField = Field.of[Order, String](_.userId),
+  foreignField = Field.of[User, String](_.id),
+  pipeline = List(Stage.matching(Field.of[User, Int](_.age).gte(18))),
+  as = "adultOwner",
 )
 
 Stage.graphLookup[Order, User, String](
@@ -944,7 +992,40 @@ Stage.setWindowFields(Sort.asc(ageField), partitionBy = Some(sensorField.path))(
 `Window.documents` counts in rows, `Window.range` in the sort field's own values — rows sharing a value fall in the
 same window — and `Window.rangeOver` does the same for a date field measured in a `DateUnit`.
 
-Both stages take their partition fields as `FieldPath` rather than `Field`, which is why the examples above write
+The window functions — what only makes sense in a window, never in a `$group` — sit beside the accumulators in the
+same output list, as `WindowFunction`s:
+
+```scala
+Stage.setWindowFields(Sort.asc(dayField), partitionBy = Some(shopField.path))(
+  "total" -> WindowOutput(Accumulator.sum(amountField)),
+  "place" -> WindowFunction.rank[Sale],                                  // also denseRank, documentNumber
+  "prev"  -> WindowFunction.shift(amountField, by = -1, default = Some(0)),
+  "kept"  -> WindowFunction.locf(amountField),                           // also linearFill
+  "slope" -> WindowFunction.derivative(amountField, Window.range(WindowBound.At(-1), WindowBound.Current), Some(DateUnit.Hour)),
+  "area"  -> WindowFunction.integral(amountField, Window.documents(WindowBound.Unbounded, WindowBound.Current)),
+  "trend" -> WindowFunction.expMovingAvg(amountField, 7),                 // or expMovingAvgAlpha(amountField, 0.3)
+)
+```
+
+`$derivative` and `$integral` need a window, so it is a parameter rather than an option; the others take none.
+`linearFill`, the calculus and the moving average compile only on a numeric field, and a moving average over fewer
+than one document, or with an `alpha` outside `(0, 1)`, is refused where it is written.
+
+`$fill` fills the nulls and the missing values a `$densify` leaves behind — with a value, with the last value seen, or
+with the line between the neighbours. The last two follow the sort order, so they need a `sortBy`:
+
+```scala
+Stage.fill(Sort.asc(recordedAt), partitionBy = Seq(sensorField.path))(
+  FillOutput.linear(temperatureField), // numeric fields only
+  FillOutput.locf(statusField),
+  FillOutput.value(noteField, "none"),
+)
+```
+
+Where there is nothing to fill from — no value before a gap for `locf`, no neighbour on one side for `linear` — the
+server writes an explicit `null` rather than leaving the field missing.
+
+These stages take their partition fields as `FieldPath` rather than `Field`, which is why the examples above write
 `sensorField.path`: a partition is a list of fields of unrelated types, and `Field[E, ?]` loses the type the path
 extension needs. Everything else about them is the usual typed selector.
 
@@ -1610,13 +1691,14 @@ repository call can join a [transaction](#sessions--transactions) the same way a
 directly, not reimplementing what's already there.
 
 For unit tests, `FakeMongoCollection` (in `mongo4s-testkit`, a published module — add it as
-`"org.mongo4s" %% "mongo4s-testkit" % "4.0.0" % Test`) implements `MongoCollection` in memory. The exact same
+`"org.mongo4s" %% "mongo4s-testkit" % "4.1.0" % Test`) implements `MongoCollection` in memory. The exact same
 `Filter`/`Update`/`Field` AST the real driver interprets is interpreted against an in-memory buffer instead, so
 repository logic is testable without a running MongoDB.
 
 Filters, updates, sorting, paging and projections are simulated, and so is a subset of `aggregate`:
-`$match`, `$sort`, `$skip`, `$limit`, `$project`, `$unset`, `$count`, `$sortByCount` and `$group` with `$sum`,
-`$avg`, `$min`, `$max`, `$first`, `$last` and `$push`. That covers the pipelines most service code writes, so aggregating no longer forces a
+`$match`, `$sort`, `$skip`, `$limit`, `$project`, `$unset`, `$count`, `$sortByCount`, `$fill` and `$group` with
+`$sum`, `$avg`, `$min`, `$max`, `$first`, `$last`, `$push`, `$firstN`, `$lastN`, `$maxN`, `$minN`, `$top`, `$bottom`,
+`$topN`, `$bottomN`, `$stdDevPop`, `$stdDevSamp` and `$mergeObjects`. That covers the pipelines most service code writes, so aggregating no longer forces a
 test to reach for Docker.
 
 `distinct` is simulated too, array fields flattened into their elements the way the server does, and so is `$slice`
@@ -1642,16 +1724,17 @@ runs, not when it is built — a stream set up before an insert sees the insert.
 `selectAs` stream as well as `find`.
 
 Every update operator is simulated — `$set`, `$unset`, `$inc`, `$mul`, `$min`, `$max`, `$rename`, `$currentDate`,
-`$push` with its `$each`/`$position`/`$slice`/`$sort` modifiers, `$pull`, `$pullAll`, `$pop` and `$addToSet` — and
+`$push` with its `$each`/`$position`/`$slice`/`$sort` modifiers, `$pull`, `$pullAll`, `$pop`, `$addToSet` and `$bit` — and
 `$setOnInsert` correctly does nothing on an update that matches.
 
 Everything else throws `UnsupportedOperationException` naming what was asked for, rather than quietly answering
 wrong — a fake that lies is worse than no fake. That includes `watch`, `explain`, `renameCollection` — the fake
 holds a single namespace, with nowhere to move it — `$text` and ranking by
-`$meta textScore`, `$expr`, the geospatial operators, `Filter.Raw`, `Stage.Raw`, `Update.Raw`, a pipeline update, a
+`$meta textScore`, `$expr`, `$jsonSchema`, the geospatial operators, `Filter.Raw`, `Stage.Raw`, `Update.Raw`, a pipeline update, a
 collation anywhere it is accepted, an update carrying `arrayFilters`, a unique index over an array field, every
-aggregation stage outside the list above, and the `$addToSet` *accumulator*, which is refused
-on purpose: MongoDB leaves the order of its result undefined, so no fake can be faithful to it. Replace-based upserts — what `upsert`/`upsertMany` go through — insert on a miss the way the
+aggregation stage outside the list above, `$median` and `$percentile`, whose `approximate` method only the server
+knows, and the `$addToSet` *accumulator*, which is refused on purpose: MongoDB leaves the order of its result
+undefined, so no fake can be faithful to it. Replace-based upserts — what `upsert`/`upsertMany` go through — insert on a miss the way the
 server does; an `update`-based `UpdateOptions.upsert` that matches nothing throws instead of guessing what the
 operators would have built.
 
@@ -1756,7 +1839,7 @@ the other single-result publishers that it guards.
 Published for `Scala 3.9 LTS` under `org.mongo4s`:
 
 ```scala
-"org.mongo4s" %% "mongo4s-<module>" % "4.0.0"
+"org.mongo4s" %% "mongo4s-<module>" % "4.1.0"
 ```
 
 | | Module | Notes |
@@ -1783,6 +1866,11 @@ compiler has to do without.
 Binary compatibility within a major version is checked by [MiMa](https://github.com/lightbend/mima) on every build,
 new `Effect`/`RsBridge` methods carry default implementations, and deprecations get at least one minor release before
 removal. `mongo4s-kyo` sits outside the promise while kyo is on a release candidate.
+
+`4.1.0` is binary compatible with `4.0.0`, checked by MiMa. It adds cases to `Accumulator`, `Filter`, `Update` and
+`Stage`, so a match over one of them that the compiler checks for exhaustiveness warns about the new cases, and
+`setWindowFields` takes `WindowField`s — the common parent of `WindowOutput` and the new `WindowFunction` — which every
+existing call already passes.
 
 `4.0.0` changes shapes MiMa would flag, and behaviour a recompile alone would not reveal: an `Update` that changes one
 path twice is refused rather than keeping only the last change, `findPage` returns a `KeysetPage` with its next

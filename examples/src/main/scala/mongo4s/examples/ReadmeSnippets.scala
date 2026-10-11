@@ -105,7 +105,7 @@ object ReadmeSnippets:
   val withBit = Update
     .set(Field.of[User, String](_.name), "bob")
     .and(
-      Update.Raw[User](BsonDocument("$bit", BsonDocument("age", BsonDocument("and", BsonString("7")))))
+      Update.Raw[User](BsonDocument("$currentDate", BsonDocument("seenAt", BsonDocument("$type", BsonString("timestamp")))))
     )
 
   // A pipeline computes from the document's own values, which operators cannot.
@@ -238,6 +238,56 @@ object ReadmeSnippets:
   val spread  = Seq(Stage.bucketAuto(Field.of[User, String](_.name), 4)("count" -> Accumulator.count[User]))
   val rounded = Seq(Stage.bucketAutoRounded(ageField, 5, BucketGranularity.R10)())
   val popular = Seq(Stage.sortByCount(Field.of[User, String](_.name)))
+
+  private val nameField = Field.of[User, String](_.name)
+
+  val ranked = Seq(
+    Stage.groupBy(Field.of[User, List[String]](_.tags))(
+      "best"   -> Accumulator.topN(Sort.desc(scoreField), nameField, 3),
+      "eldest" -> Accumulator.top(Sort.desc(ageField), nameField),
+      "recent" -> Accumulator.lastN(nameField, 2),
+      "oldest" -> Accumulator.maxN(ageField, 2),
+      "median" -> Accumulator.median(ageField),
+      "p90"    -> Accumulator.percentile(ageField, 0.9),
+      "spread" -> Accumulator.stdDevPop(ageField),
+    )
+  )
+
+  val windowed = Seq(
+    Stage.setWindowFields(Sort.asc(ageField))(
+      "total" -> WindowOutput(Accumulator.sum(ageField)),
+      "place" -> WindowFunction.rank[User],
+      "prev"  -> WindowFunction.shift(ageField, by = -1, default = Some(0)),
+      "kept"  -> WindowFunction.locf(scoreField),
+      "area"  -> WindowFunction.integral(ageField, Window.documents(WindowBound.Unbounded, WindowBound.Current)),
+      "trend" -> WindowFunction.expMovingAvg(ageField, 7),
+    )
+  )
+
+  val filled = Seq(Stage.fill(Sort.asc(ageField))(FillOutput.linear(scoreField), FillOutput.value(nameField, "none")))
+
+  val pruned = Seq(
+    Stage.redact[User](
+      BsonDocument(
+        "$cond",
+        BsonDocument("if", BsonDocument("$eq", BsonArray(java.util.List.of(BsonString("$level"), BsonInt32(1)))))
+          .append("then", Stage.Prune)
+          .append("else", Stage.Descend)
+      )
+    )
+  )
+
+  val adultOwner = Stage.lookupWithKeys[Order, User, String](
+    from = "users",
+    localField = Field.of[Order, String](_.userId),
+    foreignField = Field.of[User, String](_.id),
+    pipeline = List(Stage.matching(adults)),
+    as = "adultOwner",
+  )
+
+  val flagged    = scoreField.bitsAllSet(4) && Filter.jsonSchema[User](BsonDocument("required", BsonArray(java.util.List.of(BsonString("age")))))
+  val flagRaised = scoreField.bitOr(4L)
+  val ageMasked  = Update.bitAnd(ageField, 6)
 
   def aggregated(collection: MongoCollection[IO, S, User]): IO[List[User]] =
     collection.aggregate[User](pipeline).allowDiskUse(true).maxTime(10.seconds).all
