@@ -192,6 +192,39 @@ final class StageSpec extends AnyWordSpec, Matchers:
       an[IllegalArgumentException] should be thrownBy GeoNearOptions.default[Order].withMinDistance(Double.NaN)
     }
 
+    "render window functions beside accumulators in one $setWindowFields, each in the shape the server reads" in {
+      val count = Field.of[Order, Int](_.itemCount)
+
+      val stage = Stage.setWindowFields(Sort.asc(count))(
+        "total" -> WindowOutput(Accumulator.sum(count)),
+        "place" -> WindowFunction.rank[Order],
+        "dense" -> WindowFunction.denseRank[Order],
+        "row"   -> WindowFunction.documentNumber[Order],
+        "prev"  -> WindowFunction.shift(count, by = -1, default = Some(0)),
+        "kept"  -> WindowFunction.locf(count),
+        "fill"  -> WindowFunction.linearFill(count),
+        "slope" -> WindowFunction.derivative(count, Window.range(WindowBound.At(-1), WindowBound.Current), Some(DateUnit.Hour)),
+        "area"  -> WindowFunction.integral(count, Window.documents(WindowBound.Unbounded, WindowBound.Current)),
+        "ema"   -> WindowFunction.expMovingAvg(count, 3),
+        "emaA"  -> WindowFunction.expMovingAvgAlpha(count, 0.25),
+      )
+
+      stage.toBson(FieldNaming.snakeCase).toJson shouldBe
+        """{"$setWindowFields": {"sortBy": {"item_count": 1}, "output": {""" +
+        """"total": {"$sum": "$item_count"}, "place": {"$rank": {}}, "dense": {"$denseRank": {}}, "row": {"$documentNumber": {}}, """ +
+        """"prev": {"$shift": {"output": "$item_count", "by": -1, "default": 0}}, "kept": {"$locf": "$item_count"}, """ +
+        """"fill": {"$linearFill": "$item_count"}, """ +
+        """"slope": {"$derivative": {"input": "$item_count", "unit": "hour"}, "window": {"range": [-1, "current"]}}, """ +
+        """"area": {"$integral": {"input": "$item_count"}, "window": {"documents": ["unbounded", "current"]}}, """ +
+        """"ema": {"$expMovingAvg": {"input": "$item_count", "N": 3}}, "emaA": {"$expMovingAvg": {"input": "$item_count", "alpha": 0.25}}}}}"""
+    }
+
+    "refuse an exponential moving average the server cannot weigh" in {
+      an[IllegalArgumentException] should be thrownBy WindowFunction.expMovingAvg(Field.of[Order, Int](_.itemCount), 0)
+      an[IllegalArgumentException] should be thrownBy WindowFunction.expMovingAvgAlpha(Field.of[Order, Int](_.itemCount), 1.0)
+      "WindowFunction.linearFill(Field.of[StageSpec.Order, String](_.userId))" shouldNot typeCheck
+    }
+
     "refuse a $bucket that cannot make a single bucket" in {
       an[IllegalArgumentException] should be thrownBy
         Stage.bucketBy(Field.of[Order, Int](_.itemCount), Seq(0))()

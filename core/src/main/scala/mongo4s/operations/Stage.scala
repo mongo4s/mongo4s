@@ -74,7 +74,7 @@ enum Stage[E](val key: String):
   case SetWindowFields(
       partitionBy: Option[FieldPath],
       sortBy: Sort[E],
-      output: List[(String, WindowOutput[E])],
+      output: List[(String, WindowField[E])],
   ) extends Stage[E]("$setWindowFields")
 
   case GeoNear(
@@ -210,11 +210,7 @@ enum Stage[E](val key: String):
       then windowFields.append("sortBy", sortBy.toBson(naming)): Unit
 
       val fields = BsonDocument()
-      output.foreach { (name, windowed) =>
-        val field = windowed.accumulator.toBson(naming)
-        windowed.window.foreach(window => field.append("window", window.toBson))
-        fields.append(name, field)
-      }
+      output.foreach((name, windowed) => fields.append(name, windowed.toBson(naming)))
 
       windowFields.append("output", fields)
 
@@ -309,7 +305,7 @@ object Stage:
     Densify(field.path, partitionBy.toList, range)
 
   def setWindowFields[E](sortBy: Sort[E], partitionBy: Option[FieldPath] = None)(
-      output: (String, WindowOutput[E])*
+      output: (String, WindowField[E])*
   ): Stage[E] =
     require(output.nonEmpty, "$setWindowFields with no output field computes nothing")
 

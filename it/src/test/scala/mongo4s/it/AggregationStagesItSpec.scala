@@ -166,3 +166,92 @@ final class AggregationStagesItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers
       program.timeout(30.seconds).asserting(_ shouldBe List(5, 20, 45, 80))
     }
   }
+
+  "window functions" should {
+    val t = Field.stored[BsonDocument, Int]("t")
+    val v = Field.stored[BsonDocument, Int]("v")
+
+    def series(name: String, points: (Int, Option[Int])*): IO[MongoCollection[IO, S, BsonDocument]] =
+      for
+        client     <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+        database   <- client.getDatabase("stages_it")
+        collection <- database.getCollection[BsonDocument](name)
+        _          <- collection.insertMany(points.toList.map { (at, value) =>
+                        BsonDocument("t", BsonInt32(at)).append("v", value.fold(org.bson.BsonNull.VALUE: org.bson.BsonValue)(BsonInt32(_)))
+                      })
+      yield collection
+
+    def windowed(collection: MongoCollection[IO, S, BsonDocument], output: (String, WindowField[BsonDocument])*): IO[List[BsonDocument]] =
+      collection.aggregate[BsonDocument](Seq(Stage.setWindowFields(Sort.asc(t))(output*), Stage.sortBy(Sort.asc(t)))).all
+
+    def numbers(documents: List[BsonDocument], name: String): List[Option[Double]] =
+      documents.map(document => Option(document.get(name)).filter(_.isNumber).map(_.asNumber.doubleValue))
+
+    "rank, rank densely and number the documents, ties shared where the server shares them" in {
+      val program =
+        for
+          collection <- series("ranks", 1 -> Some(5), 2 -> Some(15), 2 -> Some(15), 3 -> Some(25))
+          ranked     <- windowed(collection, "rank" -> WindowFunction.rank[BsonDocument], "dense" -> WindowFunction.denseRank[BsonDocument])
+          numbered   <- windowed(collection, "row" -> WindowFunction.documentNumber[BsonDocument])
+        yield (numbers(ranked, "rank"), numbers(ranked, "dense"), numbers(numbered, "row"))
+
+      program.timeout(30.seconds).asserting { (rank, dense, row) =>
+        rank.flatten shouldBe List(1.0, 2.0, 2.0, 4.0)
+        dense.flatten shouldBe List(1.0, 2.0, 2.0, 3.0)
+        row.flatten.sorted shouldBe List(1.0, 2.0, 3.0, 4.0)
+      }
+    }
+
+    "shift a value from a neighbour, with the default where there is none" in {
+      val program =
+        for
+          collection <- series("shift", 1 -> Some(10), 2 -> Some(20), 3 -> Some(40))
+          shifted    <- windowed(collection, "prev" -> WindowFunction.shift(v, by = -1, default = Some(0)))
+        yield numbers(shifted, "prev")
+
+      program.timeout(30.seconds).asserting(_ shouldBe List(Some(0.0), Some(10.0), Some(20.0)))
+    }
+
+    "fill a gap with the last value, or with the line between its neighbours" in {
+      val program =
+        for
+          collection <- series("fill", 1 -> Some(10), 2 -> None, 3 -> Some(30))
+          filled     <- windowed(collection, "kept" -> WindowFunction.locf(v), "line" -> WindowFunction.linearFill(v))
+        yield (numbers(filled, "kept"), numbers(filled, "line"))
+
+      program.timeout(30.seconds).asserting { (kept, line) =>
+        kept shouldBe List(Some(10.0), Some(10.0), Some(30.0))
+        line shouldBe List(Some(10.0), Some(20.0), Some(30.0))
+      }
+    }
+
+    "differentiate and integrate over the window they were given" in {
+      val program =
+        for
+          collection <- series("calculus", 1 -> Some(10), 2 -> Some(20), 3 -> Some(40))
+          computed   <- windowed(
+                          collection,
+                          "slope" -> WindowFunction.derivative(v, Window.documents(WindowBound.At(-1), WindowBound.Current)),
+                          "area"  -> WindowFunction.integral(v, Window.documents(WindowBound.Unbounded, WindowBound.Current)),
+                        )
+        yield (numbers(computed, "slope"), numbers(computed, "area"))
+
+      program.timeout(30.seconds).asserting { (slope, area) =>
+        slope.drop(1) shouldBe List(Some(10.0), Some(20.0))
+        area shouldBe List(Some(0.0), Some(15.0), Some(45.0))
+      }
+    }
+
+    "average exponentially, by a count of documents or by alpha" in {
+      val program =
+        for
+          collection <- series("ema", 1 -> Some(10), 2 -> Some(20), 3 -> Some(40))
+          averaged   <- windowed(collection, "byN" -> WindowFunction.expMovingAvg(v, 2), "byAlpha" -> WindowFunction.expMovingAvgAlpha(v, 0.5))
+        yield (numbers(averaged, "byN").flatten, numbers(averaged, "byAlpha").flatten)
+
+      program.timeout(30.seconds).asserting { (byN, byAlpha) =>
+        byN.zip(List(10.0, 50.0 / 3, 290.0 / 9)).foreach((actual, expected) => actual shouldBe expected +- 1e-9)
+        byAlpha shouldBe List(10.0, 15.0, 27.5)
+      }
+    }
+  }
