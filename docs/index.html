@@ -551,7 +551,7 @@
         </nav>
 
         <div class="install">
-            <pre><code>libraryDependencies += "org.mongo4s" %% "mongo4s-cats" % "4.0.0"</code></pre>
+            <pre><code>libraryDependencies += "org.mongo4s" %% "mongo4s-cats" % "4.1.0"</code></pre>
             <p class="install-note">On another runtime, swap the module: <code>mongo4s-zio</code>,
                 <code>mongo4s-kyo</code> or <code>mongo4s-rapid</code>. Codecs and repositories are separate
                 modules — see <a href="#start">Quick start</a>.</p>
@@ -591,10 +591,10 @@
     <p>Pick a runtime. The default codec (<code>bson-direct</code>) derives straight from your case class — AST-free, no
         third-party codec library, no extra dependency beyond <code>mongo4s-core</code> itself:</p>
     <pre><code>libraryDependencies ++= Seq(
-    "org.mongo4s" %% "mongo4s-cats"           % "4.0.0", // mongo4s-core + cats-effect integration
-    "org.mongo4s" %% "mongo4s-bson-direct"    % "4.0.0", // ast-free bson codecs
-    "org.mongo4s" %% "mongo4s-bson-cats-data" % "4.0.0", // if you need NonEmptyList etc. codec instances
-    "org.mongo4s" %% "mongo4s-repositories"   % "4.0.0", // if you need auto-generated CRUD repository ops for your model
+    "org.mongo4s" %% "mongo4s-cats"           % "4.1.0", // mongo4s-core + cats-effect integration
+    "org.mongo4s" %% "mongo4s-bson-direct"    % "4.1.0", // ast-free bson codecs
+    "org.mongo4s" %% "mongo4s-bson-cats-data" % "4.1.0", // if you need NonEmptyList etc. codec instances
+    "org.mongo4s" %% "mongo4s-repositories"   % "4.1.0", // if you need auto-generated CRUD repository ops for your model
 )</code></pre>
     <pre><code>import cats.effect.{IO, IOApp}
 
@@ -706,6 +706,8 @@ tagsField.hasSize(3)                     // $size
 scoreField.hasType(BsonTypeName.Int)     // $type — an enum, not a string
 Filter.text[User]("scala")               // $text
 Filter.expr[User](someBsonDocument)      // $expr
+Filter.jsonSchema[User](schema)          // $jsonSchema
+flagsField.bitsAllSet(4)                 // $bitsAllSet — also $bitsAnySet, $bitsAllClear, $bitsAnyClear
 
 itemsField.elemMatch(skuField.equalTo("abc") &amp;&amp; qtyField.gt(2))  // one element satisfies both</code></pre>
     <p class="muted">
@@ -715,14 +717,16 @@ itemsField.elemMatch(skuField.equalTo("abc") &amp;&amp; qtyField.gt(2))  // one 
         <code>a &amp;&amp; b &amp;&amp; c</code> renders as one flat <code>$and</code>. The comparisons have symbolic
         aliases where they read better — <code>===</code>, <code>=!=</code>, <code>&gt;</code>, <code>&gt;=</code>,
         <code>&lt;</code>, <code>&lt;=</code>. An operator that only means something for one kind of field compiles only
-        on it: <code>regex</code> on text, <code>mod</code> on a number, <code>hasSize</code> on a collection.
+        on it: <code>regex</code> on text, <code>mod</code> on a number, <code>hasSize</code> on a collection, the
+        bitwise operators on an integer.
     </p>
     <pre><code>ageField.set(31)                   // $set
 ageField.inc(1)                    // $inc — also $mul, $min, $max
 tagsField.push("vip")              // $push — also $pull, $addToSet, and the $each variants
 tagsField.pushAll(List("vip"), PushOptions.default[String].sortedAscending.withSlice(10))
 Update.setOnInsert(nameField, "")  // $setOnInsert, for merge-style upserts
-Update.rename(oldField, newField)  // $rename — also currentDate, popFirst/popLast</code></pre>
+Update.rename(oldField, newField)  // $rename — also currentDate, popFirst/popLast
+flagsField.bitOr(4)                // $bit — also bitAnd, bitXor</code></pre>
     <p class="muted">
         Numeric operators only apply to numeric fields, so <code>Update.inc(nameField, 1)</code> does not compile. An
         <code>Option</code>-typed field takes the unwrapped value — <code>scoreField.inc(5L)</code> on a
@@ -1053,9 +1057,22 @@ val byAge = Seq(
     "names" -&gt; Accumulator.push(Field.of[User, String](_.name)),
   )
 )</code></pre>
+    <pre><code>Stage.groupBy(cityField)(
+  "best"   -&gt; Accumulator.topN(Sort.desc(scoreField), nameField, 3), // also top, bottom, bottomN
+  "recent" -&gt; Accumulator.lastN(nameField, 2),                      // also firstN, maxN, minN
+  "median" -&gt; Accumulator.median(ageField),                         // also percentile(ageField, 0.9)
+  "spread" -&gt; Accumulator.stdDevPop(ageField),                      // also stdDevSamp
+  "traits" -&gt; Accumulator.mergeObjects(traitsField),
+)</code></pre>
+    <p class="muted">
+        The ranking accumulators rank by the <code>Sort</code> they are given; <code>firstN</code>/<code>lastN</code>
+        follow arrival order, so sort before the group if it matters. <code>median</code>, <code>percentile</code> and
+        the standard deviations compile only on a numeric field, and the first two always use the server's only method,
+        <code>approximate</code>.
+    </p>
     <p class="muted">
         <code>Stage</code> covers
-        <code>$match</code>/<code>$project</code>/<code>$sort</code>/<code>$limit</code>/<code>$skip</code>/<code>$count</code>/<code>$unwind</code>/<code>$lookup</code>/<code>$graphLookup</code>/<code>$group</code>/<code>$addFields</code>/<code>$unset</code>/<code>$replaceRoot</code>/<code>$facet</code>/<code>$sample</code>/<code>$sortByCount</code>/<code>$unionWith</code>/<code>$bucket</code>/<code>$bucketAuto</code>/<code>$densify</code>/<code>$setWindowFields</code>/<code>$geoNear</code>/<code>$out</code>/<code>$merge</code>,
+        <code>$match</code>/<code>$project</code>/<code>$sort</code>/<code>$limit</code>/<code>$skip</code>/<code>$count</code>/<code>$unwind</code>/<code>$lookup</code>/<code>$graphLookup</code>/<code>$group</code>/<code>$addFields</code>/<code>$unset</code>/<code>$replaceRoot</code>/<code>$facet</code>/<code>$sample</code>/<code>$sortByCount</code>/<code>$unionWith</code>/<code>$bucket</code>/<code>$bucketAuto</code>/<code>$densify</code>/<code>$fill</code>/<code>$setWindowFields</code>/<code>$geoNear</code>/<code>$redact</code>/<code>$out</code>/<code>$merge</code>,
         with <code>Stage.raw(document)</code> as the escape hatch for anything else.
     </p>
     <pre><code>Stage.geoNear(locationField, Geometry.Point(13.405, 52.52), "distance")  // first stage only
@@ -1071,10 +1088,28 @@ Stage.bucketAutoRounded(ageField, 5, BucketGranularity.R10)()           // numer
         for numbers, so it compiles only on a numeric field. <code>$unset</code> takes more fields with
         <code>and</code>, because fields of unrelated types have no single <code>Field</code> type to share.
     </p>
+    <pre><code>Stage.setWindowFields(Sort.asc(dayField))(
+  "total" -&gt; WindowOutput(Accumulator.sum(amountField)),
+  "place" -&gt; WindowFunction.rank[Sale],                                 // also denseRank, documentNumber
+  "prev"  -&gt; WindowFunction.shift(amountField, by = -1, default = Some(0)),
+  "kept"  -&gt; WindowFunction.locf(amountField),                          // also linearFill
+  "area"  -&gt; WindowFunction.integral(amountField, Window.documents(WindowBound.Unbounded, WindowBound.Current)),
+  "trend" -&gt; WindowFunction.expMovingAvg(amountField, 7),                // also derivative
+)
+
+Stage.fill(Sort.asc(recordedAt))(FillOutput.linear(temperatureField), FillOutput.locf(statusField), FillOutput.value(noteField, "none"))
+Stage.redact[User](conditionOnLevel)                                     // answers Stage.Descend, Prune or Keep</code></pre>
+    <p class="muted">
+        Window functions sit beside the accumulators in one <code>setWindowFields</code>, but are their own type, so a
+        <code>$rank</code> cannot end up in a <code>$group</code>, where the server refuses it. <code>$fill</code> fills
+        by a value, by the last value seen or along the line between neighbours; the last two need a sort, and where
+        there is nothing to fill from the server writes an explicit <code>null</code>.
+    </p>
     <p>
-        <code>$lookup</code> has two forms: <code>Stage.lookup</code> is the equality join,
+        <code>$lookup</code> has three forms: <code>Stage.lookup</code> is the equality join,
         <code>Stage.lookupWith</code>
-        takes a sub-pipeline over the foreign collection with <code>let</code> binding values from the outer document.
+        takes a sub-pipeline over the foreign collection with <code>let</code> binding values from the outer document,
+        and <code>Stage.lookupWithKeys</code> joins on typed keys and then narrows with a sub-pipeline.
         <code>Stage.graphLookup</code> walks a self-referencing hierarchy. Both take a second type parameter, because
         the sub-pipeline and the connect fields belong to the <strong>foreign</strong> collection rather than to
         <code>A</code>.
@@ -1683,7 +1718,7 @@ users.findPage(20, descending = true)                       // newest key first<
     </p>
     <p>
         For unit tests, <code>FakeMongoCollection</code> (in <code>mongo4s-testkit</code>, a published module — add it
-        as <code>"org.mongo4s" %% "mongo4s-testkit" % "4.0.0" % Test</code>) implements
+        as <code>"org.mongo4s" %% "mongo4s-testkit" % "4.1.0" % Test</code>) implements
         <code>MongoCollection</code> in memory — the exact
         same <code>Filter</code>/<code>Update</code>/<code>Field</code> AST the real driver interprets is interpreted
         against an in-memory buffer instead, so repository logic is testable without a running MongoDB. Filters,
@@ -1691,7 +1726,8 @@ users.findPage(20, descending = true)                       // newest key first<
         <code>aggregate</code> are simulated, and so are unique indexes, <code>listIndexes</code> as the server
         describes them, the way a bulk write reports a duplicate, and how the server compares numbers of different
         widths &mdash; each checked against a real server by a parity spec. <code>watch</code>, <code>explain</code>,
-        <code>renameCollection</code>, <code>$text</code>, <code>$expr</code>, <code>Filter.Raw</code>, a pipeline
+        <code>renameCollection</code>, <code>$text</code>, <code>$expr</code>, <code>$jsonSchema</code>,
+        <code>$median</code>/<code>$percentile</code>, <code>Filter.Raw</code>, a pipeline
         update, a collation and an update carrying <code>arrayFilters</code> throw
         <code>UnsupportedOperationException</code> naming what was asked for, rather than quietly answering wrong.
         It streams through the runtime's <code>RsBridge</code>, reading the collection when the stream runs, so
@@ -1805,7 +1841,7 @@ given RsBridgeConfig = RsBridgeConfig(
 
     <h2 id="modules">Modules</h2>
     <p>Published for Scala 3 under <code>org.mongo4s</code>:</p>
-    <pre><code>"org.mongo4s" %% "mongo4s-&lt;module&gt;" % "4.0.0"</code></pre>
+    <pre><code>"org.mongo4s" %% "mongo4s-&lt;module&gt;" % "4.1.0"</code></pre>
     <table>
         <tr>
             <th>Kind</th>
@@ -1883,6 +1919,11 @@ given RsBridgeConfig = RsBridgeConfig(
         </li>
         <li>Deprecations get at least one minor release before removal.</li>
     </ul>
+    <p>
+        <strong>4.1.0 is binary compatible with 4.0.0</strong>, checked by MiMa. It adds cases to <code>Accumulator</code>,
+        <code>Filter</code>, <code>Update</code> and <code>Stage</code>, so an exhaustive match over one warns about
+        them, and <code>setWindowFields</code> takes <code>WindowField</code>s, which every existing call already passes.
+    </p>
     <p>
         <strong>4.0.0 is a breaking release.</strong> An <code>Update</code> that changes one path twice is refused
         rather than keeping only the last change. <code>findPage</code> returns a <code>KeysetPage</code> with the key
@@ -2739,6 +2780,14 @@ findOne     1.45–1.97 ms/op</code></pre>
             fake.</strong> The first balances its buckets by the server's own rules, the second needs spherical
             distances the fake does not compute, and the third a second namespace a single-collection fake does not
             have. Each is refused by name.
+        </li>
+        <li><strong>Simulating <code>$median</code>, <code>$percentile</code>, windows and <code>$redact</code> in the
+            fake.</strong> The first two are the server's <code>approximate</code> method; the others evaluate aggregation
+            expressions, which the fake does not. Each is refused by name; <code>$fill</code> is simulated.
+        </li>
+        <li><strong>Batching rapid's demand.</strong> rapid asks the cursor for one document at a time. Measured first:
+            its <code>findStream</code> ran at 1,667 ops/s against 1,523 for cats-effect and 1,504 for zio, so the
+            simpler code stays.
         </li>
         <li><strong>Copying every <code>BsonDocument</code> the API accepts.</strong> Raw filters, stages, hints and
             resume tokens are taken as given: mongo4s never writes into them. <code>Update.Raw</code> is the exception,
