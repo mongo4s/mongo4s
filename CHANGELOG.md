@@ -8,6 +8,35 @@ Notable changes per release. Breaking changes and how to migrate are in
 This file starts at `2.0.0`. `1.0.0` was released without one, and `1.1.0` was never published — its changes are
 part of `2.0.0` below.
 
+## 4.1.0
+
+Binary compatible with `4.0.0`, checked by MiMa.
+
+### Added
+
+- **The 5.x and 7.0 accumulators.** `top`/`bottom` and `topN`/`bottomN` rank by a `Sort` and output a field;
+  `firstN`/`lastN`, `maxN`/`minN`; `median` and `percentile`, always with the server's `approximate` method;
+  `stdDevPop`/`stdDevSamp`; `mergeObjects`. The statistical ones compile only on a numeric field.
+- **Window functions** — `WindowFunction.rank`, `denseRank`, `documentNumber`, `shift`, `locf`, `linearFill`,
+  `derivative`, `integral`, `expMovingAvg`/`expMovingAvgAlpha` — given to `setWindowFields` beside the accumulators.
+  They cannot be put in a `$group`, where the server refuses them.
+- **`$fill`** — by a value, by the last value seen, or along the line between neighbours, per partition, through
+  `FillOutput`. The two sort-driven methods are refused without a `sortBy`.
+- **`$redact`**, with `Stage.Descend`/`Prune`/`Keep` for the expression's answers.
+- **`Stage.lookupWithKeys`** — the concise `$lookup` that joins on `localField`/`foreignField` and narrows with a
+  sub-pipeline. The keys are typed on both sides.
+- **`$bit`** (`bitAnd`/`bitOr`/`bitXor`) and the **`$bitsAllSet`/`$bitsAnySet`/`$bitsAllClear`/`$bitsAnyClear`**
+  filters, on integer fields only through `BitwiseOf`; **`Filter.jsonSchema`**.
+- The fake simulates the new accumulators except `median`/`percentile`, and `$fill`, `$bit` and the `$bits` filters —
+  each checked against MongoDB 8.2 by a parity spec.
+
+### Changed
+
+- `setWindowFields` takes `WindowField`s, the common parent of `WindowOutput` and `WindowFunction`; every existing
+  call compiles unchanged.
+- `mongodb-driver-reactivestreams` `5.13.0`; `kyo` `1.0.0-RC7`.
+- An `.editorconfig` trims trailing whitespace, which is what turned the format check red.
+
 ## 4.0.0
 
 ### Added

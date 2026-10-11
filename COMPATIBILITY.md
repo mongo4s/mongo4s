@@ -13,6 +13,17 @@
   `build.sbt`, so nothing is waived silently. A major release — `3.0.0`, `4.0.0` — has no such exceptions: its
   migration guide below is what the major version covers.
 
+## Upgrading from 4.0.x to 4.1.0
+
+Binary compatible: MiMa checks `4.1.0` against `4.0.0` and finds nothing, and no exclusion was needed. Two things a
+recompile can show:
+
+* **`Accumulator`, `Filter`, `Update` and `Stage` have new cases.** Code that matches over one of them exhaustively
+  gets a warning naming the new cases. Nothing that only builds them is affected.
+* **`setWindowFields` takes `(String, WindowField[E])*`.** `WindowOutput` is a `WindowField`, so every call compiles
+  as it did; only code that took `SetWindowFields.output` apart and treated each entry as a `WindowOutput` needs a
+  match on `WindowOutput` versus `WindowFunction`.
+
 ## Migrating from 3.x to 4.0.0
 
 `4.0.0` keeps `Scala 3.9 LTS`. It is a major release because a handful of shapes changed and a few calls now refuse

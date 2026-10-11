@@ -470,6 +470,23 @@ alias, so a vararg of fields of unrelated types has no type to be. `Stage.unset(
 `Sort` and `Projection` do, and cannot be empty by construction; `$densify` and `$setWindowFields`, which came first,
 take `FieldPath`s instead.
 
+**A window function is not an accumulator.** `$rank`, `$shift`, `$locf` and the rest are valid in `$setWindowFields`
+and refused in `$group`, so making them `Accumulator` cases would have let `groupBy("r" -> rank)` compile and fail on
+the server. They are a `WindowFunction` enum instead, and `WindowOutput` and `WindowFunction` share a sealed parent,
+`WindowField`, which is what `setWindowFields` takes. That widened its parameter and the `SetWindowFields` case's field
+from `WindowOutput` to `WindowField` — a change to the generic signature only, the erased one is `Seq`/`List` either
+way, so MiMa reports nothing and every existing call compiles. The window `$derivative` and `$integral` need is a
+parameter rather than a `.over`, because the server refuses them without one.
+
+**Bitwise operators get their own capability, `BitwiseOf`.** `NumericOf` admits `Double` and `BigDecimal`, which
+`$bit` and the `$bits` filters refuse, so they ask for an integer field — `Int`, `Long`, or either in an `Option` —
+and a mask of the field's width.
+
+**A minor release can add a case, and a trait member with a body, but not an abstract member.** Checked rather than
+assumed before `4.1.0`, by adding each to the code and running MiMa against `4.0.0`: a new `Stage` case and a concrete
+`MongoCollection` member pass, an abstract `MongoCollection` member is a `ReversedMissingMethodProblem`. That is why
+`4.1.0` grew the ASTs and nothing on the collection or database traits.
+
 Numeric operators go through `NumericOf[C, A]`, mirroring `ElementOf[C, A]`, so an `Option[Long]` field takes a plain
 `Long`. There is deliberately **no** `NumericValue[Option[A]]`: `None` has no numeric encoding, and the obvious
 stand-in — `$inc` by zero — is a write that silently does nothing.
@@ -724,6 +741,16 @@ single-collection fake does not have. Each is refused by name.
 
 **Checking where `$geoNear` sits in a pipeline.** The server refuses it anywhere but first, with a message naming
 it. A check in `aggregate` would restate that rule without adding anything to it.
+
+**Simulating `$median`, `$percentile`, `$setWindowFields` and `$redact` in the fake.** The first two are computed by
+the server's `approximate` method, which a fake could only imitate; windows and `$redact` evaluate aggregation
+expressions, which the fake does not. Each is refused by name. `$fill`, which only fills values in sort order, is
+simulated — including the explicit `null` the server writes where there is nothing to fill from.
+
+**Batching rapid's demand.** rapid's stream asks the cursor for one more document each time it takes one, where
+fs2 asks by the chunk. Measured before changing it: against a real MongoDB, rapid's `findStream` ran at 1,667 ops/s
+against 1,523 for cats-effect and 1,504 for zio, on the same machine in the same sitting. A per-element `request` is
+lost in the decode and the round trip, so the simpler code stays.
 
 **Copying every `BsonDocument` the API accepts.** `Filter.Raw`, `Stage.Raw`, hints and resume tokens are taken as
 given, not cloned: mongo4s never writes into them, so aliasing only matters if the caller mutates a document after
