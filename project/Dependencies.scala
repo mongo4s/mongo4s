@@ -16,7 +16,7 @@ object Dependencies {
     val zioPrelude                = "1.0.0-RC48"
     val zioInteropReactiveStreams = "2.0.2"
 
-    val kyo = "1.0.0-RC6"
+    val kyo = "1.0.0-RC7"
 
     val rapid = "2.9.9"
 
