@@ -497,6 +497,50 @@ final class FakeFidelityParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matcher
     }
   }
 
+  "the fake and the server, on bits" should {
+    val bits = Field.stored[BsonDocument, Int]("bits")
+    val wide = Field.stored[BsonDocument, Long]("wide")
+
+    val seed = List(
+      BsonDocument("_id", BsonString("five")).append("bits", BsonInt32(5)).append("wide", BsonInt64(1L << 40)),
+      BsonDocument("_id", BsonString("six")).append("bits", BsonDouble(6.0)),
+      BsonDocument("_id", BsonString("half")).append("bits", BsonDouble(6.5)),
+      BsonDocument("_id", BsonString("text")).append("bits", BsonString("5")).append("label", BsonString("x")),
+      BsonDocument("_id", BsonString("none")),
+    )
+
+    def ids(filter: Filter[BsonDocument])(collection: Coll) =
+      collection.find(filter).all.map(_.map(_.getString("_id").getValue).sorted)
+
+    "agree on which documents each $bits operator matches, whole doubles included" in {
+      agree("bits_query", seed) { collection =>
+        for
+          allSet   <- ids(bits.bitsAllSet(4))(collection)
+          anySet   <- ids(bits.bitsAnySet(2))(collection)
+          allClear <- ids(bits.bitsAllClear(2))(collection)
+          anyClear <- ids(bits.bitsAnyClear(5))(collection)
+        yield (allSet, anySet, allClear, anyClear)
+      }
+    }
+
+    "agree on what $bit writes, its width, and onto a missing field" in {
+      agree("bit_update", seed) { collection =>
+        for
+          _      <- collection.updateOne(Filter.Eq(Field.stored[BsonDocument, String]("_id").path, BsonString("five")), Update.bitAnd(bits, 4))
+          _      <- collection.updateOne(Filter.Eq(Field.stored[BsonDocument, String]("_id").path, BsonString("five")), Update.bitXor(wide, 1L))
+          _      <- collection.updateOne(Filter.Eq(Field.stored[BsonDocument, String]("_id").path, BsonString("none")), Update.bitOr(bits, 3))
+          stored <- collection.find().sort(Sort.asc(Field.stored[BsonDocument, String]("_id"))).all
+        yield stored
+      }
+    }
+
+    "agree on refusing $bit over a value that is not an integer" in {
+      agree("bit_refused", seed) { collection =>
+        collection.updateOne(Filter.Eq(Field.stored[BsonDocument, String]("_id").path, BsonString("text")), Update.bitOr(bits, 1)).attempt.map(codeOf)
+      }
+    }
+  }
+
   private def indexNames(indexes: List[BsonDocument]): List[String] =
     indexes.map(_.getString("name").getValue).sorted
 

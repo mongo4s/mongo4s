@@ -520,6 +520,14 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Filter.GeoIntersects(_, _) =>
       throw UnsupportedOperationException("FakeMongoCollection: $geoIntersects is not simulated")
 
+    case Filter.BitsAllSet(path, mask)   => bitsOf(document, path).exists(bits => (bits & mask) == mask)
+    case Filter.BitsAnySet(path, mask)   => bitsOf(document, path).exists(bits => (bits & mask) != 0)
+    case Filter.BitsAllClear(path, mask) => bitsOf(document, path).exists(bits => (bits & mask) == 0)
+    case Filter.BitsAnyClear(path, mask) => bitsOf(document, path).exists(bits => (bits & mask) != mask)
+
+    case Filter.JsonSchema(_) =>
+      throw UnsupportedOperationException("FakeMongoCollection: $jsonSchema validates with the server's schema engine, so it is not simulated")
+
     case Filter.Raw(_) => throw UnsupportedOperationException("FakeMongoCollection: Filter.Raw is not simulated")
 
   private def storedSegments(path: mongo4s.FieldPath): List[String] = path.render(naming).split('.').toList
@@ -557,6 +565,35 @@ final class FakeMongoCollection[F[*], S[*], E](
     go(document, storedSegments(path))
   end at
 
+  private def bitsOf(document: BsonDocument, path: mongo4s.FieldPath): Option[Long] =
+    at(document, path).collect {
+      case value if value.isInt32 || value.isInt64                    => value.asNumber.longValue
+      case value if value.isDouble && value.asDouble.getValue.isWhole => value.asDouble.getValue.toLong
+    }
+
+  private def bitwise(current: Option[BsonValue], operation: String, mask: BsonValue): BsonValue =
+    val value = current.filterNot(_.isNull).getOrElse(BsonInt32(0))
+
+    if !(value.isInt32 || value.isInt64)
+    then
+      throw MongoError.translate(
+        MongoWriteException(
+          WriteError(2, s"Cannot apply $$bit to a value of non-integral type. Has the following type: ${value.getBsonType}", BsonDocument()),
+          ServerAddress(),
+          java.util.Collections.emptyList(),
+        )
+      )
+
+    val left   = value.asNumber.longValue
+    val right  = mask.asNumber.longValue
+    val result = operation match
+      case "and" => left & right
+      case "or"  => left | right
+      case _     => left ^ right
+
+    if value.isInt32 && mask.isInt32 then BsonInt32(result.toInt) else BsonInt64(result)
+  end bitwise
+
   private def applyUpdate(document: BsonDocument, update: Update[E]): BsonDocument = update match
     case Update.Set(path, value) => setAt(document, storedSegments(path), value)
     case Update.Unset(path)      => unsetAt(document, storedSegments(path))
@@ -566,6 +603,9 @@ final class FakeMongoCollection[F[*], S[*], E](
 
     case Update.Inc(path, amount) =>
       setAt(document, storedSegments(path), BsonOrdering.increment(at(document, path), amount))
+
+    case Update.Bit(path, operation, mask) =>
+      setAt(document, storedSegments(path), bitwise(at(document, path), operation, mask))
 
     case Update.Mul(path, factor) =>
       setAt(document, storedSegments(path), BsonOrdering.multiply(at(document, path), factor))

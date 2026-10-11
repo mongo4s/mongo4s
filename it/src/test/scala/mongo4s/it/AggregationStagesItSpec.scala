@@ -322,3 +322,18 @@ final class AggregationStagesItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers
       program.timeout(30.seconds).asserting(_ shouldBe List("u1" -> 1, "u2" -> 1))
     }
   }
+
+  "$jsonSchema" should {
+    "match only the documents that satisfy the schema" in {
+      val schema = BsonDocument("required", org.bson.BsonArray(java.util.List.of(BsonString("age"))))
+        .append("properties", BsonDocument("age", BsonDocument("bsonType", BsonString("int")).append("minimum", BsonInt32(18))))
+
+      val program =
+        for
+          collection <- seeded("json_schema")
+          adults     <- collection.find(Filter.jsonSchema(schema)).all
+        yield adults.map(_.name).sorted
+
+      program.timeout(30.seconds).asserting(_ shouldBe List("carol", "dave"))
+    }
+  }

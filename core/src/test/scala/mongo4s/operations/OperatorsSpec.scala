@@ -166,3 +166,34 @@ final class OperatorsSpec extends AnyWordSpec, Matchers:
       an[IllegalArgumentException] should be thrownBy Projection.empty[Order].sliceFrom(itemsField, 10, -5)
     }
   }
+
+  "the bitwise operators" should {
+    val flags = Field.stored[Order, Long]("flags")
+
+    "render $bit with one operation per path, the mask keeping the field's width" in {
+      Update.bitAnd(totalField, 6).toBson(FieldNaming.identity).toJson shouldBe """{"$bit": {"total": {"and": 6}}}"""
+      totalField.bitOr(1).toBson(FieldNaming.identity).toJson shouldBe """{"$bit": {"total": {"or": 1}}}"""
+      flags.bitXor(3L).toBson(FieldNaming.identity).toJson shouldBe """{"$bit": {"flags": {"xor": 3}}}"""
+    }
+
+    "render the $bits query operators with the mask as a long" in {
+      json(totalField.bitsAllSet(5)) shouldBe """{"total": {"$bitsAllSet": 5}}"""
+      json(totalField.bitsAnySet(5)) shouldBe """{"total": {"$bitsAnySet": 5}}"""
+      json(flags.bitsAllClear(8)) shouldBe """{"flags": {"$bitsAllClear": 8}}"""
+      json(flags.bitsAnyClear(8)) shouldBe """{"flags": {"$bitsAnyClear": 8}}"""
+    }
+
+    "compile only on an integer field" in {
+      typeChecks("Update.bitAnd(Field.stored[OperatorsSpec.Order, Double](\"d\"), 1.0)") shouldBe false
+      typeChecks("Field.stored[OperatorsSpec.Order, String](\"s\").bitsAllSet(1)") shouldBe false
+      typeChecks("Update.bitOr(Field.stored[OperatorsSpec.Order, Option[Int]](\"o\"), 1)") shouldBe true
+    }
+  }
+
+  "$jsonSchema" should {
+    "render the schema it was given at the top level" in {
+      val schema = org.bson.BsonDocument("required", org.bson.BsonArray(java.util.List.of(org.bson.BsonString("total"))))
+
+      json(Filter.jsonSchema(schema)) shouldBe """{"$jsonSchema": {"required": ["total"]}}"""
+    }
+  }

@@ -73,6 +73,10 @@ object Field:
     def min[A](value: A)(using ComparableOf[C, A]): Update[E] = Update.min(field, value)
     def max[A](value: A)(using ComparableOf[C, A]): Update[E] = Update.max(field, value)
 
+    def bitAnd[A](mask: A)(using BitwiseOf[C, A]): Update[E] = Update.bitAnd(field, mask)
+    def bitOr[A](mask: A)(using BitwiseOf[C, A]): Update[E]  = Update.bitOr(field, mask)
+    def bitXor[A](mask: A)(using BitwiseOf[C, A]): Update[E] = Update.bitXor(field, mask)
+
     def push[A](value: A)(using ElementOf[C, A], BsonEncoder[A]): Update[E] = Update.push(field, value)
 
     def pushAll[A](values: Seq[A], options: PushOptions[A] = PushOptions.default[A])(using
@@ -109,3 +113,8 @@ object Field:
   extension [E, A](field: Field[E, A])
     def hasType(bsonType: BsonTypeName): Filter[E]                                                = Filter.Type(field.path, bsonType)
     def mod[N](divisor: Long, remainder: Long)(using @unused numeric: NumericOf[A, N]): Filter[E] = Filter.Mod(field.path, divisor, remainder)
+
+    def bitsAllSet(mask: Long)(using @unused bits: BitwiseOf[A, ?]): Filter[E]   = Filter.BitsAllSet(field.path, mask)
+    def bitsAnySet(mask: Long)(using @unused bits: BitwiseOf[A, ?]): Filter[E]   = Filter.BitsAnySet(field.path, mask)
+    def bitsAllClear(mask: Long)(using @unused bits: BitwiseOf[A, ?]): Filter[E] = Filter.BitsAllClear(field.path, mask)
+    def bitsAnyClear(mask: Long)(using @unused bits: BitwiseOf[A, ?]): Filter[E] = Filter.BitsAnyClear(field.path, mask)

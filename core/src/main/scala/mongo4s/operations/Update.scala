@@ -5,27 +5,28 @@ import java.time.Instant
 import org.bson.{BsonArray, BsonBoolean, BsonDocument, BsonInt32, BsonString, BsonValue}
 
 import mongo4s.bson.{BsonEncoder, FieldNaming}
-import mongo4s.{ComparableOf, ElementOf, Field, FieldPath, NumericOf}
+import mongo4s.{BitwiseOf, ComparableOf, ElementOf, Field, FieldPath, NumericOf}
 
 enum Update[E](val key: String):
-  case Set[T](path: FieldPath, value: BsonValue)           extends Update[T]("$set")
-  case SetOnInsert[T](path: FieldPath, value: BsonValue)   extends Update[T]("$setOnInsert")
-  case Unset[T](path: FieldPath)                           extends Update[T]("$unset")
-  case Rename[T](path: FieldPath, to: FieldPath)           extends Update[T]("$rename")
-  case Inc[T](path: FieldPath, amount: BsonValue)          extends Update[T]("$inc")
-  case Mul[T](path: FieldPath, factor: BsonValue)          extends Update[T]("$mul")
-  case Min[T](path: FieldPath, value: BsonValue)           extends Update[T]("$min")
-  case Max[T](path: FieldPath, value: BsonValue)           extends Update[T]("$max")
-  case CurrentDate[T](path: FieldPath)                     extends Update[T]("$currentDate")
-  case Push[T](path: FieldPath, value: BsonValue)          extends Update[T]("$push")
-  case Pull[T](path: FieldPath, value: BsonValue)          extends Update[T]("$pull")
-  case PullAll[T](path: FieldPath, values: BsonArray)      extends Update[T]("$pullAll")
-  case Pop[T](path: FieldPath, first: Boolean)             extends Update[T]("$pop")
-  case AddToSet[T](path: FieldPath, value: BsonValue)      extends Update[T]("$addToSet")
-  case AddToSetEach[T](path: FieldPath, values: BsonArray) extends Update[T]("$addToSet")
-  case Combine[T](updates: List[Update[T]])                extends Update[T]("")
-  case Raw[T](document: BsonDocument)                      extends Update[T]("")
-  case Pipeline[T](stages: List[Stage[T]])                 extends Update[T]("")
+  case Set[T](path: FieldPath, value: BsonValue)                   extends Update[T]("$set")
+  case SetOnInsert[T](path: FieldPath, value: BsonValue)           extends Update[T]("$setOnInsert")
+  case Unset[T](path: FieldPath)                                   extends Update[T]("$unset")
+  case Rename[T](path: FieldPath, to: FieldPath)                   extends Update[T]("$rename")
+  case Inc[T](path: FieldPath, amount: BsonValue)                  extends Update[T]("$inc")
+  case Mul[T](path: FieldPath, factor: BsonValue)                  extends Update[T]("$mul")
+  case Min[T](path: FieldPath, value: BsonValue)                   extends Update[T]("$min")
+  case Max[T](path: FieldPath, value: BsonValue)                   extends Update[T]("$max")
+  case CurrentDate[T](path: FieldPath)                             extends Update[T]("$currentDate")
+  case Push[T](path: FieldPath, value: BsonValue)                  extends Update[T]("$push")
+  case Pull[T](path: FieldPath, value: BsonValue)                  extends Update[T]("$pull")
+  case PullAll[T](path: FieldPath, values: BsonArray)              extends Update[T]("$pullAll")
+  case Pop[T](path: FieldPath, first: Boolean)                     extends Update[T]("$pop")
+  case AddToSet[T](path: FieldPath, value: BsonValue)              extends Update[T]("$addToSet")
+  case AddToSetEach[T](path: FieldPath, values: BsonArray)         extends Update[T]("$addToSet")
+  case Combine[T](updates: List[Update[T]])                        extends Update[T]("")
+  case Raw[T](document: BsonDocument)                              extends Update[T]("")
+  case Pipeline[T](stages: List[Stage[T]])                         extends Update[T]("")
+  case Bit[T](path: FieldPath, operation: String, mask: BsonValue) extends Update[T]("$bit")
 
   case PushEach[T](
       path: FieldPath,
@@ -136,6 +137,10 @@ object Update:
   def popFirst[E, C, A](field: Field[E, C])(using ElementOf[C, A]): Update[E] = Pop(field.path, first = true)
   def popLast[E, C, A](field: Field[E, C])(using ElementOf[C, A]): Update[E]  = Pop(field.path, first = false)
 
+  def bitAnd[E, C, A](field: Field[E, C], mask: A)(using bits: BitwiseOf[C, A]): Update[E] = Bit(field.path, "and", bits.encode(mask))
+  def bitOr[E, C, A](field: Field[E, C], mask: A)(using bits: BitwiseOf[C, A]): Update[E]  = Bit(field.path, "or", bits.encode(mask))
+  def bitXor[E, C, A](field: Field[E, C], mask: A)(using bits: BitwiseOf[C, A]): Update[E] = Bit(field.path, "xor", bits.encode(mask))
+
   def combine[E](updates: Update[E]*): Update[E] = Combine(updates.toList)
 
   def pipeline[E](stages: Stage[E]*): Update[E] =
@@ -173,6 +178,7 @@ object Update:
     case Pull(path, value)               => operator(target, update.key, path.render(naming), value)
     case PullAll(path, values)           => operator(target, update.key, path.render(naming), values)
     case Pop(path, first)                => operator(target, update.key, path.render(naming), BsonInt32(if first then -1 else 1))
+    case Bit(path, operation, mask)      => operator(target, update.key, path.render(naming), BsonDocument(operation, mask))
     case AddToSet(path, value)           => operator(target, update.key, path.render(naming), value)
     case AddToSetEach(path, vs)          => operator(target, update.key, path.render(naming), each(vs))
     case Combine(updates)                => updates.foreach(write(_, naming, target))
