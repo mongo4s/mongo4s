@@ -794,6 +794,50 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Accumulator.Raw(document) =>
       throw UnsupportedOperationException(s"FakeMongoCollection: the raw accumulator $document is not simulated")
 
+    case Accumulator.FirstN(expression, n) => BsonArray(documents.take(n).map(orNull(expression, _)).asJava)
+    case Accumulator.LastN(expression, n)  => BsonArray(documents.takeRight(n).map(orNull(expression, _)).asJava)
+    case Accumulator.MaxN(expression, n)   => BsonArray(present(expression, documents).sortWith(BsonOrdering.compare(_, _) > 0).take(n).asJava)
+    case Accumulator.MinN(expression, n)   => BsonArray(present(expression, documents).sortWith(BsonOrdering.compare(_, _) < 0).take(n).asJava)
+
+    case Accumulator.Top(sortBy, output)        => documents.sortWith(orderedBy(sortBy)).headOption.fold(BsonNull.VALUE: BsonValue)(orNull(output, _))
+    case Accumulator.Bottom(sortBy, output)     => documents.sortWith(orderedBy(sortBy)).lastOption.fold(BsonNull.VALUE: BsonValue)(orNull(output, _))
+    case Accumulator.TopN(sortBy, output, n)    => BsonArray(documents.sortWith(orderedBy(sortBy)).take(n).map(orNull(output, _)).asJava)
+    case Accumulator.BottomN(sortBy, output, n) => BsonArray(documents.sortWith(orderedBy(sortBy)).takeRight(n).map(orNull(output, _)).asJava)
+
+    case Accumulator.StdDevPop(expression)    => deviation(valuesOf(expression, documents), sample = false)
+    case Accumulator.StdDevSamp(expression)   => deviation(valuesOf(expression, documents), sample = true)
+    case Accumulator.MergeObjects(expression) => merged(valuesOf(expression, documents))
+
+    case approximate @ (_: Accumulator.Median[E] | _: Accumulator.Percentile[E]) =>
+      throw UnsupportedOperationException(
+        s"FakeMongoCollection: ${approximate.key} is computed by the server's approximate method, which no fake can be faithful to"
+      )
+
+  private def orNull(expression: Accumulator.Expression[E], document: BsonDocument): BsonValue =
+    valuesOf(expression, List(document)).headOption.getOrElse(BsonNull.VALUE)
+
+  private def present(expression: Accumulator.Expression[E], documents: List[BsonDocument]): List[BsonValue] =
+    valuesOf(expression, documents).filterNot(_.isNull)
+
+  private def deviation(values: List[BsonValue], sample: Boolean): BsonValue =
+    val numbers = values.filter(_.isNumber).map(_.asNumber.doubleValue)
+    val count   = if sample then numbers.size - 1 else numbers.size
+
+    if count < 1
+    then BsonNull.VALUE
+    else
+      val mean = numbers.sum / numbers.size
+      BsonDouble(math.sqrt(numbers.map(value => (value - mean) * (value - mean)).sum / count))
+  end deviation
+
+  private def merged(values: List[BsonValue]): BsonValue =
+    values.filterNot(_.isNull).foldLeft(BsonDocument()) { (acc, value) =>
+      if !value.isDocument
+      then throw commandFailure(5911200, "Location5911200", s"$$mergeObjects requires object inputs, but input $value is of type ${value.getBsonType}")
+      value.asDocument.entrySet.asScala.foreach(entry => acc.put(entry.getKey, entry.getValue): Unit)
+      acc
+    }
+
   private def positional(expression: Accumulator.Expression[E], document: Option[BsonDocument]): BsonValue =
     document.flatMap(one => valuesOf(expression, List(one)).headOption).getOrElse(BsonNull.VALUE)
 

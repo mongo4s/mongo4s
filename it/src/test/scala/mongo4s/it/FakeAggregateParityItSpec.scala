@@ -134,6 +134,42 @@ final class FakeAggregateParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matche
         .asserting((fromServer, fromFake) => fromFake shouldBe fromServer)
     }
 
+    "produce the same $firstN, $lastN, $maxN and $minN, an n past the group's size included" in {
+      parity(
+        "n_accumulators",
+        Stage.sortBy(Sort.asc(Field.stored[Person, String]("id"))),
+        Stage.groupBy(city)(
+          "firstTwo" -> Accumulator.firstN(name, 2),
+          "lastOne"  -> Accumulator.lastN(name, 1),
+          "oldest"   -> Accumulator.maxN(age, 5),
+          "youngest" -> Accumulator.minN(age, 1),
+        ),
+        byId,
+      ).timeout(30.seconds).asserting((fromServer, fromFake) => fromFake shouldBe fromServer)
+    }
+
+    "produce the same $top, $bottom, $topN and $bottomN" in {
+      parity(
+        "ranked_accumulators",
+        Stage.groupBy(city)(
+          "eldest"   -> Accumulator.top(Sort.desc(age), name),
+          "youngest" -> Accumulator.bottom(Sort.desc(age), name),
+          "byName"   -> Accumulator.topN(Sort.asc(name), age, 5),
+          "lastName" -> Accumulator.bottomN(Sort.asc(name), name, 1),
+        ),
+        byId,
+      ).timeout(30.seconds).asserting((fromServer, fromFake) => fromFake shouldBe fromServer)
+    }
+
+    "produce the same standard deviations, to the last few bits" in {
+      parity("std_dev", Stage.groupAll[Person]("pop" -> Accumulator.stdDevPop(age), "samp" -> Accumulator.stdDevSamp(age)))
+        .timeout(30.seconds)
+        .asserting { (fromServer, fromFake) =>
+          fromFake.map(_.getDouble("pop").getValue).head shouldBe fromServer.map(_.getDouble("pop").getValue).head +- 1e-9
+          fromFake.map(_.getDouble("samp").getValue).head shouldBe fromServer.map(_.getDouble("samp").getValue).head +- 1e-9
+        }
+    }
+
     "produce the same $unset output" in {
       parity("unset", Stage.unset(age).and(city), Stage.sortBy(Sort.asc(name)))
         .timeout(30.seconds)

@@ -420,6 +420,49 @@ final class FakeFidelityParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matcher
     }
   }
 
+  "the fake and the server, grouping documents with gaps in them" should {
+    val score = Field.stored[BsonDocument, Int]("score")
+    val attrs = Field.stored[BsonDocument, BsonDocument]("attrs")
+    val group = Field.stored[BsonDocument, String]("g")
+    val seq   = Field.stored[BsonDocument, Int]("seq")
+
+    val seed = List(
+      BsonDocument("seq", BsonInt32(1)).append("g", BsonString("a")).append("score", BsonInt32(3)).append("attrs", BsonDocument("x", BsonInt32(1))),
+      BsonDocument("seq", BsonInt32(2)).append("g", BsonString("a")).append("attrs", BsonDocument("y", BsonInt32(2))),
+      BsonDocument("seq", BsonInt32(3)).append("g", BsonString("a")).append("score", BsonNull.VALUE),
+      BsonDocument("seq", BsonInt32(4)).append("g", BsonString("a")).append("score", BsonInt32(7)).append("attrs", BsonDocument("x", BsonInt32(3))),
+    )
+
+    def grouped(accumulators: (String, Accumulator[BsonDocument])*)(collection: Coll) =
+      collection
+        .aggregate[BsonDocument](Seq(Stage.sortBy(Sort.asc(seq)), Stage.groupBy(group)(accumulators*)))
+        .all
+        .map(_.map(document => { document.remove("_id"); document }))
+
+    "agree on which accumulators keep a missing or null value and which drop it" in {
+      agree("gaps_n_accumulators", seed) {
+        grouped(
+          "first"  -> Accumulator.firstN(score, 3),
+          "last"   -> Accumulator.lastN(score, 2),
+          "max"    -> Accumulator.maxN(score, 4),
+          "min"    -> Accumulator.minN(score, 4),
+          "top"    -> Accumulator.topN(Sort.asc(seq), score, 3),
+          "bottom" -> Accumulator.bottom(Sort.asc(seq), score),
+        )
+      }
+    }
+
+    "agree on what $mergeObjects builds, skipping the documents that carry nothing" in {
+      agree("gaps_merge_objects", seed)(grouped("merged" -> Accumulator.mergeObjects(attrs)))
+    }
+
+    "agree on refusing $mergeObjects over something that is not a document" in {
+      agree("merge_objects_refused", seed) { collection =>
+        grouped("merged" -> Accumulator.mergeObjects(score))(collection).attempt.map(codeOf)
+      }
+    }
+  }
+
   private def indexNames(indexes: List[BsonDocument]): List[String] =
     indexes.map(_.getString("name").getValue).sorted
 

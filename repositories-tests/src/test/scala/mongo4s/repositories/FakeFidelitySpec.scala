@@ -254,6 +254,17 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "an approximate accumulator" should {
+    "be refused by name, since only the server's own method gives its answer" in {
+      val c       = fake(BsonDocument("n", BsonInt32(1)))
+      val refused = intercept[UnsupportedOperationException] {
+        c.aggregate[BsonDocument](Seq(Stage.groupAll("m" -> Accumulator.median(Field.stored[BsonDocument, Int]("n"))))).all.unsafeRunSync()
+      }
+
+      refused.getMessage should include("$median")
+    }
+  }
+
   "renameCollection" should {
     "be refused by name, since the fake holds a single namespace and has nowhere to move it" in {
       val c       = fake(BsonDocument("name", BsonString("a")))

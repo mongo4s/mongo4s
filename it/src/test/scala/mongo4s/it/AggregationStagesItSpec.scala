@@ -90,6 +90,26 @@ final class AggregationStagesItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers
     }
   }
 
+  "$median and $percentile" should {
+    "answer from the values they were given, the percentiles in the order asked" in {
+      val program =
+        for
+          collection <- seeded("percentiles")
+          found      <- collection
+                          .aggregate[BsonDocument](
+                            Seq(Stage.groupAll[Person]("median" -> Accumulator.median(ageField), "spread" -> Accumulator.percentile(ageField, 0.1, 0.9)))
+                          )
+                          .all
+        yield found.map(document => (document.getNumber("median").doubleValue, document.getArray("spread").getValues.toArray.toList))
+
+      program.timeout(30.seconds).asserting { found =>
+        val (median, spread) = found.head
+        median should (be >= 15.0 and be <= 25.0)
+        spread.map(_.asInstanceOf[org.bson.BsonValue].asNumber.doubleValue) shouldBe List(5.0, 35.0)
+      }
+    }
+  }
+
   "$sortByCount" should {
     "count each value and put the most frequent first" in {
       val program =
