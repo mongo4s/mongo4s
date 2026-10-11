@@ -33,6 +33,15 @@ enum Stage[E](val key: String):
       as: String,
   ) extends Stage[T]("$lookup")
 
+  case LookupKeyedPipeline[T, B](
+      from: String,
+      localField: FieldPath,
+      foreignField: FieldPath,
+      let: Option[BsonDocument],
+      pipeline: List[Stage[B]],
+      as: String,
+  ) extends Stage[T]("$lookup")
+
   case GraphLookup[T, B](
       from: String,
       startWith: BsonValue,
@@ -120,6 +129,17 @@ enum Stage[E](val key: String):
       )
     case Stage.LookupPipeline(from, let, pipeline, as)    =>
       val lookup = BsonDocument("from", BsonString(from))
+
+      let.foreach(value => lookup.append("let", value): Unit)
+      lookup.append("pipeline", BsonArray(pipeline.map(_.toBson(naming)).asJava)): Unit
+      lookup.append("as", BsonString(as)): Unit
+
+      BsonDocument(key, lookup)
+
+    case Stage.LookupKeyedPipeline(from, localField, foreignField, let, pipeline, as) =>
+      val lookup = BsonDocument("from", BsonString(from))
+        .append("localField", BsonString(localField.render(naming)))
+        .append("foreignField", BsonString(foreignField.render(naming)))
 
       let.foreach(value => lookup.append("let", value): Unit)
       lookup.append("pipeline", BsonArray(pipeline.map(_.toBson(naming)).asJava)): Unit
@@ -269,6 +289,16 @@ object Stage:
 
   def lookupWith[E, B](from: String, pipeline: List[Stage[B]], as: String, let: Option[BsonDocument] = None): Stage[E] =
     LookupPipeline(from, let, pipeline, as)
+
+  def lookupWithKeys[E, B, A](
+      from: String,
+      localField: Field[E, A],
+      foreignField: Field[B, A],
+      pipeline: List[Stage[B]],
+      as: String,
+      let: Option[BsonDocument] = None,
+  ): Stage[E] =
+    LookupKeyedPipeline(from, localField.path, foreignField.path, let, pipeline, as)
 
   def graphLookup[E, B, A](
       from: String,

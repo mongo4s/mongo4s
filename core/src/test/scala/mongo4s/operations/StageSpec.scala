@@ -76,6 +76,22 @@ final class StageSpec extends AnyWordSpec, Matchers:
         """{"$lookup": {"from": "users", "let": {"owner": "$user_id"}, "pipeline": [{"$match": {"age": {"$gte": 18}}}], "as": "adults"}}"""
     }
 
+    "render a $lookup joined on keys and narrowed by a sub-pipeline, in the server's concise form" in {
+      val stage = Stage.lookupWithKeys[Order, StageSpec.User, String](
+        from = "users",
+        localField = Field.of[Order, String](_.userId),
+        foreignField = Field.of[StageSpec.User, String](_.managerId),
+        pipeline = List(Stage.matching(Field.of[StageSpec.User, Int](_.age).gte(18))),
+        as = "managed",
+      )
+
+      stage.toBson(FieldNaming.snakeCase).toJson shouldBe
+        """{"$lookup": {"from": "users", "localField": "user_id", "foreignField": "manager_id", """ +
+        """"pipeline": [{"$match": {"age": {"$gte": 18}}}], "as": "managed"}}"""
+
+      "Stage.lookupWithKeys[StageSpec.Order, StageSpec.User, Int](\"users\", Field.of[StageSpec.Order, String](_.userId), Field.of[StageSpec.User, Int](_.age), Nil, \"x\")" shouldNot typeCheck
+    }
+
     "render a $graphLookup, with its options only when they are set" in {
       val bare = Stage.graphLookup[Order, StageSpec.User, String](
         from = "users",

@@ -288,3 +288,37 @@ final class AggregationStagesItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers
       program.timeout(30.seconds).asserting(_ shouldBe List("open" -> false))
     }
   }
+
+  "$lookup joined on keys with a sub-pipeline" should {
+    "match by key and then narrow the joined documents with the pipeline" in {
+      val owner  = Field.stored[BsonDocument, String]("owner")
+      val id     = Field.stored[BsonDocument, String]("id")
+      val amount = Field.stored[BsonDocument, Int]("amount")
+
+      val program =
+        for
+          client   <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database <- client.getDatabase("stages_it")
+          users    <- database.getCollection[BsonDocument]("keyed_users")
+          orders   <- database.getCollection[BsonDocument]("keyed_orders")
+          _        <- users.insertMany(List(BsonDocument("id", BsonString("u1")), BsonDocument("id", BsonString("u2"))))
+          _        <- orders.insertMany(
+                        List(
+                          BsonDocument("owner", BsonString("u1")).append("amount", BsonInt32(5)),
+                          BsonDocument("owner", BsonString("u1")).append("amount", BsonInt32(50)),
+                          BsonDocument("owner", BsonString("u2")).append("amount", BsonInt32(70)),
+                        )
+                      )
+          joined   <- users
+                        .aggregate[BsonDocument](
+                          Seq(
+                            Stage.lookupWithKeys[BsonDocument, BsonDocument, String]("keyed_orders", id, owner, List(Stage.matching(amount.gte(10))), "big"),
+                            Stage.sortBy(Sort.asc(id)),
+                          )
+                        )
+                        .all
+        yield joined.map(user => user.getString("id").getValue -> user.getArray("big").size)
+
+      program.timeout(30.seconds).asserting(_ shouldBe List("u1" -> 1, "u2" -> 1))
+    }
+  }
