@@ -737,18 +737,67 @@ final class FakeMongoCollection[F[*], S[*], E](
     stages.foldLeft(storage.toList)(runStage)
 
   private def runStage(documents: List[BsonDocument], stage: Stage[E]): List[BsonDocument] = stage match
-    case Stage.MatchStage(filter)      => documents.filter(matches(_, filter))
-    case Stage.SortStage(sort)         => documents.sortWith(orderedBy(sort))
-    case Stage.Skip(n)                 => documents.drop(n)
-    case Stage.Limit(n)                => documents.take(n)
-    case Stage.ProjectStage(selected)  => documents.map(applyProjection(_, selected))
-    case Stage.Unset(paths)            => documents.map(document => paths.foldLeft(document)((acc, path) => unsetAt(acc, storedSegments(path))))
-    case Stage.Count(fieldName)        =>
+    case Stage.MatchStage(filter)                => documents.filter(matches(_, filter))
+    case Stage.SortStage(sort)                   => documents.sortWith(orderedBy(sort))
+    case Stage.Skip(n)                           => documents.drop(n)
+    case Stage.Limit(n)                          => documents.take(n)
+    case Stage.ProjectStage(selected)            => documents.map(applyProjection(_, selected))
+    case Stage.Unset(paths)                      => documents.map(document => paths.foldLeft(document)((acc, path) => unsetAt(acc, storedSegments(path))))
+    case Stage.Count(fieldName)                  =>
       if documents.isEmpty then Nil else List(BsonDocument(fieldName, BsonInt32(documents.size)))
-    case Stage.Group(by, accumulators) => grouped(documents, by, accumulators)
-    case Stage.SortByCount(path)       => grouped(documents, Some(path), List("count" -> Accumulator.count[E])).sortBy(-_.getInt32("count").getValue)
-    case other                         =>
+    case Stage.Group(by, accumulators)           => grouped(documents, by, accumulators)
+    case Stage.SortByCount(path)                 => grouped(documents, Some(path), List("count" -> Accumulator.count[E])).sortBy(-_.getInt32("count").getValue)
+    case Stage.Fill(partitionBy, sortBy, output) => filled(documents, partitionBy, sortBy, output)
+    case other                                   =>
       throw UnsupportedOperationException(s"FakeMongoCollection: ${stageName(other)} is not simulated")
+
+  private def filled(documents: List[BsonDocument], partitionBy: List[mongo4s.FieldPath], sortBy: Sort[E], output: List[FillOutput[E]]) =
+    val partitions = documents.groupBy(document => partitionBy.map(at(document, _).getOrElse(BsonNull.VALUE))).values.toList
+
+    partitions.flatMap { partition =>
+      val ordered = if sortBy.isEmpty then partition else partition.sortWith(orderedBy(sortBy))
+      output.foldLeft(ordered)((rows, method) => fillColumn(rows, method, sortBy))
+    }
+  end filled
+
+  private def fillColumn(rows: List[BsonDocument], method: FillOutput[E], sortBy: Sort[E]): List[BsonDocument] =
+    val segments = storedSegments(method.path)
+    val values   = rows.map(row => at(row, method.path).filterNot(_.isNull))
+
+    method match
+      case FillOutput.Value(_, value) =>
+        rows.zip(values).map((row, current) => if current.isEmpty then setAt(row, segments, value) else row)
+
+      case FillOutput.Locf(_) =>
+        rows
+          .zip(values)
+          .foldLeft((List.empty[BsonDocument], Option.empty[BsonValue])) { case ((done, last), (row, current)) =>
+            current match
+              case Some(value) => (done :+ row, Some(value))
+              case None        => (done :+ setAt(row, segments, last.getOrElse(BsonNull.VALUE)), last)
+          }
+          ._1
+
+      case FillOutput.Linear(_) =>
+        val xs     = rows.map(row => sortBy.fields.headOption.flatMap((path, _) => at(row, path)).map(positionOf))
+        val points = values.zip(xs).zipWithIndex.collect { case ((Some(value), Some(x)), index) => (index, x, value.asNumber.doubleValue) }
+
+        rows.zipWithIndex.map { (row, index) =>
+          if values(index).nonEmpty
+          then row
+          else
+            val before = points.filter(_._1 < index).lastOption
+            val after  = points.find(_._1 > index)
+
+            (before, after, xs(index)) match
+              case (Some((_, x0, y0)), Some((_, x1, y1)), Some(x)) => setAt(row, segments, BsonDouble(y0 + (y1 - y0) * (x - x0) / (x1 - x0)))
+              case _                                               => setAt(row, segments, BsonNull.VALUE)
+        }
+    end match
+  end fillColumn
+
+  private def positionOf(value: BsonValue): Double =
+    if value.isDateTime then value.asDateTime.getValue.toDouble else value.asNumber.doubleValue
 
   private def stageName(stage: Stage[E]): String =
     if stage.key.nonEmpty

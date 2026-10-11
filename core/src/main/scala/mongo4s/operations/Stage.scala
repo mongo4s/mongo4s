@@ -77,6 +77,14 @@ enum Stage[E](val key: String):
       output: List[(String, WindowField[E])],
   ) extends Stage[E]("$setWindowFields")
 
+  case Fill(
+      partitionBy: List[FieldPath],
+      sortBy: Sort[E],
+      output: List[FillOutput[E]],
+  ) extends Stage[E]("$fill")
+
+  case Redact(expression: BsonValue) extends Stage[E]("$redact")
+
   case GeoNear(
       near: Geometry.Point,
       path: FieldPath,
@@ -216,6 +224,21 @@ enum Stage[E](val key: String):
 
       BsonDocument(key, windowFields)
 
+    case Stage.Fill(partitionBy, sortBy, output) =>
+      val fill = BsonDocument()
+
+      if partitionBy.nonEmpty
+      then fill.append("partitionByFields", BsonArray(partitionBy.map(p => BsonString(p.render(naming)): BsonValue).asJava)): Unit
+
+      if !sortBy.isEmpty
+      then fill.append("sortBy", sortBy.toBson(naming)): Unit
+
+      fill.append("output", output.foldLeft(BsonDocument())((acc, entry) => acc.append(entry.path.render(naming), entry.toBson)))
+
+      BsonDocument(key, fill)
+
+    case Stage.Redact(expression) => BsonDocument(key, expression)
+
     case Stage.GeoNear(near, path, distanceField, options) =>
       val geoNear = BsonDocument("near", near.toBson)
         .append("distanceField", BsonString(distanceField))
@@ -311,6 +334,22 @@ object Stage:
 
     SetWindowFields(partitionBy, sortBy, output.toList)
   end setWindowFields
+
+  def fill[E](sortBy: Sort[E] = Sort.empty[E], partitionBy: Seq[FieldPath] = Seq.empty)(output: FillOutput[E]*): Stage[E] =
+    require(output.nonEmpty, "$fill with no output field fills nothing")
+
+    output.find(_.needsSort).foreach { method =>
+      require(!sortBy.isEmpty, s"$$fill by linear or locf follows the sort order, so it needs a sortBy; ${method.path.render(FieldNaming.identity)} has none")
+    }
+
+    Fill(partitionBy.toList, sortBy, output.toList)
+  end fill
+
+  def redact[E](expression: BsonValue): Stage[E] = Redact(expression)
+
+  val Descend: BsonValue = BsonString("$$DESCEND")
+  val Prune: BsonValue   = BsonString("$$PRUNE")
+  val Keep: BsonValue    = BsonString("$$KEEP")
 
   def geoNear[E, A](field: Field[E, A], near: Geometry.Point, distanceField: String, options: GeoNearOptions[E] = GeoNearOptions.default[E]): Stage[E] =
     GeoNear(near, field.path, distanceField, options)

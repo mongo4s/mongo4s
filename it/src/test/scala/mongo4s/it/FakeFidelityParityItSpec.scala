@@ -463,6 +463,40 @@ final class FakeFidelityParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matcher
     }
   }
 
+  "the fake and the server, filling gaps" should {
+    val t    = Field.stored[BsonDocument, Int]("t")
+    val v    = Field.stored[BsonDocument, Int]("v")
+    val s    = Field.stored[BsonDocument, String]("s")
+    val note = Field.stored[BsonDocument, String]("note")
+    val g    = Field.stored[BsonDocument, String]("g")
+
+    def row(id: String, group: String, at: Int, fields: (String, BsonValue)*): BsonDocument =
+      fields.foldLeft(BsonDocument("_id", BsonString(id)).append("g", BsonString(group)).append("t", BsonInt32(at)))((acc, f) => acc.append(f._1, f._2))
+
+    val seed = List(
+      row("a1", "a", 1, "v" -> BsonInt32(10), "s"    -> BsonString("x")),
+      row("a2", "a", 2, "s" -> BsonNull.VALUE),
+      row("a3", "a", 4, "v" -> BsonInt32(40), "note" -> BsonString("kept")),
+      row("a4", "a", 5),
+      row("b1", "b", 1),
+      row("b2", "b", 2, "v" -> BsonInt32(5), "s"     -> BsonString("y")),
+    )
+
+    def filledBy(stage: Stage[BsonDocument])(collection: Coll) =
+      collection.aggregate[BsonDocument](Seq(stage, Stage.sortBy(Sort.asc(g).asc(t)))).all
+
+    "agree on a fill by value, by the last value and by the line between neighbours, each within its partition" in {
+      agree(
+        "fill_methods",
+        seed,
+      )(filledBy(Stage.fill(Sort.asc(t), partitionBy = Seq(g.path))(FillOutput.linear(v), FillOutput.locf(s), FillOutput.value(note, "none"))))
+    }
+
+    "agree on a fill by value with no partition and no sort" in {
+      agree("fill_value_only", seed)(filledBy(Stage.fill[BsonDocument]()(FillOutput.value(v, 0))))
+    }
+  }
+
   private def indexNames(indexes: List[BsonDocument]): List[String] =
     indexes.map(_.getString("name").getValue).sorted
 

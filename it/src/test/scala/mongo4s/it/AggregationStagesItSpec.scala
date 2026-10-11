@@ -255,3 +255,36 @@ final class AggregationStagesItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers
       }
     }
   }
+
+  "$redact" should {
+    "prune what its expression says to, and descend into the rest" in {
+      val levelled = Seq(
+        Stage.redact[BsonDocument](
+          BsonDocument(
+            "$cond",
+            BsonDocument("if", BsonDocument("$eq", org.bson.BsonArray(java.util.List.of(BsonString("$level"), BsonInt32(1)))))
+              .append("then", Stage.Prune)
+              .append("else", Stage.Descend),
+          )
+        )
+      )
+
+      val program =
+        for
+          client     <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database   <- client.getDatabase("stages_it")
+          collection <- database.getCollection[BsonDocument]("redact")
+          _          <- collection.insertMany(
+                          List(
+                            BsonDocument("name", BsonString("open"))
+                              .append("level", BsonInt32(0))
+                              .append("secret", BsonDocument("level", BsonInt32(1)).append("pin", BsonInt32(1234))),
+                            BsonDocument("name", BsonString("hidden")).append("level", BsonInt32(1)),
+                          )
+                        )
+          kept       <- collection.aggregate[BsonDocument](levelled).all
+        yield kept.map(document => (document.getString("name").getValue, document.containsKey("secret")))
+
+      program.timeout(30.seconds).asserting(_ shouldBe List("open" -> false))
+    }
+  }

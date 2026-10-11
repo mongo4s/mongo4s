@@ -3,7 +3,7 @@ package mongo4s.operations
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
-import org.bson.{BsonDocument, BsonInt32, BsonString}
+import org.bson.{BsonBoolean, BsonDocument, BsonInt32, BsonString}
 
 import mongo4s.Field
 import mongo4s.bson.FieldNaming
@@ -223,6 +223,37 @@ final class StageSpec extends AnyWordSpec, Matchers:
       an[IllegalArgumentException] should be thrownBy WindowFunction.expMovingAvg(Field.of[Order, Int](_.itemCount), 0)
       an[IllegalArgumentException] should be thrownBy WindowFunction.expMovingAvgAlpha(Field.of[Order, Int](_.itemCount), 1.0)
       "WindowFunction.linearFill(Field.of[StageSpec.Order, String](_.userId))" shouldNot typeCheck
+    }
+
+    "render $fill with its partition fields, its sort and one method per field, through the naming policy" in {
+      val count = Field.of[Order, Int](_.itemCount)
+      val user  = Field.of[Order, String](_.userId)
+
+      val stage = Stage.fill(Sort.asc(count), partitionBy = Seq(user.path))(
+        FillOutput.linear(count),
+        FillOutput.locf(Field.of[Order, List[String]](_.tags)),
+        FillOutput.value(user, "nobody"),
+      )
+
+      stage.toBson(FieldNaming.snakeCase).toJson shouldBe
+        """{"$fill": {"partitionByFields": ["user_id"], "sortBy": {"item_count": 1}, "output": """ +
+        """{"item_count": {"method": "linear"}, "tags": {"method": "locf"}, "user_id": {"value": "nobody"}}}}"""
+
+      Stage.fill[Order]()(FillOutput.value(user, "nobody")).toBson(FieldNaming.identity).toJson shouldBe
+        """{"$fill": {"output": {"userId": {"value": "nobody"}}}}"""
+    }
+
+    "refuse a $fill that fills nothing, or follows a sort order it was not given" in {
+      an[IllegalArgumentException] should be thrownBy Stage.fill[Order]()()
+      an[IllegalArgumentException] should be thrownBy Stage.fill[Order]()(FillOutput.locf(Field.of[Order, String](_.userId)))
+      "FillOutput.linear(Field.of[StageSpec.Order, String](_.userId))" shouldNot typeCheck
+    }
+
+    "render $redact around the expression it was given" in {
+      val expression = BsonDocument("$cond", BsonDocument("if", BsonBoolean.TRUE).append("then", Stage.Descend).append("else", Stage.Prune))
+
+      Stage.redact[Order](expression).toBson(FieldNaming.identity).toJson shouldBe
+        """{"$redact": {"$cond": {"if": true, "then": "$$DESCEND", "else": "$$PRUNE"}}}"""
     }
 
     "refuse a $bucket that cannot make a single bucket" in {
