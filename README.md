@@ -1723,6 +1723,12 @@ The fake streams through the same `RsBridge` the real collection does, and reads
 runs, not when it is built — a stream set up before an insert sees the insert. `aggregate`, `distinct` and
 `selectAs` stream as well as `find`.
 
+One fake can be shared between fibers. Each operation runs start to finish under one lock, so concurrent inserts
+all land, a duplicate `_id` or unique key lets exactly one of them through, `$inc`s from many fibers add up, and
+`findOneAndUpdate` hands each document to one caller — what a test of a counter or a work queue relies on. That is
+stricter than the server, which promises atomicity per document: every answer the fake gives is one MongoDB could
+give, but a race across documents that the server could expose will not show here.
+
 Every update operator is simulated — `$set`, `$unset`, `$inc`, `$mul`, `$min`, `$max`, `$rename`, `$currentDate`,
 `$push` with its `$each`/`$position`/`$slice`/`$sort` modifiers, `$pull`, `$pullAll`, `$pop`, `$addToSet` and `$bit` — and
 `$setOnInsert` correctly does nothing on an update that matches.

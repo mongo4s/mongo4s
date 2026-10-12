@@ -680,6 +680,18 @@ recorded it twice, a clash with an existing name or key pattern went through, an
 silent. Adding `createIndexes` and `dropIndexes` was the point to fix all of it, each case pinned by a parity spec
 with the server's own error codes.
 
+**The fake takes one lock, not a concurrent map.** Its storage was a bare `ArrayBuffer`, and a test that shared it
+between fibers saw inserts vanish or throw, two documents with one `_id`, and a thousand concurrent `$inc`s add up to
+a few hundred. A `TrieMap` keyed by `_id` was the obvious replacement and fixes only the first: every write here is
+check-then-act — the duplicate check, a unique index scanning the other documents, read-modify-write for `$inc`,
+`updateMany` and a bulk write touching several — so each would need its own CAS loop and some cannot be one at all.
+It would also lose insertion order, which `find` without a `Sort`, `updateOne`'s choice of match and `$group`'s
+bucket order all rest on, and key `1` and `1L` apart where the server treats them as one `_id`. One `ReentrantLock`
+around every operation, and around the moment a stream takes its results, makes each operation atomic and keeps the
+buffer as it was. It serialises more than MongoDB does, but a serial history is one the server could produce, and
+the in-memory operations it serialises take microseconds. `FakeConcurrencySpec` fails against the unlocked buffer —
+five of its six cases on every run, the duplicate `_id` one now and then.
+
 ## Evolving the API
 
 Three commitments, and the mechanics that make each one keepable:

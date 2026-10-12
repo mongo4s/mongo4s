@@ -37,6 +37,12 @@ Binary compatible with `4.0.0`, checked by MiMa.
 - `mongodb-driver-reactivestreams` `5.13.0`; `kyo` `1.0.0-RC7`.
 - An `.editorconfig` trims trailing whitespace, which is what turned the format check red.
 
+### Fixed
+
+- **The fake is safe to share between fibers.** Its storage was a bare `ArrayBuffer`, so concurrent inserts lost
+  documents or threw, a duplicate `_id` or unique key could get through twice, and concurrent `$inc`s lost updates.
+  Every operation now runs under one lock.
+
 ## 4.0.0
 
 ### Added

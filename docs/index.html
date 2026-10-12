@@ -1732,7 +1732,9 @@ users.findPage(20, descending = true)                       // newest key first<
         <code>UnsupportedOperationException</code> naming what was asked for, rather than quietly answering wrong.
         It streams through the runtime's <code>RsBridge</code>, reading the collection when the stream runs, so
         <code>FakeMongoCollection[IO, S, User](codec)</code> and <code>FakeRepository[IO, S, User, String]()</code> are
-        all it takes.
+        all it takes. One fake can be shared between fibers: each operation runs under one lock, so concurrent
+        inserts all land, a duplicate <code>_id</code> lets exactly one through, <code>$inc</code>s add up and
+        <code>findOneAndUpdate</code> hands each document to one caller.
         Replace-based upserts — what <code>upsert</code>/<code>upsertMany</code> go through — insert on a miss the way
         the server does; an <code>update</code>-based <code>UpdateOptions.upsert</code> that matches nothing throws
         instead of
