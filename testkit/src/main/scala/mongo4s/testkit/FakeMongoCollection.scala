@@ -1,5 +1,7 @@
 package mongo4s.testkit
 
+import java.util.concurrent.locks.ReentrantLock
+
 import scala.annotation.unused
 import scala.collection.mutable
 
@@ -29,16 +31,24 @@ final class FakeMongoCollection[F[*], S[*], E](
   private val storage        = mutable.ArrayBuffer.empty[BsonDocument]
   private val IdIndex        = "_id_"
   private val createdIndexes = mutable.ArrayBuffer.empty[Index[E]]
+  private val lock           = ReentrantLock()
+
+  private def locked[A](body: => A): A =
+    lock.lock()
+    try body
+    finally lock.unlock()
+
+  private def atomically[A](body: => A): F[A] = F.delay(locked(body))
 
   def withReadConcern(concern: ReadConcern): MongoCollection[F, S, E]          = this
   def withWriteConcern(concern: WriteConcern): MongoCollection[F, S, E]        = this
   def withReadPreference(preference: ReadPreference): MongoCollection[F, S, E] = this
 
-  def snapshot: List[E] = storage.flatMap(codec.decodeDocument(_).toOption).toList
+  def snapshot: List[E] = locked(storage.flatMap(codec.decodeDocument(_).toOption).toList)
 
-  def indexes: List[Index[E]] = createdIndexes.toList
+  def indexes: List[Index[E]] = locked(createdIndexes.toList)
 
-  def insertRaw(document: BsonDocument): Unit = storage += document
+  def insertRaw(document: BsonDocument): Unit = locked(storage += document): Unit
 
   private def requireDefaultUpdateOptions(options: UpdateOptions, operation: String): Unit =
     requireNoArrayFilters(options.arrayFilters, operation)
@@ -84,14 +94,14 @@ final class FakeMongoCollection[F[*], S[*], E](
   end replacing
 
   def insertOne(document: E)(using session: Option[ClientSession]): F[InsertOneResult] =
-    F.delay {
+    atomically {
       val encoded = identified(codec.encodeDocument(document))
       storage += encoded
       InsertOneResult(Option(encoded.get(BsonField.Id)))
     }
 
   def insertMany(documents: Seq[E])(using session: Option[ClientSession]): F[InsertManyResult] =
-    F.delay {
+    atomically {
       val ids = mutable.ListBuffer.empty[BsonValue]
 
       documents.zipWithIndex.foreach { (document, i) =>
@@ -131,7 +141,7 @@ final class FakeMongoCollection[F[*], S[*], E](
   def find(filter: Filter[E])(using session: Option[ClientSession]): FindQuery[F, S, E] = FakeFindQuery(filter)
 
   def replaceOne(filter: Filter[E], replacement: E, options: ReplaceOptions)(using session: Option[ClientSession]): F[UpdateResult] =
-    F.delay {
+    atomically {
       requireNoCollation(options.collation, "replaceOne")
 
       matching(filter).headOption match
@@ -147,7 +157,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     }
 
   def updateOne(filter: Filter[E], update: Update[E], options: UpdateOptions)(using session: Option[ClientSession]): F[UpdateResult] =
-    F.delay {
+    atomically {
       requireNoArrayFilters(options.arrayFilters, "updateOne")
       requireNoCollation(options.collation, "updateOne")
       requireRenderable(update)
@@ -163,7 +173,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     }
 
   def updateMany(filter: Filter[E], update: Update[E], options: UpdateOptions)(using session: Option[ClientSession]): F[UpdateResult] =
-    F.delay {
+    atomically {
       requireNoArrayFilters(options.arrayFilters, "updateMany")
       requireNoCollation(options.collation, "updateMany")
       requireRenderable(update)
@@ -181,7 +191,7 @@ final class FakeMongoCollection[F[*], S[*], E](
   def findOneAndUpdate(filter: Filter[E], update: Update[E], options: FindOneAndUpdateOptions[E])(using
       session: Option[ClientSession]
   ): F[Option[E]] =
-    F.delay {
+    atomically {
       requireNoArrayFilters(options.arrayFilters, "findOneAndUpdate")
       requireNoCollation(options.collation, "findOneAndUpdate")
       requireRenderable(update)
@@ -198,7 +208,7 @@ final class FakeMongoCollection[F[*], S[*], E](
   def findOneAndReplace(filter: Filter[E], replacement: E, options: FindOneAndReplaceOptions[E])(using
       session: Option[ClientSession]
   ): F[Option[E]] =
-    F.delay {
+    atomically {
       requireNoCollation(options.collation, "findOneAndReplace")
 
       firstMatching(filter, options.sort) match
@@ -211,7 +221,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     }
 
   def findOneAndDelete(filter: Filter[E], options: FindOneAndDeleteOptions[E])(using session: Option[ClientSession]): F[Option[E]] =
-    F.delay {
+    atomically {
       requireNoCollation(options.collation, "findOneAndDelete")
 
       firstMatching(filter, options.sort).flatMap { existing =>
@@ -221,7 +231,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     }
 
   def deleteOne(filter: Filter[E], options: DeleteOptions)(using session: Option[ClientSession]): F[DeleteResult] =
-    F.delay {
+    atomically {
       requireNoCollation(options.collation, "deleteOne")
 
       matching(filter).headOption match
@@ -230,7 +240,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     }
 
   def deleteMany(filter: Filter[E], options: DeleteOptions)(using session: Option[ClientSession]): F[DeleteResult] =
-    F.delay {
+    atomically {
       requireNoCollation(options.collation, "deleteMany")
 
       val matches = matching(filter)
@@ -239,7 +249,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     }
 
   def count(filter: Filter[E], options: CountOptions)(using session: Option[ClientSession]): F[Long] =
-    F.delay {
+    atomically {
       requireNoCollation(options.collation, "count")
 
       val matches = matching(filter).size.toLong
@@ -247,10 +257,10 @@ final class FakeMongoCollection[F[*], S[*], E](
       options.limit.fold(skipped)(limit => math.min(skipped, limit.toLong))
     }
 
-  def estimatedCount: F[Long] = F.delay(storage.size.toLong)
+  def estimatedCount: F[Long] = atomically(storage.size.toLong)
 
   def bulkWrite(commands: Seq[WriteCommand[E]], ordered: Boolean)(using session: Option[ClientSession]): F[BulkWriteResult] =
-    F.delay {
+    atomically {
       var inserted = 0L
       var matched  = 0L
       var modified = 0L
@@ -329,7 +339,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     F.map(createIndexes(List(index)))(_.head)
 
   def createIndexes(indexes: Seq[Index[E]])(using session: Option[ClientSession]): F[List[String]] =
-    F.delay {
+    atomically {
       val missing = indexes.filterNot(alreadyBuilt)
       missing.foreach(requireBuildable)
 
@@ -418,7 +428,7 @@ final class FakeMongoCollection[F[*], S[*], E](
   end uniqueKey
 
   def listIndexes(using session: Option[ClientSession]): F[List[BsonDocument]] =
-    F.delay {
+    atomically {
       val onId = BsonDocument("v", BsonInt32(2)).append("key", BsonDocument(BsonField.Id, BsonInt32(1))).append("name", BsonString(IdIndex))
 
       onId :: createdIndexes.map(described).toList
@@ -440,7 +450,7 @@ final class FakeMongoCollection[F[*], S[*], E](
   end described
 
   def dropIndex(indexName: String)(using session: Option[ClientSession]): F[Unit] =
-    F.delay {
+    atomically {
       if indexName == IdIndex
       then throw commandFailure(72, "InvalidOptions", "cannot drop _id index")
 
@@ -450,12 +460,12 @@ final class FakeMongoCollection[F[*], S[*], E](
       createdIndexes.filterInPlace(index => this.indexName(index) != indexName)
     }
 
-  def dropIndexes(using session: Option[ClientSession]): F[Unit] = F.delay(createdIndexes.clear())
+  def dropIndexes(using session: Option[ClientSession]): F[Unit] = atomically(createdIndexes.clear())
 
   def renameCollection(to: String, dropTarget: Boolean)(using session: Option[ClientSession]): F[Unit] =
     F.raiseError(UnsupportedOperationException("FakeMongoCollection: renameCollection is not simulated, the fake holds a single namespace"))
 
-  def drop(using session: Option[ClientSession]): F[Unit] = F.delay { storage.clear(); createdIndexes.clear() }
+  def drop(using session: Option[ClientSession]): F[Unit] = atomically { storage.clear(); createdIndexes.clear() }
 
   def watchAttempting(options: WatchOptions[E])(using
       session: Option[ClientSession]
@@ -975,17 +985,17 @@ final class FakeMongoCollection[F[*], S[*], E](
     def maxTime(duration: scala.concurrent.duration.FiniteDuration): DistinctQuery[F, S, B] = this
     def batchSize(n: Int): DistinctQuery[F, S, B]                                           = this
 
-    def first: F[Option[B]] = F.delay(decoded.headOption)
-    def all: F[List[B]]     = F.delay(decoded)
+    def first: F[Option[B]] = atomically(decoded.headOption)
+    def all: F[List[B]]     = atomically(decoded)
 
     def stream(using Streamable[S, B]): S[B] =
-      rs.stream(DeferredPublisher(() => decoded))
+      rs.stream(DeferredPublisher(() => locked(decoded)))
 
     def attempting: DecodeAttempts[F, S, B] = new DecodeAttempts[F, S, B]:
-      def all: F[List[DecodeResult[B]]] = F.delay(distinctValues(path, filter).map(decoder.decode))
+      def all: F[List[DecodeResult[B]]] = atomically(distinctValues(path, filter).map(decoder.decode))
 
       def stream(using Streamable[S, DecodeResult[B]]): S[DecodeResult[B]] =
-        rs.stream(DeferredPublisher(() => distinctValues(path, filter).map(decoder.decode)))
+        rs.stream(DeferredPublisher(() => locked(distinctValues(path, filter).map(decoder.decode))))
 
     private def decoded: List[B] =
       distinctValues(path, filter).map(decoder.decode(_).fold(error => throw error.toThrowable, identity))
@@ -1002,17 +1012,17 @@ final class FakeMongoCollection[F[*], S[*], E](
     def explain(verbosity: ExplainVerbosity): F[BsonDocument] =
       throw UnsupportedOperationException("FakeMongoCollection: explain needs a real query planner, so it is not simulated")
 
-    def first: F[Option[B]] = F.delay(decoded.headOption)
-    def all: F[List[B]]     = F.delay(decoded)
+    def first: F[Option[B]] = atomically(decoded.headOption)
+    def all: F[List[B]]     = atomically(decoded)
 
     def stream(using Streamable[S, B]): S[B] =
-      rs.stream(DeferredPublisher(() => decoded))
+      rs.stream(DeferredPublisher(() => locked(decoded)))
 
     def attempting: DecodeAttempts[F, S, B] = new DecodeAttempts[F, S, B]:
-      def all: F[List[DecodeResult[B]]] = F.delay(runPipeline(stages).map(decoderB.decodeDocument))
+      def all: F[List[DecodeResult[B]]] = atomically(runPipeline(stages).map(decoderB.decodeDocument))
 
       def stream(using Streamable[S, DecodeResult[B]]): S[DecodeResult[B]] =
-        rs.stream(DeferredPublisher(() => runPipeline(stages).map(decoderB.decodeDocument)))
+        rs.stream(DeferredPublisher(() => locked(runPipeline(stages).map(decoderB.decodeDocument))))
 
     private def decoded: List[B] =
       runPipeline(stages).map(decoderB.decodeDocument(_).fold(error => throw error.toThrowable, identity))
@@ -1040,34 +1050,34 @@ final class FakeMongoCollection[F[*], S[*], E](
     def explain(verbosity: ExplainVerbosity): F[BsonDocument] =
       throw UnsupportedOperationException("FakeMongoCollection: explain needs a real query planner, so it is not simulated")
 
-    def first: F[Option[E]]                  = F.delay(results.headOption)
-    def all: F[List[E]]                      = F.delay(results)
-    def stream(using Streamable[S, E]): S[E] = rs.stream(DeferredPublisher(() => results))
+    def first: F[Option[E]]                  = atomically(results.headOption)
+    def all: F[List[E]]                      = atomically(results)
+    def stream(using Streamable[S, E]): S[E] = rs.stream(DeferredPublisher(() => locked(results)))
 
     def selecting[B](selected: Projection[E], decoder: FieldNaming => BsonDocumentDecoder[B]): SelectQuery[F, S, B] =
       val decode            = decoder(naming).decodeDocument
       val selectedDocuments = () => sourceDocuments.map(applyProjection(_, selected)).map(decode)
 
       new SelectQuery[F, S, B]:
-        def first: F[Option[B]] = F.delay(selectedDocuments().headOption.map(orThrow))
-        def all: F[List[B]]     = F.delay(selectedDocuments().map(orThrow))
+        def first: F[Option[B]] = atomically(selectedDocuments().headOption.map(orThrow))
+        def all: F[List[B]]     = atomically(selectedDocuments().map(orThrow))
 
         def stream(using Streamable[S, B]): S[B] =
-          rs.stream(DeferredPublisher(() => selectedDocuments().map(orThrow)))
+          rs.stream(DeferredPublisher(() => locked(selectedDocuments().map(orThrow))))
 
         def attempting: DecodeAttempts[F, S, B] = new DecodeAttempts[F, S, B]:
-          def all: F[List[DecodeResult[B]]] = F.delay(selectedDocuments())
+          def all: F[List[DecodeResult[B]]] = atomically(selectedDocuments())
 
           def stream(using Streamable[S, DecodeResult[B]]): S[DecodeResult[B]] =
-            rs.stream(DeferredPublisher(selectedDocuments))
+            rs.stream(DeferredPublisher(() => locked(selectedDocuments())))
     end selecting
 
     private def orThrow[B](result: DecodeResult[B]): B = result.fold(error => throw error.toThrowable, identity)
 
     def attempting: DecodeAttempts[F, S, E] = new DecodeAttempts[F, S, E]:
-      def all: F[List[DecodeResult[E]]] = F.delay(documents.map(codec.decodeDocument))
+      def all: F[List[DecodeResult[E]]] = atomically(documents.map(codec.decodeDocument))
 
-      def stream(using Streamable[S, DecodeResult[E]]): S[DecodeResult[E]] = rs.stream(DeferredPublisher(() => documents.map(codec.decodeDocument)))
+      def stream(using Streamable[S, DecodeResult[E]]): S[DecodeResult[E]] = rs.stream(DeferredPublisher(() => locked(documents.map(codec.decodeDocument))))
 
     private def sourceDocuments: List[BsonDocument] =
       val ordered =
