@@ -232,10 +232,10 @@ asterisk. `aggregateDirect[B]` takes a `WireCodec[B]` instead and registers it t
 registers the entity's, so the output is read straight off the wire. It carries the strictness with it — the output
 type's fields all have to be present, the same rule a stored entity is read under.
 
-The size of that asterisk is now measured rather than assumed: over ten thousand documents `aggregateDirect` is 1.6×
-the bridged path against a real server, and over ten it is a wash, because the round trip is the whole cost at that
-scale. Both halves are in [BENCHMARKS.md](BENCHMARKS.md); the second half is the reason `aggregate` was never
-deprecated in favour of it.
+The size of that asterisk is now measured rather than assumed: over ten thousand documents `aggregateDirect` is 1.4×
+the bridged path against a real server, and over ten it is a wash, because the round trip and the server's work are
+the whole cost at that scale. Both halves are in [BENCHMARKS.md](BENCHMARKS.md); the second half is the reason
+`aggregate` was never deprecated in favour of it.
 
 `distinct` is left alone deliberately: it reads one `BsonValue` per result rather than a document, so there is no
 intermediate tree to skip and nothing to win.
@@ -774,7 +774,7 @@ carrying exactly n events it blocks forever. Not fixable from here.
 
 **A circe bridge.** There is no `mongo4s-bson-circe` module, and there is not going to be one. circe is a *JSON*
 codec: routing an entity through it means `case class → circe → some BSON tree → org.bson`, which is the same
-`case class ↔ circe ↔ mongo4cats.Bson ↔ org.Bson` trip [BENCHMARKS.md](BENCHMARKS.md) measures at 2.5–5× slower on
+`case class ↔ circe ↔ mongo4cats.Bson ↔ org.Bson` trip [BENCHMARKS.md](BENCHMARKS.md) measures at 1.9–3.4× slower on
 decode. That cost is the reason `mongo4s` exists; shipping a first-class path back to it would be arguing against
 the library's own premise. A model already on circe should get a `BsonDocumentCodec[A]` written against BSON
 directly — `bson-direct` derives one with no third-party dependency at all.

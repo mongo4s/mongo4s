@@ -1899,15 +1899,16 @@ What changed in each release: **[CHANGELOG.md](CHANGELOG.md)**. What is not cove
 
 ## Benchmarks
 
-Six JMH harnesses in [`benchmarks/`](benchmarks), against `mongo4cats` as a reference point. The short version:
-`bson-direct`'s `WireCodec` writes and reads real BSON bytes **2.7–3.2×** faster than either `mongo4cats` codec and
-allocates up to **6.9×** less; against a real `MongoDB` every single-document operation lands inside run-to-run
-error for all six stacks, while bulk reads pull ahead — `mongo4cats` allocates **2.0–13×** more on
-`findAll`/`findStream`, and its `find(...).stream` runs at **10 ops/s** against `mongo4s`'s **232**.
+Six JMH harnesses in [`benchmarks/`](benchmarks), against `mongo4cats` `0.8.0` as a reference point. The short
+version: `bson-direct`'s `WireCodec` writes and reads real BSON bytes **2.4–3.2×** faster than either `mongo4cats`
+codec and allocates up to **6.4×** less; against a real `MongoDB` the single-document operations land level for all
+six stacks, while bulk reads pull ahead — `mongo4cats` allocates **2.1–6.0×** more on `findAll`/`findStream`, reads
+`findAll` **1.13–1.35×** slower, and its `find(...).stream` runs at **1,626 ops/s** against `mongo4s`'s **3,174** on
+the same effect system (`mongo4cats` `0.7.18` ran it at 392; `0.8.0` closed most of that gap, not all).
 
-Those server-backed rates are latency-bound on the machine they were measured on — `MongoDB` in Docker on macOS,
-where a bare `ping` inside the container already costs over 2 ms. They compare stacks honestly; read them as ratios
-rather than as throughput a server can deliver.
+The server-backed rates were measured against `MongoDB` in Docker on macOS, where a bare `ping` inside the container
+costs 0.135 ms and the round trip is still most of a single-document call. They compare stacks honestly; read them as
+ratios rather than as throughput a server can deliver.
 
 Every table, the methodology and the commands to reproduce them: **[BENCHMARKS.md](BENCHMARKS.md)**.
 

@@ -36,6 +36,12 @@ Binary compatible with `4.0.0`, checked by MiMa.
   call compiles unchanged.
 - `mongodb-driver-reactivestreams` `5.13.0`; `kyo` `1.0.0-RC7`.
 - An `.editorconfig` trims trailing whitespace, which is what turned the format check red.
+- **The benchmarks are re-measured against `mongo4cats` `0.8.0`** (and `circe` `0.14.17`, whose decoders now answer
+  an `Either`), on macOS 26.7.1 and Docker Desktop engine 29.8.2, with the version of everything compared named in
+  [BENCHMARKS.md](BENCHMARKS.md). The environment moved more than the libraries did: a round trip to the server is
+  0.135 ms where the old tables had 2.4 ms, so the server-backed rates are over 20× higher and the bulk-read gaps
+  between `mongo4s` and `mongo4cats` are now visible. `mongo4cats`' `find(...).stream` on `cats` is ~4× faster in
+  `0.8.0` than in `0.7.18`, measured side by side, and still about half of `mongo4s`'s.
 
 ### Fixed
 
