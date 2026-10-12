@@ -93,7 +93,7 @@ class CodecBenchmark:
   @Benchmark def directDecode: Either[?, Person] = direct.decodeDocument(directDoc)
 
   @Benchmark def circeEncode: mongo4cats.bson.BsonValue = circeEncoder.encode(person)
-  @Benchmark def circeDecode: Option[Person]            = circeDecoder.decode(circeBson)
+  @Benchmark def circeDecode: Either[?, Person]         = circeDecoder.decode(circeBson)
 
   @Benchmark def zioJsonEncode: mongo4cats.bson.BsonValue = zioEncoder.encode(person)
-  @Benchmark def zioJsonDecode: Option[Person]            = zioDecoder.decode(zioJsonBson)
+  @Benchmark def zioJsonDecode: Either[?, Person]         = zioDecoder.decode(zioJsonBson)

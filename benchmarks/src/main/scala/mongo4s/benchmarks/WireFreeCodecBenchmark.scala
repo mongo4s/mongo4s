@@ -116,8 +116,10 @@ object WireFreeCodecBenchmark:
   private def viaBsonValue(encode: Person => M4CBsonValue, p: Person): Array[Byte] =
     toBytes(w => bsonValueCodec.encode(w, encode(p), encoderContext))
 
-  private def fromBsonValue(decode: M4CBsonValue => Option[Person], bytes: Array[Byte]): Person =
-    decode(M4CBsonValue.document(documentCodec.decode(readerOf(bytes), decoderContext))).get
+  private def fromBsonValue(decode: M4CBsonValue => Either[?, Person], bytes: Array[Byte]): Person =
+    decode(M4CBsonValue.document(documentCodec.decode(readerOf(bytes), decoderContext))) match
+      case Right(p)  => p
+      case Left(err) => throw IllegalStateException(err.toString)
 
 end WireFreeCodecBenchmark
 

@@ -24,8 +24,8 @@ object Dependencies {
     val zioBson = "1.0.11"
     val calypso = "0.7.0"
 
-    val mongo4cats = "0.7.18"
-    val circe      = "0.14.16"
+    val mongo4cats = "0.8.0"
+    val circe      = "0.14.17"
     val zioSchema  = "1.9.0"
 
     val testcontainers = "1.21.4"
