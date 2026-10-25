@@ -37,10 +37,15 @@ object MongoSession:
       F: Effect[F],
       rs: RsBridge[F, S],
   ): F[Unit] =
-    F.handleErrorWith(abortTransaction[F, S](session)) { abortError =>
-      cause match
-        case Some(original) if original ne abortError => F.delay(original.addSuppressed(abortError))
-        case _                                        => F.unit
+    F.flatMap(F.delay(session.hasActiveTransaction)) { active =>
+      if !active
+      then F.unit
+      else
+        F.handleErrorWith(abortTransaction[F, S](session)) { abortError =>
+          cause match
+            case Some(original) if original ne abortError => F.delay(original.addSuppressed(abortError))
+            case _                                        => F.unit
+        }
     }
 
   private[mongo4s] def hasErrorLabel(error: Throwable, label: String): Boolean =

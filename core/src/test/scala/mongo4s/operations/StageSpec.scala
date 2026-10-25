@@ -321,6 +321,14 @@ final class StageSpec extends AnyWordSpec, Matchers:
         """{"$setWindowFields": {"sortBy": {"item_count": 1}, "output": {"total": {"$sum": "$item_count"}}}}"""
     }
 
+    "leave a raw accumulator untouched when it is rendered with a window" in {
+      val raw = Accumulator.raw[Order](BsonDocument("$sum", BsonInt32(1)))
+
+      WindowOutput(raw).over(Window.documents(WindowBound.Unbounded, WindowBound.Current)).toBson(FieldNaming.identity): Unit
+
+      raw.toBson(FieldNaming.identity).toJson shouldBe """{"$sum": 1}"""
+    }
+
     "refuse a $setWindowFields that computes nothing" in {
       an[IllegalArgumentException] should be thrownBy
         Stage.setWindowFields(Sort.asc(Field.of[Order, Int](_.itemCount)))()

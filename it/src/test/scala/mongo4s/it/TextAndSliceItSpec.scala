@@ -105,4 +105,22 @@ final class TextAndSliceItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Bef
         .timeout(30.seconds)
         .asserting((fromServer, fromFake) => (fromFake, fromServer) shouldBe (List("b", "c"), List("b", "c")))
     }
+
+    "keep only the sliced field it includes, on the server as in the fake" in {
+      val projection = Projection.empty[BsonDocument].include(comments).slice(comments, 2)
+
+      val program =
+        for
+          collection <- collection("included", List(thread("t", 5)))
+          fake       <- seededFake
+          fromServer <- collection.find(title.equalTo("t")).projection(projection).first
+          fromFake   <- fake.find(title.equalTo("t")).projection(projection).first
+        yield (fromServer.map(_.keySet.asScala.toSet), fromFake.map(_.keySet.asScala.toSet), fromServer.map(commentsOf))
+
+      program
+        .timeout(30.seconds)
+        .asserting((fromServer, fromFake, sliced) =>
+          (fromServer, fromFake, sliced) shouldBe (Some(Set("_id", "comments")), Some(Set("_id", "comments")), Some(List("a", "b")))
+        )
+    }
   }

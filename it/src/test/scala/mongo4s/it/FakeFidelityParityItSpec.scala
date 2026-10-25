@@ -7,6 +7,7 @@ import cats.effect.testing.scalatest.AsyncIOSpec
 import org.testcontainers.mongodb.MongoDBContainer
 
 import cats.effect.IO
+import cats.syntax.all.*
 import org.bson.*
 import org.bson.types.ObjectId
 
@@ -90,6 +91,10 @@ final class FakeFidelityParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matcher
 
     "agree on $in over an array" in {
       agree("in_array", people)(_.find(Filter.In(tagsF.path, List(BsonString("b"), BsonString("z")))).all.map(namesOf))
+    }
+
+    "agree that $all over an empty list matches nothing" in {
+      agree("all_empty", people)(_.find(Filter.All(tagsF.path, Nil)).all.map(namesOf))
     }
 
     "agree on a dotted path through an array of documents" in {
@@ -384,6 +389,32 @@ final class FakeFidelityParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matcher
           _      <- collection.createIndex(Index.ascending(ageF).named("first"))
           failed <- collection.createIndex(Index.ascending(ageF).named("second")).attempt
         yield codeOf(failed)
+      }
+    }
+
+    "agree on refusing a unique index on _id alone" in {
+      agree("indexes_unique_id", keyed("a")) { collection =>
+        collection.createIndex(Index.unique(Field.stored[BsonDocument, String]("_id"))).attempt.map(codeOf)
+      }
+    }
+
+    "agree on which filters a partial index accepts" in {
+      val filters = List(
+        ageF.gte(18),
+        ageF.in(List(1, 2)) || nameF.exists,
+        Filter.Type[BsonDocument](ageF.path, mongo4s.bson.BsonTypeName.Int),
+        !ageF.gte(18),
+        ageF.in(Nil),
+        Filter.Ne[BsonDocument](ageF.path, BsonInt32(1)),
+        nameF.regex("^a"),
+        Filter.Exists[BsonDocument](nameF.path, false),
+        tagsF.hasSize(1),
+      )
+
+      agree("indexes_partial", keyed("a")) { collection =>
+        filters.zipWithIndex.traverse { (filter, i) =>
+          collection.createIndex(Index.ascending(Field.stored[BsonDocument, Int](s"f$i")).where(filter)).attempt.map(codeOf)
+        }
       }
     }
 

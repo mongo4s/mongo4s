@@ -8,11 +8,12 @@ import org.testcontainers.mongodb.MongoDBContainer
 
 import cats.effect.IO
 import org.bson.BsonDocument
+import org.bson.types.ObjectId
 
 import mongo4s.cats.CatsStream
 import mongo4s.operations.Index
 import mongo4s.repositories.BaseMongoRepository
-import mongo4s.{Field, MongoClient, MongoCollection}
+import mongo4s.{Field, MongoClient, MongoCollection, WithId}
 
 import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
@@ -225,6 +226,20 @@ final class IndexItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndA
         yield duplicated.isLeft
 
       program.asserting(_ shouldBe true)
+    }
+
+    "answer _id_ for a key stored as _id, where the server refuses a unique index" in {
+      val program =
+        for
+          client   <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database <- client.getDatabase("index_it")
+          notes    <- BaseMongoRepository.objectId[IO, S, RepositoryItSpec.Note](database, "ensure_id_index")
+          name     <- notes.ensureKeyIndex
+          _        <- notes.insertOne(WithId(ObjectId.get(), RepositoryItSpec.Note("kept")))
+          indexes  <- database.getCollection[BsonDocument]("ensure_id_index").flatMap(_.listIndexes)
+        yield (name, byName(indexes).keySet)
+
+      program.asserting(_ shouldBe ("_id_", Set("_id_")))
     }
   }
 

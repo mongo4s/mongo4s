@@ -43,8 +43,8 @@ final class OperatorsSpec extends AnyWordSpec, Matchers:
       json(labelsField.containsAll(List("a", "b"))) shouldBe """{"labels": {"$all": ["a", "b"]}}"""
     }
 
-    "treat containsAll of nothing as no constraint" in {
-      json(labelsField.containsAll(Nil)) shouldBe "{}"
+    "match nothing for containsAll of nothing, as the server answers $all: []" in {
+      json(labelsField.containsAll(Nil)) shouldBe """{"$nor": [{}]}"""
     }
 
     "match by array length" in {
@@ -150,6 +150,21 @@ final class OperatorsSpec extends AnyWordSpec, Matchers:
     "combine with an inclusion without leaving either chain" in {
       Projection.empty[Order].include(totalField).slice(itemsField, 2).withoutId.toBson(FieldNaming.identity).toJson shouldBe
         """{"total": 1, "_id": 0, "items": {"$slice": 2}}"""
+    }
+
+    "keep an included field it slices, holding _id so the server stays in inclusion mode" in {
+      Projection.empty[Order].include(itemsField).slice(itemsField, 2).toBson(FieldNaming.identity).toJson shouldBe
+        """{"_id": 1, "items": {"$slice": 2}}"""
+    }
+
+    "slice an included field beside another one without repeating it" in {
+      Projection.empty[Order].include(totalField).include(itemsField).slice(itemsField, 2).toBson(FieldNaming.identity).toJson shouldBe
+        """{"total": 1, "items": {"$slice": 2}}"""
+    }
+
+    "refuse to keep only sliced fields without _id, which the server would answer with every field" in {
+      val sliced = Projection.empty[Order].include(itemsField).slice(itemsField, 2).withoutId
+      an[IllegalArgumentException] should be thrownBy sliced.toBson(FieldNaming.identity)
     }
 
     "combine with an exclusion too" in {

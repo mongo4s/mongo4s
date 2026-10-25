@@ -1,7 +1,7 @@
 package mongo4s.repositories
 
 import java.lang.reflect.{InvocationHandler, Method, Proxy}
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
@@ -51,6 +51,7 @@ object TransactionBackendSpec:
     val started = AtomicInteger(0)
     val commits = AtomicInteger(0)
     val aborts  = AtomicInteger(0)
+    val active  = AtomicBoolean(false)
 
     val session: ClientSession =
       Proxy
@@ -60,20 +61,25 @@ object TransactionBackendSpec:
           new InvocationHandler:
             def invoke(proxy: Object, method: Method, args: Array[Object]): Object =
               method.getName match
-                case "startTransaction"  =>
+                case "startTransaction"     =>
                   started.incrementAndGet(): Unit
+                  active.set(true)
                   null
-                case "commitTransaction" =>
+                case "commitTransaction"    =>
                   val attempt = commits.getAndIncrement()
+                  active.set(false)
                   publisher(commitFailures.lift(attempt))
-                case "abortTransaction"  =>
+                case "abortTransaction"     =>
                   aborts.incrementAndGet(): Unit
-                  publisher(None)
-                case "close"             => null
-                case "hashCode"          => Integer.valueOf(System.identityHashCode(proxy))
-                case "equals"            => java.lang.Boolean.valueOf(proxy eq args(0))
-                case "toString"          => "FakeSession"
-                case other               => throw UnsupportedOperationException(s"FakeSession: $other is not simulated"),
+                  if active.getAndSet(false)
+                  then publisher(None)
+                  else publisher(Some(IllegalStateException("Cannot call abortTransaction after calling commitTransaction")))
+                case "hasActiveTransaction" => java.lang.Boolean.valueOf(active.get)
+                case "close"                => null
+                case "hashCode"             => Integer.valueOf(System.identityHashCode(proxy))
+                case "equals"               => java.lang.Boolean.valueOf(proxy eq args(0))
+                case "toString"             => "FakeSession"
+                case other                  => throw UnsupportedOperationException(s"FakeSession: $other is not simulated"),
         )
         .asInstanceOf[ClientSession]
 
@@ -151,6 +157,18 @@ trait TransactionBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
       calls.get shouldBe 1
       fake.started.get shouldBe 1
       fake.aborts.get shouldBe 1
+    }
+
+    "not abort a transaction its failed commit already ended, so the error carries nothing it did not cause" in {
+      val boom          = RuntimeException("commit failed")
+      val fake          = FakeSession(commitFailures = List(boom))
+      val (calls, body) = bodyFailing(Nil)
+
+      runAttempt(fake.session.withTransaction[F, S, Int](body)) shouldBe Left(boom)
+
+      calls.get shouldBe 1
+      fake.aborts.get shouldBe 0
+      boom.getSuppressed shouldBe empty
     }
 
     "report the first failure when retries are switched off" in {

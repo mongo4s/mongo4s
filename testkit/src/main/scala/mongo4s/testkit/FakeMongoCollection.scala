@@ -375,11 +375,29 @@ final class FakeMongoCollection[F[*], S[*], E](
     )
 
   private def requireBuildable(index: Index[E]): Unit =
+    if index.unique && index.keysToBson(naming).keySet.asScala == Set(BsonField.Id)
+    then throw commandFailure(197, "InvalidIndexSpecificationOption", "The field 'unique' is not valid for an _id index specification")
+
+    index.partialFilter.flatMap(unsupportedInPartialIndex).foreach { operator =>
+      throw commandFailure(67, "CannotCreateIndex", s"Expression not supported in partial index: $operator")
+    }
+
     if index.unique && index.collation.nonEmpty
     then throw UnsupportedOperationException("FakeMongoCollection: a unique index with a collation is not simulated")
 
     if index.unique
     then storage.toList.foreach(document => requireUnique(index, document, Some(document)))
+
+  private def unsupportedInPartialIndex(filter: Filter[E]): Option[String] =
+    filter match
+      case Filter.Eq(_, _) | Filter.Gt(_, _) | Filter.Gte(_, _) | Filter.Lt(_, _) | Filter.Lte(_, _)  => None
+      case Filter.In(_, _) | Filter.All(_, _) | Filter.Type(_, _) | Filter.MatchAll() | Filter.Raw(_) => None
+      case Filter.Exists(_, true)                                                                     => None
+      case Filter.Exists(_, false)                                                                    => Some("$exists")
+      case Filter.Regex(_, _, _)                                                                      => Some("$regex")
+      case Filter.And(filters)                                                                        => filters.flatMap(unsupportedInPartialIndex).headOption
+      case Filter.Or(filters)                                                                         => filters.flatMap(unsupportedInPartialIndex).headOption
+      case other                                                                                      => Some(other.key)
 
   private def indexName(index: Index[E]): String =
     index.name.getOrElse {
@@ -503,7 +521,8 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Filter.MatchAll()                    => true
     case Filter.MatchNone()                   => false
 
-    case Filter.All(path, values) => elementsAt(document, path).exists(elements => values.forall(value => elements.exists(BsonOrdering.same(_, value))))
+    case Filter.All(path, values) =>
+      values.nonEmpty && elementsAt(document, path).exists(elements => values.forall(value => elements.exists(BsonOrdering.same(_, value))))
     case Filter.Size(path, size)  => at(document, path).exists(v => v.isArray && v.asArray.size == size)
     case Filter.Type(path, name)  => at(document, path).exists(v => mongo4s.bson.BsonTypeName.of(v) == name)
 
@@ -708,6 +727,8 @@ final class FakeMongoCollection[F[*], S[*], E](
     codec.decodeDocument(applyProjection(document, projection)).fold(error => throw error.toThrowable, Some(_))
 
   private def applyProjection(document: BsonDocument, projection: Projection[E]): BsonDocument =
+    projection.toBson(naming): Unit
+
     val projected = projection match
       case Projection.Everything(_) => document
 

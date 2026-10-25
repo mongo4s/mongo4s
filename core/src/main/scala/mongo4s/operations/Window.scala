@@ -48,8 +48,7 @@ final class WindowOutput[E] private (val accumulator: Accumulator[E], val window
 
   def toBson(naming: FieldNaming): BsonDocument =
     val field = accumulator.toBson(naming)
-    window.foreach(value => field.append("window", value.toBson))
-    field
+    window.fold(field)(value => field.clone().append("window", value.toBson))
 
 object WindowOutput:
   def apply[E](accumulator: Accumulator[E]): WindowOutput[E] = new WindowOutput(accumulator, None)

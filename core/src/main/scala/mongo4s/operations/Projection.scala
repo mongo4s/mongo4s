@@ -32,13 +32,22 @@ enum Projection[E]:
     val document = this match
       case Everything(_) => BsonDocument()
 
-      case Include(fields, withId, _) =>
-        val included = fields.foldLeft(BsonDocument()) { (acc, path) =>
+      case Include(fields, withId, sliced) =>
+        val plain      = fields.filterNot(path => sliced.exists(_._1 == path))
+        val included   = plain.foldLeft(BsonDocument()) { (acc, path) =>
           acc.append(path.render(naming), BsonInt32(1))
         }
-        if withId
-        then included
-        else included.append(Projection.IdPath.render(naming), BsonInt32(0))
+        val onlySliced = plain.isEmpty && sliced.nonEmpty
+
+        (withId, onlySliced) match
+          case (true, true)   => included.append(Projection.IdPath.render(naming), BsonInt32(1))
+          case (true, false)  => included
+          case (false, true)  =>
+            throw IllegalArgumentException(
+              "a projection that keeps only sliced fields has to keep _id or include another field, " +
+                "or the server returns every field"
+            )
+          case (false, false) => included.append(Projection.IdPath.render(naming), BsonInt32(0))
 
       case Exclude(fields, _) =>
         fields.foldLeft(BsonDocument()) { (acc, path) =>

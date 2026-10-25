@@ -7,8 +7,8 @@ import com.mongodb.reactivestreams.client.ClientSession
 
 import mongo4s.operations.*
 import mongo4s.bson.direct.WireCodec
-import mongo4s.bson.{BsonDocumentCodec, BsonEncoder, FieldNaming}
 import mongo4s.results.{BulkWriteResult, DeleteResult, UpdateResult}
+import mongo4s.bson.{BsonDocumentCodec, BsonEncoder, BsonField, FieldNaming}
 import mongo4s.{Effect, Field, MongoCollection, MongoDatabase, MongoError, PrimaryKey, Streamable, WithId}
 
 open class BaseMongoRepository[F[*], S[*], E, K](
@@ -155,7 +155,9 @@ open class BaseMongoRepository[F[*], S[*], E, K](
     collection.deleteMany(filter)(using session)
 
   def ensureKeyIndex(using session: Option[ClientSession]): F[String] =
-    collection.createIndex(Index.forKeyFields[E](pk.fieldNames))(using session)
+    if pk.fieldNames == List(BsonField.Id)
+    then F.pure(BaseMongoRepository.IdIndex)
+    else collection.createIndex(Index.forKeyFields[E](pk.fieldNames))(using session)
 
   def createIndex(index: Index[E])(using session: Option[ClientSession]): F[String] =
     collection.createIndex(index)(using session)
@@ -194,6 +196,8 @@ open class BaseMongoRepository[F[*], S[*], E, K](
 
 object BaseMongoRepository:
   val DefaultBatchSize: Int = 500
+
+  private val IdIndex = "_id_"
 
   def create[F[*], S[*], E, K](
       database: MongoDatabase[F, S],

@@ -94,7 +94,7 @@ object Field:
 
     def containsAll[A](values: Seq[A])(using ev: ElementOf[C, A], encoder: BsonEncoder[A]): Filter[E] =
       if values.isEmpty
-      then Filter.MatchAll()
+      then Filter.MatchNone()
       else Filter.All(field.path, values.toList.map(encoder.encode))
 
     def hasSize[A](size: Int)(using ElementOf[C, A]): Filter[E] = Filter.Size(field.path, size)
