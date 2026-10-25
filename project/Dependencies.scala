@@ -12,7 +12,7 @@ object Dependencies {
     val catsEffectTesting = "1.8.0"
     val fs2               = "3.14.0"
 
-    val zio                       = "2.1.26"
+    val zio                       = "2.1.27"
     val zioPrelude                = "1.0.0-RC48"
     val zioInteropReactiveStreams = "2.0.2"
 
