@@ -4,7 +4,7 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AsyncWordSpec
 import org.scalatest.matchers.should.Matchers
 import cats.effect.testing.scalatest.AsyncIOSpec
-import org.testcontainers.containers.MongoDBContainer
+import org.testcontainers.mongodb.MongoDBContainer
 
 import cats.effect.IO
 import org.bson.{BsonDocument, BsonInt32, BsonString}
@@ -54,7 +54,7 @@ final class FakeAggregateParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matche
   import FakeAggregateParityItSpec.*
   import FakeAggregateParityItSpec.Person.given
 
-  private val container = new MongoDBContainer("mongo:8.2")
+  private val container = new MongoDBContainer("mongo:8.2").withReplicaSet()
 
   override def beforeAll(): Unit = container.start()
   override def afterAll(): Unit  = container.stop()

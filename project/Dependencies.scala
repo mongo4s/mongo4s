@@ -28,7 +28,7 @@ object Dependencies {
     val circe      = "0.14.17"
     val zioSchema  = "1.9.0"
 
-    val testcontainers = "1.21.4"
+    val testcontainers = "2.0.5"
 
     val scalatest = "3.2.20"
   }
@@ -45,7 +45,7 @@ object Dependencies {
   }
 
   object IntegrationTesting {
-    val testcontainersMongo = "org.testcontainers" % "mongodb" % Versions.testcontainers % Test
+    val testcontainersMongo = "org.testcontainers" % "testcontainers-mongodb" % Versions.testcontainers % Test
   }
 
   object Codecs {

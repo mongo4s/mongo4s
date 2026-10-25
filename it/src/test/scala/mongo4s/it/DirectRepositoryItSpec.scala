@@ -3,7 +3,7 @@ package mongo4s.it
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
-import org.testcontainers.containers.MongoDBContainer
+import org.testcontainers.mongodb.MongoDBContainer
 
 import mongo4s.bson.direct.WireCodec
 import mongo4s.repositories.BaseMongoRepository
@@ -30,7 +30,7 @@ trait DirectRepositoryItSpec[F[*], S[*]] extends AnyWordSpec, Matchers, BeforeAn
   protected def run[A](fa: F[A]): A
   protected def drain(stream: S[Person]): List[Person]
 
-  protected val container: MongoDBContainer = new MongoDBContainer("mongo:8.2")
+  protected val container: MongoDBContainer = new MongoDBContainer("mongo:8.2").withReplicaSet()
 
   override def beforeAll(): Unit = container.start()
   override def afterAll(): Unit  = container.stop()

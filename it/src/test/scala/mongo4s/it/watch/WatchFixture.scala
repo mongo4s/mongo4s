@@ -1,7 +1,7 @@
 package mongo4s.it.watch
 
 import org.bson.{BsonDocument, BsonInt32}
-import org.testcontainers.containers.MongoDBContainer
+import org.testcontainers.mongodb.MongoDBContainer
 
 import mongo4s.bson.BsonDocumentCodec
 import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec}
@@ -16,7 +16,7 @@ object WatchFixture:
   val Hello: BsonDocument = BsonDocument().append("hello", BsonInt32(1))
 
   private lazy val container: MongoDBContainer =
-    val instance = new MongoDBContainer("mongo:8.2")
+    val instance = new MongoDBContainer("mongo:8.2").withReplicaSet()
     instance.start()
     instance
 

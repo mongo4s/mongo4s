@@ -4,7 +4,7 @@ import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AsyncWordSpec
 import org.scalatest.matchers.should.Matchers
 import cats.effect.testing.scalatest.AsyncIOSpec
-import org.testcontainers.containers.MongoDBContainer
+import org.testcontainers.mongodb.MongoDBContainer
 
 import cats.effect.IO
 import org.bson.{BsonDocument, BsonString}
@@ -19,7 +19,7 @@ import mongo4s.cats.CatsInstances.given
 
 final class CreateCollectionItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAfterAll:
 
-  private val container = new MongoDBContainer("mongo:8.2")
+  private val container = new MongoDBContainer("mongo:8.2").withReplicaSet()
 
   override def beforeAll(): Unit = container.start()
   override def afterAll(): Unit  = container.stop()
