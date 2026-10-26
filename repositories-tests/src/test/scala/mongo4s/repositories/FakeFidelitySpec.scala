@@ -377,6 +377,18 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "Atlas Search" should {
+    "be refused by name, its indexes as well as its stages, since it lives outside the collection" in {
+      val c = fake(keyed("a"))
+
+      intercept[UnsupportedOperationException](c.createSearchIndex(SearchIndex.dynamic[BsonDocument]()).unsafeRunSync()).getMessage should include("search")
+      intercept[UnsupportedOperationException](c.listSearchIndexes.unsafeRunSync())
+      intercept[UnsupportedOperationException](
+        c.aggregate[BsonDocument](Seq(Stage.search(SearchOperator.text(nameF, "x")))).all.unsafeRunSync()
+      ).getMessage should include("$search")
+    }
+  }
+
   "a tailable cursor" should {
     "be refused by name, since it waits for writes the fake's cursor never sees, while a plain one reads as usual" in {
       val c = fake(keyed("a"))

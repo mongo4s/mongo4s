@@ -106,6 +106,12 @@ trait MongoCollection[F[*], S[*], A]:
   def createIndexes(indexes: Seq[Index[A]])(using session: Option[ClientSession] = None): F[List[String]]
   def listIndexes(using session: Option[ClientSession] = None): F[List[BsonDocument]]
   def dropIndex(name: String)(using session: Option[ClientSession] = None): F[Unit]
+
+  def createSearchIndex(index: SearchIndex[A]): F[String]
+  def createSearchIndexes(indexes: Seq[SearchIndex[A]]): F[List[String]]
+  def updateSearchIndex(index: SearchIndex[A]): F[Unit]
+  def dropSearchIndex(name: String): F[Unit]
+  def listSearchIndexes: F[List[BsonDocument]]
   def dropIndexes(using session: Option[ClientSession] = None): F[Unit]
 
   def renameCollection(to: String, dropTarget: Boolean = false)(using session: Option[ClientSession] = None): F[Unit]

@@ -294,6 +294,16 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
     rs.list(publisher)
   end listIndexes
 
+  def createSearchIndex(index: SearchIndex[A]): F[String] = F.map(createSearchIndexes(List(index)))(_.head)
+
+  def createSearchIndexes(indexes: Seq[SearchIndex[A]]): F[List[String]] = SearchIndexes.create(underlying, indexes, naming)
+
+  def updateSearchIndex(index: SearchIndex[A]): F[Unit] = SearchIndexes.update(underlying, index, naming)
+
+  def dropSearchIndex(name: String): F[Unit] = SearchIndexes.drop(underlying, name)
+
+  def listSearchIndexes: F[List[BsonDocument]] = SearchIndexes.list(underlying)
+
   def dropIndex(indexName: String)(using session: Option[ClientSession]): F[Unit] =
     val publisher = session match
       case Some(s) => underlying.dropIndex(s, indexName)

@@ -104,6 +104,18 @@ enum Stage[E](val key: String):
   case Out(collection: String, options: OutOptions)     extends Stage[E]("$out")
   case Merge(collection: String, options: MergeOptions) extends Stage[E]("$merge")
 
+  case Search(operator: SearchOperator[E], options: SearchOptions)     extends Stage[E]("$search")
+  case SearchMeta(operator: SearchOperator[E], options: SearchOptions) extends Stage[E]("$searchMeta")
+
+  case VectorSearch(
+      index: String,
+      path: FieldPath,
+      queryVector: List[Double],
+      limit: Int,
+      numCandidates: Option[Int],
+      filter: Option[Filter[E]],
+  ) extends Stage[E]("$vectorSearch")
+
   case Raw(document: BsonDocument) extends Stage[E]("")
 
   def toBson(naming: FieldNaming): BsonDocument = this match
@@ -273,9 +285,22 @@ enum Stage[E](val key: String):
 
       BsonDocument(key, geoNear)
 
-    case Stage.Out(collection, options)   => BsonDocument(key, Stage.outTarget(collection, options))
-    case Stage.Merge(collection, options) => BsonDocument(key, Stage.mergeTarget(collection, options))
-    case Stage.Raw(document)              => document
+    case Stage.Out(collection, options)      => BsonDocument(key, Stage.outTarget(collection, options))
+    case Stage.Merge(collection, options)    => BsonDocument(key, Stage.mergeTarget(collection, options))
+    case Stage.Search(operator, options)     => BsonDocument(key, Stage.searchBody(operator, options, naming))
+    case Stage.SearchMeta(operator, options) => BsonDocument(key, Stage.searchBody(operator, options, naming))
+
+    case Stage.VectorSearch(index, path, queryVector, limit, numCandidates, filter) =>
+      val search = BsonDocument("index", BsonString(index))
+        .append("path", BsonString(path.render(naming)))
+        .append("queryVector", BsonArray(queryVector.map(value => BsonDouble(value): BsonValue).asJava))
+        .append("limit", BsonInt32(limit))
+      numCandidates match
+        case Some(candidates) => search.append("numCandidates", BsonInt32(candidates))
+        case None             => search.append("exact", BsonBoolean(true))
+      filter.foreach(value => search.append("filter", value.toBson(naming)))
+      BsonDocument(key, search)
+    case Stage.Raw(document)                                                        => document
 
 object Stage:
   def matching[E](filter: Filter[E]): Stage[E]        = MatchStage(filter)
@@ -379,6 +404,48 @@ object Stage:
   end fill
 
   def redact[E](expression: BsonValue): Stage[E] = Redact(expression)
+
+  def search[E](operator: SearchOperator[E], options: SearchOptions = SearchOptions.default): Stage[E] = Search(operator, options)
+
+  def searchMeta[E](operator: SearchOperator[E], options: SearchOptions = SearchOptions.default): Stage[E] = SearchMeta(operator, options)
+
+  def vectorSearch[E, C, A](
+      index: String,
+      field: Field[E, C],
+      queryVector: Seq[Double],
+      limit: Int,
+      numCandidates: Int,
+      filter: Option[Filter[E]] = None,
+  )(using @unused element: mongo4s.ElementOf[C, A], @unused numeric: mongo4s.NumericOf[A, ?]): Stage[E] =
+    require(queryVector.nonEmpty, "a vector search needs a query vector")
+    Bounds.atLeastOne(limit, "$vectorSearch limit", "which MongoDB refuses"): Unit
+    require(numCandidates >= limit && numCandidates <= 10000, s"numCandidates runs from the limit $limit to 10000, got $numCandidates")
+    VectorSearch(index, field.path, queryVector.toList, limit, Some(numCandidates), filter)
+
+  def exactVectorSearch[E, C, A](
+      index: String,
+      field: Field[E, C],
+      queryVector: Seq[Double],
+      limit: Int,
+      filter: Option[Filter[E]] = None,
+  )(using @unused element: mongo4s.ElementOf[C, A], @unused numeric: mongo4s.NumericOf[A, ?]): Stage[E] =
+    require(queryVector.nonEmpty, "a vector search needs a query vector")
+    Bounds.atLeastOne(limit, "$vectorSearch limit", "which MongoDB refuses"): Unit
+    VectorSearch(index, field.path, queryVector.toList, limit, None, filter)
+
+  private def searchBody[E](operator: SearchOperator[E], options: SearchOptions, naming: FieldNaming): BsonDocument =
+    val body = BsonDocument("index", BsonString(options.index))
+    operator.toBson(naming).forEach((name, value) => body.append(name, value): Unit)
+    options.count.foreach {
+      case SearchCount.Total             => body.append("count", BsonDocument("type", BsonString("total")))
+      case SearchCount.LowerBound(limit) =>
+        val count = BsonDocument("type", BsonString("lowerBound"))
+        limit.foreach(value => count.append("threshold", BsonInt32(value)))
+        body.append("count", count)
+    }
+    if options.returnStoredSource then body.append("returnStoredSource", BsonBoolean(true)): Unit
+    body
+  end searchBody
 
   val Descend: BsonValue = BsonString("$$DESCEND")
   val Prune: BsonValue   = BsonString("$$PRUNE")

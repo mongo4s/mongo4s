@@ -488,6 +488,15 @@ final class FakeMongoCollection[F[*], S[*], E](
       createdIndexes.filterInPlace(index => this.indexName(index) != indexName)
     }
 
+  private def refuseSearch: Nothing =
+    throw UnsupportedOperationException("FakeMongoCollection: search indexes live in Atlas Search, outside the collection, so they are not simulated")
+
+  def createSearchIndex(index: SearchIndex[E]): F[String]                = F.delay(refuseSearch)
+  def createSearchIndexes(indexes: Seq[SearchIndex[E]]): F[List[String]] = F.delay(refuseSearch)
+  def updateSearchIndex(index: SearchIndex[E]): F[Unit]                  = F.delay(refuseSearch)
+  def dropSearchIndex(name: String): F[Unit]                             = F.delay(refuseSearch)
+  def listSearchIndexes: F[List[BsonDocument]]                           = F.delay(refuseSearch)
+
   def dropIndexes(using session: Option[ClientSession]): F[Unit] = atomically(createdIndexes.clear())
 
   def renameCollection(to: String, dropTarget: Boolean)(using session: Option[ClientSession]): F[Unit] =
