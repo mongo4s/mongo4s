@@ -9,7 +9,9 @@ import mongo4s.operations.*
 import mongo4s.bson.direct.WireCodec
 import mongo4s.results.{BulkWriteResult, DeleteResult, UpdateResult}
 import mongo4s.bson.{BsonDocumentCodec, BsonEncoder, BsonField, FieldNaming}
-import mongo4s.{Effect, Field, MongoCollection, MongoDatabase, MongoError, PrimaryKey, Streamable, WithId}
+import mongo4s.{Effect, Field, FieldPath, MongoCollection, MongoDatabase, MongoError, PrimaryKey, Streamable, WithId}
+
+import scala.jdk.CollectionConverters.given
 
 open class BaseMongoRepository[F[*], S[*], E, K](
     protected val collection: MongoCollection[F, S, E],
@@ -95,6 +97,17 @@ open class BaseMongoRepository[F[*], S[*], E, K](
 
     F.map(inserted)(_ => entities.map(pk.key))
   end insertMany
+
+  def insertIfAbsent(entity: E)(using session: Option[ClientSession]): F[Boolean] =
+    val onInsert = collection.codec.encodeDocument(entity).entrySet.asScala.toList.map { entry =>
+      Update.SetOnInsert[E](FieldPath(List(FieldPath.Segment.Stored(entry.getKey))), entry.getValue)
+    }
+
+    F.map(collection.updateOne(pk.eqFilter(pk.key(entity)), Update.Combine(onInsert), UpdateOptions.upsert)(using session))(_.wasUpserted)
+  end insertIfAbsent
+
+  def replace(entity: E, condition: Filter[E])(using session: Option[ClientSession]): F[UpdateResult] =
+    collection.replaceOne(Filter.and(pk.eqFilter(pk.key(entity)), condition), entity)(using session)
 
   def upsert(entity: E)(using session: Option[ClientSession]): F[UpdateResult] =
     collection.replaceOne(pk.eqFilter(pk.key(entity)), entity, ReplaceOptions.upsert)(using session)

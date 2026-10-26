@@ -63,6 +63,10 @@ trait Repository[F[*], S[*], E, K]:
       session: Option[ClientSession] = None,
   ): F[List[K]]
 
+  def insertIfAbsent(entity: E)(using session: Option[ClientSession] = None): F[Boolean]
+
+  def replace(entity: E, condition: Filter[E] = Filter.all)(using session: Option[ClientSession] = None): F[UpdateResult]
+
   def upsert(entity: E)(using session: Option[ClientSession] = None): F[UpdateResult]
   def upsertMany(entities: List[E])(using session: Option[ClientSession] = None): F[BulkWriteResult]
 

@@ -9,8 +9,8 @@ import cats.effect.unsafe.implicits.given
 import org.bson.{BsonBoolean, BsonDocument, BsonInt32, BsonString}
 
 import mongo4s.cats.CatsStream
-import mongo4s.testkit.FakeMongoCollection
-import mongo4s.operations.{Filter, Index, Update}
+import mongo4s.testkit.{FakeCounters, FakeMongoCollection}
+import mongo4s.operations.{Filter, Index, Update, UpdateOptions}
 import mongo4s.bson.BsonDocumentCodec
 import mongo4s.{Field, MongoError}
 
@@ -44,6 +44,26 @@ final class FakeConcurrencySpec extends AnyWordSpec, Matchers:
 
         results.count(_.isLeft) shouldBe 0
         c.estimatedCount.unsafeRunSync() shouldBe 2000L
+      }
+    }
+
+    "hand out every counter value exactly once, though each first call races to create the counter" in {
+      (1 to rounds).foreach { _ =>
+        val counters = FakeCounters[IO, S]()
+        val values   = concurrently(500)(_ => counters.next("orders"))
+
+        values.collect { case Right(value) => value }.sorted shouldBe (1L to 500L).toList
+        counters.fake.snapshot shouldBe List(Counter("orders", 500L))
+      }
+    }
+
+    "insert exactly one of many concurrent upserts on the same key" in {
+      (1 to rounds).foreach { _ =>
+        val c       = fresh
+        val results = concurrently(500)(_ => c.updateOne(idF.equalTo(1), Update.inc(nF, 1), UpdateOptions.upsert))
+
+        results.collect { case Right(result) => result.wasUpserted }.count(identity) shouldBe 1
+        c.find().all.unsafeRunSync() shouldBe List(keyed(1).append("n", BsonInt32(500)))
       }
     }
 

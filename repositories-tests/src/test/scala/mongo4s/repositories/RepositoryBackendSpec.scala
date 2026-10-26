@@ -6,8 +6,8 @@ import org.scalatest.matchers.should.Matchers
 import org.bson.{BsonDocument, BsonInt32, BsonString}
 
 import mongo4s.bson.*
-import mongo4s.testkit.FakeMongoCollection
-import mongo4s.operations.{Update, WriteCommand}
+import mongo4s.operations.{Update, UpdateOptions, WriteCommand}
+import mongo4s.testkit.{FakeCounters, FakeMongoCollection}
 import mongo4s.{Effect, Field, PrimaryKey, RsBridge, Streamable}
 
 import mongo4s.bson.BsonInstances.given
@@ -179,6 +179,116 @@ trait RepositoryBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
       run(repository.upsertMany(List(Person("1", "bob", 30), Person("2", "alice", 25))))
 
       collection.snapshot should contain theSameElementsAs List(Person("1", "bob", 30), Person("2", "alice", 25))
+    }
+  }
+
+  "insertIfAbsent" should {
+    "insert an entity whose key is new and report it" in {
+      val (collection, repository) = repo()
+
+      run(repository.insertIfAbsent(Person("1", "bob", 30))) shouldBe true
+      collection.snapshot shouldBe List(Person("1", "bob", 30))
+    }
+
+    "leave the stored entity alone and report false when the key is already there" in {
+      val (collection, repository) = repo()
+      run(collection.insertOne(Person("1", "bob", 30)))
+
+      run(repository.insertIfAbsent(Person("1", "eve", 99))) shouldBe false
+      collection.snapshot shouldBe List(Person("1", "bob", 30))
+    }
+  }
+
+  "replace" should {
+    "replace the entity with the same key" in {
+      val (collection, repository) = repo()
+      run(collection.insertMany(List(Person("1", "bob", 30), Person("2", "eve", 40))))
+
+      run(repository.replace(Person("1", "bobby", 31))).matchedCount shouldBe 1
+      collection.snapshot should contain theSameElementsAs List(Person("1", "bobby", 31), Person("2", "eve", 40))
+    }
+
+    "insert nothing when the key is not there" in {
+      val (collection, repository) = repo()
+
+      run(repository.replace(Person("1", "bob", 30))).wasApplied shouldBe false
+      collection.snapshot shouldBe Nil
+    }
+
+    "replace only while the condition still holds, which is what optimistic concurrency needs" in {
+      val (collection, repository) = repo()
+      val version                  = Field.of[Person, Int](_.age)
+      run(collection.insertOne(Person("1", "bob", 1)))
+
+      run(repository.replace(Person("1", "first", 2), version.equalTo(1))).matchedCount shouldBe 1
+      run(repository.replace(Person("1", "second", 2), version.equalTo(1))).matchedCount shouldBe 0
+      collection.snapshot shouldBe List(Person("1", "first", 2))
+    }
+  }
+
+  "updateOne with upsert" should {
+    "insert a document built from the key and the update when the key is new" in {
+      val (collection, repository) = repo()
+
+      val result =
+        run(repository.updateOne("1", Update.set(Field.of[Person, String](_.name), "bob").and(Update.inc(Field.of[Person, Int](_.age), 1)), UpdateOptions.upsert))
+
+      result.wasUpserted shouldBe true
+      collection.snapshot shouldBe List(Person("1", "bob", 1))
+    }
+  }
+
+  "counters" should {
+    def counters: FakeCounters[F, S] =
+      given Effect[F]      = effectInstance
+      given RsBridge[F, S] = bridgeInstance
+      FakeCounters[F, S]()
+
+    "start at one and count up by one" in {
+      val sequence = counters
+
+      List.fill(3)(run(sequence.next("orders"))) shouldBe List(1L, 2L, 3L)
+    }
+
+    "keep each name to itself" in {
+      val sequence = counters
+      run(sequence.next("orders"))
+      run(sequence.next("orders"))
+
+      run(sequence.next("invoices")) shouldBe 1L
+      run(sequence.current("orders")) shouldBe Some(2L)
+    }
+
+    "move by a step, so a caller can reserve a block" in {
+      val sequence = counters
+
+      run(sequence.next("ids", step = 100L)) shouldBe 100L
+      run(sequence.next("ids", step = 100L)) shouldBe 200L
+    }
+
+    "report nothing for a counter that was never moved" in {
+      run(counters.current("orders")) shouldBe None
+    }
+
+    "carry on from a reset, which also creates the counter" in {
+      val sequence = counters
+      run(sequence.reset("orders", 41L))
+
+      run(sequence.next("orders")) shouldBe 42L
+      run(sequence.reset("orders"))
+      run(sequence.next("orders")) shouldBe 1L
+    }
+
+    "refuse a step that does not move forward" in {
+      an[IllegalArgumentException] should be thrownBy counters.next("orders", step = 0L)
+    }
+
+    "store one document per name" in {
+      val sequence = counters
+      run(sequence.next("orders"))
+      run(sequence.next("orders"))
+
+      sequence.fake.snapshot shouldBe List(Counter("orders", 2L))
     }
   }
 
