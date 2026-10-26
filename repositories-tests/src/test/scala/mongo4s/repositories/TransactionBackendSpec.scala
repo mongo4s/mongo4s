@@ -134,7 +134,9 @@ trait TransactionBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
 
     "not retry a commit that ran out of maxCommitTime, whether the server reports it at the top level or in its write concern" in {
       val topLevel     = commitOutOfTime(MongoExecutionTimeoutException(50, "MaxTimeMSExpired"))
-      val writeConcern = commitOutOfTime(MongoWriteConcernException(WriteConcernError(50, "MaxTimeMSExpired", "wtimeout", BsonDocument()), ServerAddress()))
+      val writeConcern = commitOutOfTime(
+        MongoWriteConcernException(WriteConcernError(50, "MaxTimeMSExpired", "wtimeout", BsonDocument()), null, ServerAddress(), java.util.Collections.emptyList())
+      )
 
       List(topLevel, writeConcern).foreach { failure =>
         val fake          = FakeSession(commitFailures = List(failure))

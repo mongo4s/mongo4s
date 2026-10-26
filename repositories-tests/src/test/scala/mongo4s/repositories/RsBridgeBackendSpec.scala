@@ -194,7 +194,7 @@ trait RsBridgeBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers, TimeLimits:
   "a driver failure" should {
 
     def duplicateKey: MongoWriteException =
-      MongoWriteException(WriteError(11000, "E11000 duplicate key", org.bson.BsonDocument()), ServerAddress())
+      MongoWriteException(WriteError(11000, "E11000 duplicate key", org.bson.BsonDocument()), ServerAddress(), java.util.Collections.emptyList())
 
     def translated[A](fa: F[A]): Throwable =
       attempt(fa).left.getOrElse(fail("expected the operation to fail"))

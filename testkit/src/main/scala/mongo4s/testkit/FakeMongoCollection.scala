@@ -113,7 +113,7 @@ final class FakeMongoCollection[F[*], S[*], E](
         try
           val encoded = identified(codec.encodeDocument(document))
           storage += encoded
-          ids ++= Option(encoded.get(BsonField.Id))
+          ids ++= Option(encoded.get(BsonField.Id)): Unit
         catch case duplicate: MongoError.DuplicateKey => failures.addOne(failureAt(i, duplicate)): Unit
       }
 

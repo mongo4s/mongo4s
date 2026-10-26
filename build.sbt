@@ -74,6 +74,7 @@ lazy val commonSettings = Seq(
     "-Wimplausible-patterns",
     "-Wrecurse-with-default",
   ),
+  scalacOptions ++= (if sourceLevel.value == "future" then Nil else Seq("-Werror", "-Wconf:msg=@nowarn annotation does not suppress any warnings:s")),
   credentials ++= Seq(Path.userHome / ".sbt" / "sonatype_credentials").filter(_.isFile).map(Credentials(_)),
   mimaPreviousArtifacts  := binaryCompatibleWith.map(organization.value %% moduleName.value % _),
 )

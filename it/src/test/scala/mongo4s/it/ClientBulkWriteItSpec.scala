@@ -15,7 +15,6 @@ import mongo4s.results.ClientBulkWriteResult
 import mongo4s.{Field, MongoClient, MongoError}
 import mongo4s.operations.{BulkWriteOptions, Index, Update, UpdateOptions, WriteCommand}
 
-import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
 import mongo4s.bson.BsonInstances.given
 
@@ -96,18 +95,18 @@ final class ClientBulkWriteItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, 
     "carry on past a duplicate when unordered" in {
       val program =
         for
-          (client, users, orders) <- setUp("client_bulk_unordered")
-          failed                  <- client
-                                       .bulkWrite(
-                                         List(
-                                           users.write(WriteCommand.InsertOne(User("u1", "ada"))),
-                                           users.write(WriteCommand.InsertOne(User("u1", "again"))),
-                                           users.write(WriteCommand.InsertOne(User("u2", "bob"))),
-                                         ),
-                                         BulkWriteOptions.unordered,
-                                       )
-                                       .attempt
-          stored                  <- users.count()
+          (client, users, _) <- setUp("client_bulk_unordered")
+          failed             <- client
+                                  .bulkWrite(
+                                    List(
+                                      users.write(WriteCommand.InsertOne(User("u1", "ada"))),
+                                      users.write(WriteCommand.InsertOne(User("u1", "again"))),
+                                      users.write(WriteCommand.InsertOne(User("u2", "bob"))),
+                                    ),
+                                    BulkWriteOptions.unordered,
+                                  )
+                                  .attempt
+          stored             <- users.count()
         yield (failed.isLeft, stored)
 
       program.asserting(_ shouldBe (true, 2L))
@@ -131,13 +130,13 @@ final class ClientBulkWriteItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, 
     "take part in a transaction" in {
       val program =
         for
-          (client, users, orders) <- setUp("client_bulk_transaction")
-          aborted                 <- client
-                                       .withTransaction(
-                                         client.bulkWrite(List(users.write(WriteCommand.InsertOne(User("u1", "ada"))))) >> IO.raiseError(RuntimeException("rollback"))
-                                       )
-                                       .attempt
-          stored                  <- users.count()
+          (client, users, _) <- setUp("client_bulk_transaction")
+          aborted            <- client
+                                  .withTransaction(
+                                    client.bulkWrite(List(users.write(WriteCommand.InsertOne(User("u1", "ada"))))) >> IO.raiseError(RuntimeException("rollback"))
+                                  )
+                                  .attempt
+          stored             <- users.count()
         yield (aborted.isLeft, stored)
 
       program.asserting(_ shouldBe (true, 0L))
