@@ -551,7 +551,7 @@
         </nav>
 
         <div class="install">
-            <pre><code>libraryDependencies += "org.mongo4s" %% "mongo4s-cats" % "4.1.0"</code></pre>
+            <pre><code>libraryDependencies += "org.mongo4s" %% "mongo4s-cats" % "5.0.0"</code></pre>
             <p class="install-note">On another runtime, swap the module: <code>mongo4s-zio</code>,
                 <code>mongo4s-kyo</code> or <code>mongo4s-rapid</code>. Codecs and repositories are separate
                 modules — see <a href="#start">Quick start</a>.</p>
@@ -591,10 +591,10 @@
     <p>Pick a runtime. The default codec (<code>bson-direct</code>) derives straight from your case class — AST-free, no
         third-party codec library, no extra dependency beyond <code>mongo4s-core</code> itself:</p>
     <pre><code>libraryDependencies ++= Seq(
-    "org.mongo4s" %% "mongo4s-cats"           % "4.1.0", // mongo4s-core + cats-effect integration
-    "org.mongo4s" %% "mongo4s-bson-direct"    % "4.1.0", // ast-free bson codecs
-    "org.mongo4s" %% "mongo4s-bson-cats-data" % "4.1.0", // if you need NonEmptyList etc. codec instances
-    "org.mongo4s" %% "mongo4s-repositories"   % "4.1.0", // if you need auto-generated CRUD repository ops for your model
+    "org.mongo4s" %% "mongo4s-cats"           % "5.0.0", // mongo4s-core + cats-effect integration
+    "org.mongo4s" %% "mongo4s-bson-direct"    % "5.0.0", // ast-free bson codecs
+    "org.mongo4s" %% "mongo4s-bson-cats-data" % "5.0.0", // if you need NonEmptyList etc. codec instances
+    "org.mongo4s" %% "mongo4s-repositories"   % "5.0.0", // if you need auto-generated CRUD repository ops for your model
 )</code></pre>
     <pre><code>import cats.effect.{IO, IOApp}
 
@@ -704,28 +704,35 @@ tagsField.contains("urgent")             // array membership
 tagsField.containsAll(List("a", "b"))    // $all
 tagsField.hasSize(3)                     // $size
 scoreField.hasType(BsonTypeName.Int)     // $type — an enum, not a string
+scoreField.hasAnyType(BsonTypeName.Int, BsonTypeName.Long) // $type over several types
 Filter.text[User]("scala")               // $text
-Filter.expr[User](someBsonDocument)      // $expr
+Filter.expr(totalField.expr &gt; limitField.expr) // $expr, typed
 Filter.jsonSchema[User](schema)          // $jsonSchema
 flagsField.bitsAllSet(4)                 // $bitsAllSet — also $bitsAnySet, $bitsAllClear, $bitsAnyClear
 
-itemsField.elemMatch(skuField.equalTo("abc") &amp;&amp; qtyField.gt(2))  // one element satisfies both</code></pre>
+itemsField.elemMatch(skuField.equalTo("abc") &amp;&amp; qtyField.gt(2))           // one element satisfies both
+scoresField.elemMatch(Field.self[Int].gte(80) &amp;&amp; Field.self[Int].lt(85)) // a range on a scalar element</code></pre>
     <p class="muted">
         <code>Filter.and</code>/<code>or</code> fold <code>Filter.all</code> and <code>Filter.none</code> away rather
-        than emitting a one-element <code>$and</code>. That is what makes an empty list safe:
-        <code>field.in(Nil)</code> is <code>Filter.none</code>, not "match everything", and a chain
-        <code>a &amp;&amp; b &amp;&amp; c</code> renders as one flat <code>$and</code>. The comparisons have symbolic
-        aliases where they read better — <code>===</code>, <code>=!=</code>, <code>&gt;</code>, <code>&gt;=</code>,
-        <code>&lt;</code>, <code>&lt;=</code>. An operator that only means something for one kind of field compiles only
-        on it: <code>regex</code> on text, <code>mod</code> on a number, <code>hasSize</code> on a collection, the
-        bitwise operators on an integer.
+        than emitting a one-element <code>$and</code>, and a chain <code>a &amp;&amp; b &amp;&amp; c</code> renders as
+        one flat <code>$and</code>. The empty lists answer what the server answers: <code>in(Nil)</code> and
+        <code>containsAll(Nil)</code> match nothing, <code>notIn(Nil)</code> everything. <code>Field.self</code> stands
+        for a scalar array element itself; its conditions render as bare operators, and joined with
+        <code>&amp;&amp;</code> they merge into one document. The comparisons have symbolic aliases where they read
+        better — <code>===</code>, <code>=!=</code>, <code>&gt;</code>, <code>&gt;=</code>, <code>&lt;</code>,
+        <code>&lt;=</code>. An operator that only means something for one kind of field compiles only on it:
+        <code>regex</code> on text, <code>mod</code> on a number, <code>hasSize</code> on a collection, the bitwise
+        operators on an integer.
     </p>
     <pre><code>ageField.set(31)                   // $set
 ageField.inc(1)                    // $inc — also $mul, $min, $max
 tagsField.push("vip")              // $push — also $pull, $addToSet, and the $each variants
 tagsField.pushAll(List("vip"), PushOptions.default[String].sortedAscending.withSlice(10))
+itemsField.pullWhere(qtyField.lt(1))          // $pull by a condition
+scoresField.pullWhere(Field.self[Int].gte(6)) // ...on a scalar element itself
 Update.setOnInsert(nameField, "")  // $setOnInsert, for merge-style upserts
 Update.rename(oldField, newField)  // $rename — also currentDate, popFirst/popLast
+Update.currentTimestamp(syncedField) // $currentDate as a BSON timestamp
 flagsField.bitOr(4)                // $bit — also bitAnd, bitXor</code></pre>
     <p class="muted">
         Numeric operators only apply to numeric fields, so <code>Update.inc(nameField, 1)</code> does not compile. An
@@ -735,64 +742,69 @@ flagsField.bitOr(4)                // $bit — also bitAnd, bitXor</code></pre>
         operators of the same name into one sub-document; <code>Update.Raw</code> carries operators the AST does not
         model and merges the same way, without mutating the document you handed it. One operator document holds one
         change per path, so an update that changes a path twice is refused when it renders rather than losing the
-        first change, and so is one whose paths overlap across operators. <code>bulkWrite</code> takes a
-        <code>Seq[WriteCommand[E]]</code> — <code>InsertOne</code>/<code>ReplaceOne</code>/<code>UpdateOne</code>/<code>UpdateMany</code>/<code>DeleteOne</code>/<code>DeleteMany</code>,
-        carrying the same <code>Filter</code> and <code>Update</code> values, run in the order given unless
-        <code>ordered = false</code>. A <code>BulkWriteFailed</code> names each failing command by its position, and its
-        <code>result</code> is what the others wrote.
+        first change, and so is one whose paths overlap across operators.
     </p>
     <p>
         An update that computes from the document's own values is a pipeline, not operators.
         <code>Update.pipeline</code> takes the stages the server accepts in one — <code>$addFields</code>,
-        <code>$project</code>, <code>$unset</code>, <code>$replaceRoot</code> or a <code>Stage.raw</code> — and every
-        update call takes it:
+        <code>$project</code>, <code>$unset</code>, <code>$replaceRoot</code>, <code>$replaceWith</code> or a
+        <code>Stage.raw</code> — and every update call takes it. Its values are
+        <a href="#expressions">aggregation expressions</a>:
     </p>
-    <pre><code>val exclaimed = Update.pipeline(
-  Stage.addFields[User]("name" -&gt; BsonDocument("$concat", BsonArray(java.util.List.of(BsonString("$name"), BsonString("!")))))
-)
+    <pre><code>val exclaimed = Update.pipeline(Stage.addFields[User]("name" := nameField.expr ++ Expr.lit("!")))
 
 collection.updateMany(Filter.all, exclaimed)</code></pre>
     <p>
-        The positional operators are path segments, so <code>/</code> builds them. <code>$[]</code> updates every
-        element and needs nothing else; <code>$[identifier]</code> updates only what an <em>array filter</em> selects,
-        and those go in <code>arrayFilters</code> on
-        <code>updateOne</code>/<code>updateMany</code>/<code>findOneAndUpdate</code>:
+        The positional operators are methods on an array field, each giving a field of the element type, and
+        <code>/</code> with another <code>Field</code> reaches into the element through the collection's naming:
+        <code>each</code> is <code>$[]</code>, <code>matched</code> is <code>$</code>, and <code>where</code> is
+        <code>$[identifier]</code>, whose <code>Field.element</code> builds the array filter too:
     </p>
-    <pre><code>val lowQty: Field[Order, Int]    = Field.of[Order, List[Item]](_.items) / "$[low]" / "qty"
-val elementQty: Field[Item, Int] = Field.stored("low.qty")
+    <pre><code>collection.updateOne(orderId.equalTo("1"), Update.set(items.each / quantity, 0))
+collection.updateOne(items.elemMatch(sku.equalTo("abc")), Update.inc(items.matched / quantity, 1))
 
-collection.updateOne(orderId.equalTo("1"), Update.set(lowQty, 100), UpdateOptions.default.withArrayFilters(Seq(elementQty.lt(3))))</code></pre>
-    <p class="muted">
-        Array-filter paths are written against the <strong>stored</strong> document — the identifier is not a field of
-        your model, so build them with <code>Field.stored</code> and spell the field names as they appear on the wire.
-        Everything reached through <code>/</code> is a stored segment too, so neither the identifier nor
-        <code>$[]</code> is touched by the collection's <code>FieldNaming</code>.
-    </p>
+val low = Field.element[Item]("low")
+collection.updateOne(orderId.equalTo("1"), Update.set(items.where(low) / quantity, 100),
+  UpdateOptions.default.withArrayFilters(Seq((low / quantity).lt(3))))</code></pre>
     <p>
         <code>updateOne</code>/<code>updateMany</code> take an <code>UpdateOptions</code>, <code>replaceOne</code> a
-        <code>ReplaceOptions</code>. Both are immutable, built by chaining from <code>default</code>, and exist so new
-        options stay additive — a write method's signature never has to grow another parameter again. Each operation
+        <code>ReplaceOptions</code>, inserts an <code>InsertOneOptions</code>/<code>InsertManyOptions</code>. They are
+        immutable, built by chaining from <code>default</code>, and exist so new options stay additive. Each operation
         family gets its own type rather than one shared bag, so <code>upsert</code> cannot be set on something that
         has no upsert to give.
     </p>
-    <pre><code>UpdateOptions.default                                     // nothing set
-UpdateOptions.upsert                                      // shorthand for default.withUpsert
-UpdateOptions.upsert.withArrayFilters(Seq(elementQty.lt(3)))
+    <pre><code>UpdateOptions.upsert.withArrayFilters(Seq((low / quantity).lt(3)))
+UpdateOptions.default.withSort(Sort.asc(ageField))         // which document updateOne changes — 8.0+
+collection.insertMany(users, InsertManyOptions.unordered)  // carry on past a duplicate
 
 collection.deleteMany(filter, DeleteOptions.default.withCollation(caseInsensitive))
 collection.count(filter, CountOptions.default.withSkip(20).withLimit(10))</code></pre>
     <p class="muted">
         What each type carries today: <code>collation</code>, <code>hint</code> and <code>comment</code> everywhere;
-        <code>bypassDocumentValidation</code> on the two that write whole documents; <code>limit</code>,
-        <code>skip</code> and <code>maxTime</code> on <code>CountOptions</code>.
+        <code>let</code> variables on every write, read in an <code>$expr</code> as <code>Expr.variable</code>;
+        <code>bypassDocumentValidation</code> on those that write whole documents; <code>sort</code> on
+        <code>UpdateOptions</code> and <code>ReplaceOptions</code>, which <code>updateMany</code> refuses rather than
+        letting the driver drop; <code>limit</code>, <code>skip</code> and <code>maxTime</code> on
+        <code>CountOptions</code>. The <code>findOneAnd*</code> trio works the same way, except its options carry the
+        entity type because <code>sort</code> and <code>projection</code> do; <code>returnUpdated</code> defaults to
+        true, and <code>returningPrevious</code> asks for the document as it was.
     </p>
+    <p>
+        <code>bulkWrite</code> takes a <code>Seq[WriteCommand[E]]</code> —
+        <code>InsertOne</code>/<code>ReplaceOne</code>/<code>UpdateOne</code>/<code>UpdateMany</code>/<code>DeleteOne</code>/<code>DeleteMany</code>
+        — run in the order given unless <code>BulkWriteOptions.unordered</code>, which also carries
+        <code>comment</code>, <code>let</code> and <code>bypassDocumentValidation</code>. A
+        <code>BulkWriteFailed</code> names each failing command by its position, and its <code>result</code> is what the
+        others wrote. On MongoDB 8.0 the client writes to several collections at once, each collection addressing its
+        own command with its own codec:
+    </p>
+    <pre><code>client.bulkWrite(List(
+  users.write(WriteCommand.InsertOne(User("3", "Cleo", 28))),
+  orders.write(WriteCommand.updateOne(orderId.equalTo("1"), Update.inc(totalField, 5))),
+))</code></pre>
     <p class="muted">
-        The <code>findOneAnd*</code> trio works the same way, except its options carry the entity type because
-        <code>sort</code> and <code>projection</code> do. <code>returnUpdated</code> defaults to true, and
-        <code>returningPrevious</code> asks for the document as it was:
-        <code>findOneAndUpdate(filter, update, FindOneAndUpdateOptions.default[User].returningPrevious)</code>. They
-        carry <code>collation</code>, <code>hint</code>, <code>maxTime</code> and <code>comment</code> too, and the
-        update and replace ones <code>bypassDocumentValidation</code>.
+        It fails as <code>MongoError.ClientBulkWriteFailed</code>, naming each failed write by its position, and a
+        <code>comment</code> or <code>let</code> set on one command — which only the whole bulk can carry — is refused.
     </p>
     <p><code>find</code> returns a builder; nothing is sent until <code>first</code>, <code>all</code>,
         <code>stream</code> or <code>attempting</code>:</p>
@@ -806,15 +818,22 @@ collection.count(filter, CountOptions.default.withSkip(20).withLimit(10))</code>
   .maxTime(5.seconds)
   .batchSize(100)
   .comment("adults page 3")
-  .all</code></pre>
+  .all
+
+collection.find().cursorType(CursorType.TailableAwait).maxAwaitTime(1.second).stream // tail a capped collection</code></pre>
     <p class="muted">
         <code>filter</code> narrows what is already there; <code>sort</code>, <code>projection</code>,
-        <code>skip</code> and <code>limit</code> replace. The same options are on <code>aggregate</code>, which adds
-        <code>allowDiskUse</code>, and <code>collation</code>/<code>maxTime</code>/<code>batchSize</code> on
-        <code>distinct</code>.
+        <code>skip</code> and <code>limit</code> replace. <code>find</code> also takes <code>let</code>,
+        <code>allowDiskUse</code>, <code>noCursorTimeout</code>, <code>cursorType</code> and
+        <code>maxAwaitTime</code>; a tailable cursor streams as a live stream, emitting each document as it arrives,
+        and its <code>all</code> never ends. <code>aggregate</code> adds <code>allowDiskUse</code>, <code>let</code>,
+        <code>maxAwaitTime</code> and <code>bypassDocumentValidation</code>; <code>distinct</code> takes
+        <code>collation</code>, <code>hint</code>, <code>comment</code>, <code>maxTime</code> and
+        <code>batchSize</code>; <code>estimatedCount</code> an <code>EstimatedCountOptions</code>.
         <code>Projection</code> keeps inclusion and exclusion apart, since MongoDB rejects a projection mixing them.
         They are separate types, so chaining <code>exclude</code> onto an inclusion projection does not compile.
-        <code>_id</code> is the exception, via <code>withoutId</code>.
+        <code>_id</code> is the exception, via <code>withoutId</code>. An inclusion projection can also
+        <code>compute</code> fields from expressions, and slicing a field it includes keeps it once, sliced.
     </p>
     <p class="muted">
         The numbers are checked where you write them, because MongoDB reads the edge cases as something else: a
@@ -822,6 +841,14 @@ collection.count(filter, CountOptions.default.withSkip(20).withLimit(10))</code>
         and a <code>maxTime</code> under a millisecond, which truncates to no time limit. <code>distinct</code> over a
         field typed as an array answers with the elements' type, because that is what the server answers with.
     </p>
+
+    <h3 id="partial-reads">Partial reads</h3>
+    <p>
+        <code>selectAs</code> reads a few fields into a named tuple, building the projection and the decoder from one
+        shape. A wrong label or type is a compile error, and it works on direct collections too:
+    </p>
+    <pre><code>val names: IO[List[(name: String, age: Int)]] =
+  collection.find(adults).selectAs[(name: String, age: Int)].all</code></pre>
 
     <h3 id="results">Results, and reads that survive bad documents</h3>
     <p>
@@ -1072,8 +1099,10 @@ val byAge = Seq(
     </p>
     <p class="muted">
         <code>Stage</code> covers
-        <code>$match</code>/<code>$project</code>/<code>$sort</code>/<code>$limit</code>/<code>$skip</code>/<code>$count</code>/<code>$unwind</code>/<code>$lookup</code>/<code>$graphLookup</code>/<code>$group</code>/<code>$addFields</code>/<code>$unset</code>/<code>$replaceRoot</code>/<code>$facet</code>/<code>$sample</code>/<code>$sortByCount</code>/<code>$unionWith</code>/<code>$bucket</code>/<code>$bucketAuto</code>/<code>$densify</code>/<code>$fill</code>/<code>$setWindowFields</code>/<code>$geoNear</code>/<code>$redact</code>/<code>$out</code>/<code>$merge</code>,
-        with <code>Stage.raw(document)</code> as the escape hatch for anything else.
+        <code>$match</code>/<code>$project</code>/<code>$sort</code>/<code>$limit</code>/<code>$skip</code>/<code>$count</code>/<code>$unwind</code>/<code>$lookup</code>/<code>$graphLookup</code>/<code>$group</code>/<code>$addFields</code>/<code>$unset</code>/<code>$replaceRoot</code>/<code>$replaceWith</code>/<code>$facet</code>/<code>$sample</code>/<code>$sortByCount</code>/<code>$unionWith</code>/<code>$bucket</code>/<code>$bucketAuto</code>/<code>$densify</code>/<code>$fill</code>/<code>$setWindowFields</code>/<code>$geoNear</code>/<code>$redact</code>/<code>$out</code>/<code>$merge</code>
+        and Atlas Search's <code>$search</code>/<code>$searchMeta</code>/<code>$vectorSearch</code>, with
+        <code>Stage.raw(document)</code> as the escape hatch for anything else. <code>$unwind</code> takes
+        <code>includeArrayIndex</code>, and <code>$unionWith</code> a pipeline over the other collection.
     </p>
     <pre><code>Stage.geoNear(locationField, Geometry.Point(13.405, 52.52), "distance")  // first stage only
 Stage.unset(ageField).and(tagsField)
@@ -1098,12 +1127,37 @@ Stage.bucketAutoRounded(ageField, 5, BucketGranularity.R10)()           // numer
 )
 
 Stage.fill(Sort.asc(recordedAt))(FillOutput.linear(temperatureField), FillOutput.locf(statusField), FillOutput.value(noteField, "none"))
-Stage.redact[User](conditionOnLevel)                                     // answers Stage.Descend, Prune or Keep</code></pre>
+Stage.redact(Expr.cond(levelField.expr === Expr.lit(1), Expr.prune, Expr.descend))</code></pre>
     <p class="muted">
         Window functions sit beside the accumulators in one <code>setWindowFields</code>, but are their own type, so a
         <code>$rank</code> cannot end up in a <code>$group</code>, where the server refuses it. <code>$fill</code> fills
         by a value, by the last value seen or along the line between neighbours; the last two need a sort, and where
         there is nothing to fill from the server writes an explicit <code>null</code>.
+    </p>
+    <h4 id="expressions">Aggregation expressions</h4>
+    <p>
+        An <code>Expr[E, A]</code> computes an <code>A</code> from a document of <code>E</code>. <code>field.expr</code>
+        reads a field through the collection's naming — an <code>Option[A]</code> field as the <code>A</code> it holds —
+        <code>Expr.lit</code> a value, and <code>"name" := expr</code> or <code>field := expr</code> a computed field.
+        <code>$addFields</code>, <code>$group</code> keys, accumulators, <code>$replaceWith</code>, <code>$redact</code>,
+        an inclusion <code>Projection</code>, <code>Filter.expr</code> and pipeline updates all take them:
+    </p>
+    <pre><code>val total: Expr[Order, Double] = priceField.expr * qtyField.expr   // a Double times an Int is a Double
+
+Stage.addFields[Order]("total" := total, "size" := Expr.cond(qtyField.expr &gt; Expr.lit(10), Expr.lit("bulk"), Expr.lit("single")))
+Stage.groupByExpr(createdAtField.expr.year)("revenue" -&gt; Accumulator.sum(total))
+Stage.groupByKeys[Order]("city" := cityField.expr, "month" := createdAtField.expr.month)("orders" -&gt; Accumulator.count[Order])
+Stage.replaceWith(Expr.mergeObjects(Expr.root[Order], Expr.document("total" := total)))
+itemsField.expr.filter(item =&gt; item.get(itemQty) &gt; Expr.lit(1))</code></pre>
+    <p class="muted">
+        Each operator compiles only where the server would accept it: arithmetic on numbers, widening the way the server
+        does — an <code>Int</code> with a <code>Long</code> is a <code>Long</code>, anything with a <code>Double</code> a
+        <code>Double</code> — comparisons between values of one kind or two numbers, text operators on text, array
+        operators on a collection, date operators on an <code>Instant</code>. There are conversions, <code>$ifNull</code>
+        as <code>orElse</code>, <code>cond</code>/<code>switch</code>, <code>let</code> variables through
+        <code>Expr.variable</code>, the search scores, and <code>Expr.raw</code> for anything else. Inside a ScalaTest
+        spec, write <code>equalTo</code> rather than <code>===</code>, which <code>Matchers</code> takes over. The fake
+        does not evaluate expressions and refuses them by name.
     </p>
     <p>
         <code>$lookup</code> has three forms: <code>Stage.lookup</code> is the equality join,
@@ -1194,6 +1248,7 @@ collection.createIndex(Index.unique(idField))
 collection.createIndex(Index.ascending(createdAtField).expiringAfter(30.days))     // TTL
 collection.createIndex(Index.ascending(ageField).where(ageField.gte(18)))          // partial
 collection.createIndex(Index.empty[User].text(bioField).withSparse)
+collection.createIndex(Index.text(titleField).text(bioField).withWeight(titleField, 10).withDefaultLanguage("spanish"))
 collection.createIndex(Index.hashed(idField))                                      // sharding
 collection.createIndex(Index.geo2DSphere(Field.stored[User, Any]("location")))     // also geo2D
 collection.createIndex(Index.ascending(ageField).withHidden)                       // ignored by the planner
@@ -1213,9 +1268,62 @@ collection.renameCollection("people_archive", dropTarget = true)</code></pre>
         <code>dropTarget</code> says to, and leaves the handle it was called on pointing at the old, now empty, name.
         <code>expireAfterSeconds</code> is a whole number on the server, so a sub-second TTL is rejected rather than
         silently truncated to "expire immediately"; when immediately is what you mean — each document carries its own
-        expiry time — <code>expiringAtFieldTime</code> asks for a TTL of zero on purpose. From a repository,
+        expiry time — <code>expiringAtFieldTime</code> asks for a TTL of zero on purpose. A text index takes field
+        weights, a default language and a field that overrides it per document. A partial index takes the operators
+        the server accepts there — equality, comparisons, <code>$in</code>, <code>exists</code>, <code>hasType</code>,
+        <code>$and</code>, <code>$or</code> — and not a negation, which <code>!f</code> renders as. From a repository,
         <code>ensureKeyIndex</code> builds the unique index the <code>PrimaryKey</code> describes without you restating
-        its fields.
+        its fields; for a key stored as <code>_id</code>, which the server keeps unique on its own, it builds nothing and
+        answers <code>_id_</code>.
+    </p>
+
+    <h3 id="search">Atlas Search</h3>
+    <p>
+        Full-text and vector search run on Atlas Search indexes, which a collection creates, lists, redefines and drops.
+        An index builds in the background and finds nothing until <code>listSearchIndexes</code> reports it
+        <code>queryable</code>:
+    </p>
+    <pre><code>collection.createSearchIndexes(List(
+  SearchIndex.dynamic[Movie](),                                                       // "default", every field mapped
+  SearchIndex.vector("plots", embeddingField, 1536, VectorSimilarity.Cosine).filteringOn(yearField),
+))
+
+val matrix = SearchOperator.compound[Movie](
+  must = List(SearchOperator.text(plotField, "hacker").orIn(titleField).fuzzy(1)),
+  filter = List(SearchOperator.atLeast(yearField, 1999)),
+)
+collection.aggregate[Movie](Seq(
+  Stage.search(matrix, SearchOptions.default.withCount(SearchCount.total)),
+  Stage.project(Projection.empty[Movie].include(titleField).compute("score" := Expr.searchScore)),
+))
+
+Stage.vectorSearch("plots", embeddingField, queryVector, limit = 10, numCandidates = 200, filter = Some(yearField.gte(2000)))</code></pre>
+    <p class="muted">
+        The common operators are typed — <code>text</code>, <code>phrase</code>, <code>autocomplete</code>,
+        <code>wildcard</code> and <code>regex</code> on text fields, <code>equalTo</code>, the ranges on fields the server
+        orders, <code>exists</code>, <code>compound</code> — and <code>SearchOperator.raw</code>/<code>SearchIndex.of</code>
+        carry the rest. <code>$searchMeta</code> answers with counts, and <code>exactVectorSearch</code> searches without
+        candidates. All of it runs against a local <code>mongodb/mongodb-atlas-local</code> container as well as Atlas —
+        Testcontainers ships <code>MongoDBAtlasLocalContainer</code> — and the fake refuses it by name.
+    </p>
+
+    <h3 id="create-collection">Creating a collection</h3>
+    <p>
+        MongoDB creates a collection on first write, so <code>createCollection</code> is for the cases where the shape
+        has to be declared up front — a capped log, a schema the server enforces, a time series, a clustered
+        collection:
+    </p>
+    <pre><code>database.createCollection("events", CreateCollectionOptions.capped(8 * 1024 * 1024).withMaxDocuments(10000))
+database.createCollection("readings", CreateCollectionOptions.default
+  .withTimeSeries(TimeSeries.on("recordedAt").withMetaField("sensor").withGranularity(TimeSeriesGranularity.MINUTES))
+  .expiringAfter(30.days))
+database.createCollection("people", CreateCollectionOptions.default.withValidator(jsonSchema))
+database.createCollection("orders", CreateCollectionOptions.default.withClusteredIndex(ClusteredIndex.onId))</code></pre>
+    <p class="muted">
+        A capped collection takes its size because the server rejects one without it, and two combinations the server
+        accepts and then ignores are refused instead: a <code>maxDocuments</code> on a collection that is not capped,
+        and a validation level or action with no validator. A sub-second <code>expiringAfter</code> is refused as it is
+        on an index.
     </p>
 
     <h3>Change streams</h3>
@@ -1718,17 +1826,19 @@ users.findPage(20, descending = true)                       // newest key first<
     </p>
     <p>
         For unit tests, <code>FakeMongoCollection</code> (in <code>mongo4s-testkit</code>, a published module — add it
-        as <code>"org.mongo4s" %% "mongo4s-testkit" % "4.1.0" % Test</code>) implements
+        as <code>"org.mongo4s" %% "mongo4s-testkit" % "5.0.0" % Test</code>) implements
         <code>MongoCollection</code> in memory — the exact
         same <code>Filter</code>/<code>Update</code>/<code>Field</code> AST the real driver interprets is interpreted
         against an in-memory buffer instead, so repository logic is testable without a running MongoDB. Filters,
         every update operator, sorting, paging, projections, <code>distinct</code> and a subset of
         <code>aggregate</code> are simulated, and so are unique indexes, <code>listIndexes</code> as the server
         describes them, the way a bulk write reports a duplicate, and how the server compares numbers of different
-        widths &mdash; each checked against a real server by a parity spec. <code>watch</code>, <code>explain</code>,
-        <code>renameCollection</code>, <code>$text</code>, <code>$expr</code>, <code>$jsonSchema</code>,
-        <code>$median</code>/<code>$percentile</code>, <code>Filter.Raw</code>, a pipeline
-        update, a collation and an update carrying <code>arrayFilters</code> throw
+        widths, unordered inserts, a <code>sort</code> on single-document updates, <code>pullWhere</code> and conditions
+        on scalar elements &mdash; each checked against a real server by a parity spec. <code>watch</code>, <code>explain</code>,
+        <code>renameCollection</code>, <code>$text</code>, aggregation expressions and so <code>$expr</code>,
+        <code>$jsonSchema</code>, <code>$median</code>/<code>$percentile</code>, Atlas Search, a tailable cursor, the
+        positional update operators, a write for the client-level <code>bulkWrite</code>, <code>Filter.Raw</code>, a
+        pipeline update, a collation and an update carrying <code>arrayFilters</code> throw
         <code>UnsupportedOperationException</code> naming what was asked for, rather than quietly answering wrong.
         It streams through the runtime's <code>RsBridge</code>, reading the collection when the stream runs, so
         <code>FakeMongoCollection[IO, S, User](codec)</code> and <code>FakeRepository[IO, S, User, String]()</code> are
@@ -1827,23 +1937,24 @@ MongoClientResource.fromConnectionString("mongodb://localhost:27017") { client =
     </p>
     <pre><code>import mongo4s.RsBridgeConfig
 
-given RsBridgeConfig = RsBridgeConfig(
-  bufferSize         = 512,             // outstanding demand for streaming reads
-  timeout            = Some(5.seconds), // per non-streaming operation; unset by default
-  strictSingleResult = false,           // fail on a second result instead of taking the first
-)</code></pre>
+given RsBridgeConfig = RsBridgeConfig.default
+  .withBufferSize(512)        // outstanding demand for streaming reads
+  .withTimeout(5.seconds)     // per non-streaming operation; unset by default
+  .withStrictSingleResult     // fail on a second result instead of taking the first</code></pre>
     <p class="muted">
-        <code>bufferSize</code> bounds memory against a fast cursor; it does not apply to <code>all</code>, which asks
-        for everything by definition. <code>timeout</code> is a backstop for a cursor that stops signalling entirely —
+        <code>bufferSize</code> bounds memory against a fast cursor. On cats and kyo it does not apply to <code>all</code>,
+        which asks for everything by definition; zio and rapid read <code>all</code> through the same buffered source as a
+        stream, so it applies there. <code>timeout</code> is a backstop for a cursor that stops signalling entirely —
         the driver has its own timeouts, and streams are deliberately excluded, since a change stream sitting idle is
         working rather than stuck. Operations that expect at most one document read two, not the whole cursor — enough
         to notice a second result under <code>strictSingleResult</code>, and no more;
-        <code>AggregateQuery.first</code> pushes a <code>$limit</code> into the pipeline for the same reason.
+        <code>find(...).first</code> and <code>AggregateQuery.first</code> push a <code>limit</code>/<code>$limit</code> to
+        the server for the same reason, so it is <code>distinct</code> and the other single-result publishers it guards.
     </p>
 
     <h2 id="modules">Modules</h2>
     <p>Published for Scala 3 under <code>org.mongo4s</code>:</p>
-    <pre><code>"org.mongo4s" %% "mongo4s-&lt;module&gt;" % "4.1.0"</code></pre>
+    <pre><code>"org.mongo4s" %% "mongo4s-&lt;module&gt;" % "5.0.0"</code></pre>
     <table>
         <tr>
             <th>Kind</th>
@@ -1891,7 +2002,7 @@ given RsBridgeConfig = RsBridgeConfig(
         </tr>
         <tr>
             <td><code>mongo4s-kyo</code></td>
-            <td>kyo 1.0.0-RC6</td>
+            <td>kyo 1.0.0-RC7</td>
         </tr>
         <tr>
             <td><code>mongo4s-rapid</code></td>
@@ -1908,6 +2019,15 @@ given RsBridgeConfig = RsBridgeConfig(
             <td>FakeMongoCollection, FakeRepository — in-memory doubles for unit tests</td>
         </tr>
     </table>
+    <p class="muted">
+        <strong>Java.</strong> The published class files target Java 17, so every module runs on JDK 17 or newer —
+        except <code>mongo4s-kyo</code>, whose kyo dependency ships Java 25 class files and so needs JDK 25 at runtime as
+        well as to build. Building the project needs JDK 25 throughout.
+        <strong>MongoDB.</strong> The integration suite runs against MongoDB 8.2, and Atlas Search against the
+        <code>mongodb-atlas-local</code> 8.2 image. <code>$median</code>/<code>$percentile</code> and the ranking
+        accumulators need 7.0; the client-level <code>bulkWrite</code> and a <code>sort</code> on
+        <code>updateOne</code>/<code>replaceOne</code> need 8.0.
+    </p>
 
     <h3 id="compatibility">Compatibility</h3>
     <p>What the artifacts promise:</p>
@@ -1922,9 +2042,14 @@ given RsBridgeConfig = RsBridgeConfig(
         <li>Deprecations get at least one minor release before removal.</li>
     </ul>
     <p>
-        <strong>4.1.0 is binary compatible with 4.0.0</strong>, checked by MiMa. It adds cases to <code>Accumulator</code>,
-        <code>Filter</code>, <code>Update</code> and <code>Stage</code>, so an exhaustive match over one warns about
-        them, and <code>setWindowFields</code> takes <code>WindowField</code>s, which every existing call already passes.
+        <strong>5.0.0 is a breaking release</strong>, mostly in binary shape: most existing calls compile unchanged.
+        <code>insertOne</code>/<code>insertMany</code> take options, <code>bulkWrite</code> takes
+        <code>BulkWriteOptions</code> instead of <code>ordered</code>, <code>$addFields</code> takes computed fields,
+        several AST cases changed shape, and <code>FindQuery</code>, <code>AggregateQuery</code>, <code>DistinctQuery</code>,
+        <code>MongoCollection</code> and <code>MongoClient</code> gained members. <code>containsAll(Nil)</code> now matches
+        nothing, as <code>$all: []</code> does, and a <code>sort</code> on <code>updateMany</code> is refused rather than
+        dropped. The migration guide is in
+        <a href="https://github.com/mongo4s/mongo4s/blob/main/COMPATIBILITY.md">COMPATIBILITY.md</a>.
     </p>
     <p>
         <strong>4.0.0 is a breaking release.</strong> An <code>Update</code> that changes one path twice is refused
@@ -1957,13 +2082,13 @@ given RsBridgeConfig = RsBridgeConfig(
         which used to be pinned to a fast-release <code>3.8</code>, are on the LTS line with the rest.
         <code>mongo4s-kyo</code> depends on a kyo release candidate and sits outside the binary compatibility
         promise the other artifacts make until kyo reaches <code>1.0.0</code> final. Compiling any module that touches
-        kyo requires <strong>JDK 25</strong>: kyo's <code>Frame</code> macro runs
-        inside the compiler and its class files target Java 25. Since <code>3.0.0</code> the build enforces
+        kyo requires <strong>JDK 25</strong>: kyo ships Java 25 class files, and its <code>Frame</code> macro loads them
+        inside the compiler. Since <code>3.0.0</code> the build enforces
         that for <em>every</em> module and refuses to load on an older JDK, naming the version it found,
         rather than letting four modules compile and the fifth fail with
         <code>UnsupportedClassVersionError: class file version 69.0</code>. One JDK across the build is
-        deliberate — the alternative is publishing artifacts compiled against different JDKs. It is a
-        build-time requirement; the published artifacts are unaffected.
+        deliberate — the alternative is publishing artifacts compiled against different JDKs. What it publishes
+        targets Java 17; only an application on <code>mongo4s-kyo</code> needs JDK 25 at runtime, for kyo's sake.
     </p>
 
     <h2 id="benchmarks">Benchmarks</h2>
@@ -2780,6 +2905,37 @@ findOne     0.129 ms/op → ~7,750 ops/s</code></pre>
         tests rather than only inside this build. Alongside it, <code>FakeRepository</code> is a
         <code>BaseMongoRepository</code> over a <code>FakeMongoCollection</code> — the real repository logic, only the
         collection faked, so the fake cannot drift from what production does.
+    </p>
+
+    <h3 id="design-expressions">Aggregation expressions are a phantom-typed tree</h3>
+    <p>
+        Every node of an <code>Expr</code> is an <code>Expr[Any, Nothing]</code> underneath, which conforms to every
+        <code>Expr[E, A]</code>; the types live on the factories and operators that build them. That keeps the renderer
+        one match over ten node shapes, and makes <code>Expr.raw</code> free. Contravariance in <code>E</code> lets a
+        literal, which reads no document, stand anywhere; the binary operators take <code>[E2 &lt;: E]</code> so a
+        literal on either side still yields an <code>Expr[Order, …]</code>. Covariance in <code>A</code> once let
+        <code>qty &lt; note</code> compile by widening to <code>Int | String</code>, so comparisons ask for a
+        <code>Comparison[A, B]</code> — one type with itself, or two numbers — and arithmetic for a
+        <code>Widened[A, B, R]</code> encoding the server's own widening.
+    </p>
+    <p class="muted">
+        Two names were the compiler's choice: element navigation is <code>get</code>, because <code>/</code> overloaded
+        for division and navigation picked the wrong alternative inside <code>"name" := …</code>, and the comparisons
+        have named forms because ScalaTest's <code>===</code> wins inside a spec. The fake does not evaluate
+        expressions: one that is subtly wrong is worse than one that refuses.
+    </p>
+
+    <h3 id="design-search">Search, the client bulk write, and refusing what would be dropped</h3>
+    <p>
+        Atlas Search was deferred while nothing here could run it; Testcontainers 2's
+        <code>MongoDBAtlasLocalContainer</code> removed the reason, so the common operators are typed and tested and
+        <code>raw</code> carries the long tail. The client-level <code>bulkWrite</code> keeps collections typed by
+        having each collection address its own command with its own codec, so the driver's client registry never sees an
+        entity. And options that mean nothing where they are given — a <code>sort</code> on <code>updateMany</code>, a
+        <code>comment</code> on one command of a client bulk — are refused with a message saying where they belong,
+        rather than dropped the way the driver drops them. A tailable cursor streams through the same chunk-of-one
+        bridge change streams use, since fs2's <code>fromPublisher</code> emits nothing until a chunk fills or the
+        publisher ends, and a tailable cursor never ends.
     </p>
 
     <h3 id="design-evolution">Evolving the API</h3>
