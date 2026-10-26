@@ -18,6 +18,9 @@ final class Index[E] private (
     val partialFilter: Option[Filter[E]],
     val collation: Option[Collation],
     val wildcardProjection: Option[BsonDocument],
+    val weights: List[(FieldPath, Int)],
+    val defaultLanguage: Option[String],
+    val languageOverride: Option[FieldPath],
 ):
   def ascending[A](field: Field[E, A]): Index[E]   = copy(keys = keys :+ (field.path, Index.Direction.Ascending))
   def descending[A](field: Field[E, A]): Index[E]  = copy(keys = keys :+ (field.path, Index.Direction.Descending))
@@ -37,6 +40,17 @@ final class Index[E] private (
   def withCollation(value: Collation): Index[E] = copy(collation = Some(value))
 
   def withWildcardProjection(value: BsonDocument): Index[E] = copy(wildcardProjection = Some(value))
+
+  def withWeight[A](field: Field[E, A], weight: Int): Index[E] =
+    require(weight >= 1 && weight <= 99999, s"a text index weight runs from 1 to 99999, got $weight")
+    copy(weights = weights :+ (field.path, weight))
+
+  def withDefaultLanguage(language: String): Index[E] = copy(defaultLanguage = Some(language))
+
+  def withLanguageOverride(field: Field[E, String]): Index[E] = copy(languageOverride = Some(field.path))
+
+  def weightsToBson(naming: FieldNaming): Option[BsonDocument] =
+    Option.when(weights.nonEmpty)(weights.foldLeft(BsonDocument())((document, entry) => document.append(entry._1.render(naming), BsonInt32(entry._2))))
 
   def expiringAfter(duration: FiniteDuration): Index[E] =
     require(
@@ -65,6 +79,9 @@ final class Index[E] private (
       partialFilter: Option[Filter[E]] = partialFilter,
       collation: Option[Collation] = collation,
       wildcardProjection: Option[BsonDocument] = wildcardProjection,
+      weights: List[(FieldPath, Int)] = weights,
+      defaultLanguage: Option[String] = defaultLanguage,
+      languageOverride: Option[FieldPath] = languageOverride,
   ): Index[E] =
     new Index(
       keys = keys,
@@ -76,6 +93,9 @@ final class Index[E] private (
       partialFilter = partialFilter,
       collation = collation,
       wildcardProjection = wildcardProjection,
+      weights = weights,
+      defaultLanguage = defaultLanguage,
+      languageOverride = languageOverride,
     )
 
 object Index:
@@ -103,6 +123,9 @@ object Index:
       partialFilter = None,
       collation = None,
       wildcardProjection = None,
+      weights = Nil,
+      defaultLanguage = None,
+      languageOverride = None,
     )
 
   def ascending[E, A](field: Field[E, A]): Index[E]   = empty[E].ascending(field)

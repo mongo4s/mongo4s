@@ -174,6 +174,9 @@ private[mongo4s] object DriverOptions:
     index.partialFilter.foreach(filter => options.partialFilterExpression(filter.toBson(naming)))
     index.collation.foreach(options.collation)
     index.wildcardProjection.foreach(options.wildcardProjection)
+    index.weightsToBson(naming).foreach(options.weights)
+    index.defaultLanguage.foreach(options.defaultLanguage)
+    index.languageOverride.foreach(path => options.languageOverride(path.render(naming)))
 
     options
   end index

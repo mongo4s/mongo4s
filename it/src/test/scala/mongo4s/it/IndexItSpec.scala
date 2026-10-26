@@ -7,8 +7,8 @@ import cats.effect.testing.scalatest.AsyncIOSpec
 import org.testcontainers.mongodb.MongoDBContainer
 
 import cats.effect.IO
-import org.bson.BsonDocument
 import org.bson.types.ObjectId
+import org.bson.{BsonDocument, BsonInt32}
 
 import mongo4s.cats.CatsStream
 import mongo4s.operations.Index
@@ -240,6 +240,31 @@ final class IndexItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndA
         yield (name, byName(indexes).keySet)
 
       program.asserting(_ shouldBe ("_id_", Set("_id_")))
+    }
+  }
+
+  "a text index" should {
+    "carry its weights, its default language and the field that overrides it" in {
+      val bioField  = Field.stored[Person, String]("bio")
+      val langField = Field.stored[Person, String]("lang")
+
+      val program =
+        for
+          people  <- collection("text_weights")
+          _       <- people.createIndex(
+                       Index
+                         .text(nameField)
+                         .text(bioField)
+                         .withWeight(nameField, 10)
+                         .withDefaultLanguage("spanish")
+                         .withLanguageOverride(langField)
+                         .named("by_text")
+                     )
+          indexes <- people.listIndexes
+          text     = byName(indexes)("by_text")
+        yield (text.getDocument("weights"), text.getString("default_language").getValue, text.getString("language_override").getValue)
+
+      program.asserting(_ shouldBe (BsonDocument("bio", BsonInt32(1)).append("name", BsonInt32(10)), "spanish", "lang"))
     }
   }
 

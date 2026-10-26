@@ -56,6 +56,26 @@ final class DriverOptionsSpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "text index options" should {
+    "carry weights through the naming, a default language and the overriding field" in {
+      val index = Index
+        .text(itemCount)
+        .withWeight(itemCount, 5)
+        .withDefaultLanguage("french")
+        .withLanguageOverride(Field.stored[Order, String]("idiom"))
+
+      val options = DriverOptions.index(index, FieldNaming.snakeCase)
+
+      (options.getWeights, options.getDefaultLanguage, options.getLanguageOverride) shouldBe
+        (BsonDocument("item_count", BsonInt32(5)), "french", "idiom")
+    }
+
+    "refuse a weight the server would refuse" in {
+      an[IllegalArgumentException] should be thrownBy Index.text(itemCount).withWeight(itemCount, 0)
+      an[IllegalArgumentException] should be thrownBy Index.text(itemCount).withWeight(itemCount, 100000)
+    }
+  }
+
   "the remaining write options" should {
     "carry let variables on deletes and every findOneAnd*, and a comment on counts" in {
       DriverOptions.delete(DeleteOptions.default.withLet(variables)).getLet shouldBe variables
