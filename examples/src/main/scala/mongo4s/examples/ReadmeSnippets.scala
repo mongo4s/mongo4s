@@ -105,7 +105,7 @@ object ReadmeSnippets:
   val withBit = Update
     .set(Field.of[User, String](_.name), "bob")
     .and(
-      Update.Raw[User](BsonDocument("$currentDate", BsonDocument("seenAt", BsonDocument("$type", BsonString("timestamp")))))
+      Update.Raw[User](BsonDocument("$unset", BsonDocument("legacyNickname", BsonString(""))))
     )
 
   // A pipeline computes from the document's own values, which operators cannot.
@@ -117,20 +117,27 @@ object ReadmeSnippets:
 
   // --- Array elements ---
 
-  def resetEveryQuantity(collection: MongoCollection[IO, S, Order]): IO[UpdateResult] =
-    val everyQuantity: Field[Order, Int] = Field.of[Order, List[Item]](_.items) / "$[]" / "quantity"
+  val quantity = Field.of[Item, Int](_.quantity)
 
-    collection.updateOne(Field.of[Order, Int](_.seq).equalTo(1), Update.set(everyQuantity, 0))
+  def resetEveryQuantity(collection: MongoCollection[IO, S, Order]): IO[UpdateResult] =
+    collection.updateOne(Field.of[Order, Int](_.seq).equalTo(1), Update.set(itemsField.each / quantity, 0))
+
+  def bumpMatched(collection: MongoCollection[IO, S, Order]): IO[UpdateResult] =
+    collection.updateOne(itemsField.elemMatch(Field.of[Item, String](_.sku).equalTo("abc")), Update.inc(itemsField.matched / quantity, 1))
 
   def raiseLowQuantities(collection: MongoCollection[IO, S, Order]): IO[UpdateResult] =
-    val lowQuantity: Field[Order, Int]    = Field.of[Order, List[Item]](_.items) / "$[low]" / "quantity"
-    val elementQuantity: Field[Item, Int] = Field.stored("low.quantity")
+    val low = Field.element[Item]("low")
 
     collection.updateOne(
       Field.of[Order, Int](_.seq).equalTo(1),
-      Update.set(lowQuantity, 100),
-      UpdateOptions.default.withArrayFilters(Seq(elementQuantity.lt(3))),
+      Update.set(itemsField.where(low) / quantity, 100),
+      UpdateOptions.default.withArrayFilters(Seq((low / quantity).lt(3))),
     )
+
+  val emptied   = itemsField.pullWhere(quantity.lt(1))
+  val inRange   = tagsField.elemMatch(Field.self[String].gte("a") && Field.self[String].lt("n"))
+  val anyNumber = ageField.hasAnyType(BsonTypeName.Int, BsonTypeName.Long)
+  val synced    = Update.currentTimestamp(Field.stored[User, BsonTimestamp]("syncedAt"))
 
   // --- Concerns ---
 
@@ -266,16 +273,7 @@ object ReadmeSnippets:
 
   val filled = Seq(Stage.fill(Sort.asc(ageField))(FillOutput.linear(scoreField), FillOutput.value(nameField, "none")))
 
-  val pruned = Seq(
-    Stage.redact[User](
-      BsonDocument(
-        "$cond",
-        BsonDocument("if", BsonDocument("$eq", BsonArray(java.util.List.of(BsonString("$level"), BsonInt32(1)))))
-          .append("then", Stage.Prune)
-          .append("else", Stage.Descend)
-      )
-    )
-  )
+  val pruned = Seq(Stage.redact(Expr.cond(ageField.expr === Expr.lit(1), Expr.prune, Expr.descend)))
 
   val adultOwner = Stage.lookupWithKeys[Order, User, String](
     from = "users",
@@ -496,3 +494,91 @@ object ReadmeSnippets:
     if result.wasUpserted then s"inserted ${result.upsertedId}"
     else if result.wasApplied then s"matched ${result.matchedCount}, changed ${result.modifiedCount}"
     else "nothing matched"
+
+  // --- Write options ---
+
+  def oldestRenamed(collection: MongoCollection[IO, S, User]): IO[UpdateResult] =
+    collection.updateOne(Filter.all, Update.set(nameField, "oldest"), UpdateOptions.default.withSort(Sort.asc(ageField)))
+
+  def importUsers(collection: MongoCollection[IO, S, User], users: List[User]): IO[Unit] =
+    collection.insertMany(users, InsertManyOptions.unordered).void
+
+  def bulkUnordered(collection: MongoCollection[IO, S, User]): IO[BulkWriteResult] =
+    collection.bulkWrite(
+      Seq(WriteCommand.deleteOne(ageField.lt(0), DeleteOptions.default.withComment("cleanup"))),
+      BulkWriteOptions.unordered.withComment("nightly"),
+    )
+
+  def acrossCollections(client: MongoClient[IO, S], users: MongoCollection[IO, S, User], orders: MongoCollection[IO, S, Order]) =
+    client.bulkWrite(
+      List(
+        users.write(WriteCommand.InsertOne(User("3", "Cleo", 28, Nil, None))),
+        orders.write(WriteCommand.updateOne(Field.of[Order, Int](_.seq).equalTo(1), Update.inc(Field.of[Order, Map[String, Int]](_.totals).at("EUR"), 5))),
+      )
+    )
+
+  // --- Tailable cursors ---
+
+  def tail(collection: MongoCollection[IO, S, User]): S[User] =
+    collection.find().cursorType(com.mongodb.CursorType.TailableAwait).maxAwaitTime(1.second).stream
+
+  // --- Aggregation expressions ---
+
+  final case class Line(price: Double, qty: Int, discount: Option[Double], createdAt: java.time.Instant, city: String) derives WireCodec
+
+  private val price     = Field.of[Line, Double](_.price)
+  private val qty       = Field.of[Line, Int](_.qty)
+  private val discount  = Field.of[Line, Option[Double]](_.discount)
+  private val createdAt = Field.of[Line, java.time.Instant](_.createdAt)
+  private val lineCity  = Field.of[Line, String](_.city)
+
+  val total: Expr[Line, Double] = price.expr * qty.expr
+  val net                       = total - discount.expr.orElse(Expr.lit(0.0))
+  val size                      = Expr.cond(qty.expr > Expr.lit(10), Expr.lit("bulk"), Expr.lit("single"))
+  val sized                     = Expr.switch((qty.expr > Expr.lit(100)) -> Expr.lit("huge"), (qty.expr > Expr.lit(10)) -> Expr.lit("big"))(Expr.lit("small"))
+
+  val computedLines = Seq(
+    Stage.addFields[Line]("total"                                                             := total, "size" := size),
+    Stage.groupByExpr(createdAt.expr.year)("revenue"                                          -> Accumulator.sum(price.expr * qty.expr)),
+    Stage.groupByKeys[Line]("city" := lineCity.expr, "month" := createdAt.expr.month)("lines" -> Accumulator.count[Line]),
+    Stage.replaceWith(Expr.mergeObjects(Expr.root[Line], Expr.document("total" := total))),
+  )
+
+  val expensive = Filter.expr(total > Expr.lit(100.0))
+  val initials  = Projection.empty[User].include(nameField).compute("initial" := nameField.expr.substring(0, 1))
+
+  val manyItems = itemsField.expr.filter(item => item.get(quantity) > Expr.lit(1))
+  val itemSizes = itemsField.expr.map(item => item.get(quantity) * Expr.lit(2))
+
+  // --- Atlas Search ---
+
+  final case class Movie(title: String, plot: String, year: Int, embedding: List[Double]) derives WireCodec
+
+  private val title     = Field.of[Movie, String](_.title)
+  private val plot      = Field.of[Movie, String](_.plot)
+  private val year      = Field.of[Movie, Int](_.year)
+  private val embedding = Field.of[Movie, List[Double]](_.embedding)
+
+  def searchIndexes(collection: MongoCollection[IO, S, Movie]): IO[List[String]] =
+    collection.createSearchIndexes(
+      List(
+        SearchIndex.dynamic[Movie](),
+        SearchIndex.vector("plots", embedding, 1536, VectorSimilarity.Cosine).filteringOn(year),
+      )
+    )
+
+  val matrix = SearchOperator.compound[Movie](
+    must = List(SearchOperator.text(plot, "hacker").orIn(title).fuzzy(1)),
+    filter = List(SearchOperator.atLeast(year, 1999)),
+  )
+
+  val searched = Seq(
+    Stage.search(matrix, SearchOptions.default.withCount(SearchCount.total)),
+    Stage.project(Projection.empty[Movie].include(title).compute("score" := Expr.searchScore)),
+  )
+
+  def nearest(queryVector: List[Double]) =
+    Stage.vectorSearch("plots", embedding, queryVector, limit = 10, numCandidates = 200, filter = Some(year.gte(2000)))
+
+  def weighted(collection: MongoCollection[IO, S, Movie]): IO[String] =
+    collection.createIndex(Index.text(title).text(plot).withWeight(title, 10).withDefaultLanguage("spanish"))

@@ -56,10 +56,10 @@ third-party codec library, no extra dependency beyond `mongo4s-core` itself:
 
 ```scala
 libraryDependencies ++= Seq(
-  "org.mongo4s" %% "mongo4s-cats"           % "4.1.0", // mongo4s-core + cats-effect integration
-  "org.mongo4s" %% "mongo4s-bson-direct"    % "4.1.0", // ast-free bson codecs
-  "org.mongo4s" %% "mongo4s-bson-cats-data" % "4.1.0", // if you need NonEmptyList etc. codec instances
-  "org.mongo4s" %% "mongo4s-repositories"   % "4.1.0", // if you need auto-generated CRUD repository ops for your model
+  "org.mongo4s" %% "mongo4s-cats"           % "5.0.0", // mongo4s-core + cats-effect integration
+  "org.mongo4s" %% "mongo4s-bson-direct"    % "5.0.0", // ast-free bson codecs
+  "org.mongo4s" %% "mongo4s-bson-cats-data" % "5.0.0", // if you need NonEmptyList etc. codec instances
+  "org.mongo4s" %% "mongo4s-repositories"   % "5.0.0", // if you need auto-generated CRUD repository ops for your model
 )
 ```
 
@@ -207,10 +207,12 @@ tagsField.hasSize(3)                     // $size
 nameField.regex("^A")                    // $regex
 scoreField.exists                        // $exists
 scoreField.hasType(BsonTypeName.Int)     // $type
+scoreField.hasAnyType(BsonTypeName.Int, BsonTypeName.Long) // $type over several types
 totalField.mod(4, 1)                     // $mod
 flagsField.bitsAllSet(4)                 // $bitsAllSet — also $bitsAnySet, $bitsAllClear, $bitsAnyClear
 Filter.text[User]("scala")               // $text
-Filter.expr[User](someBsonDocument)      // $expr
+Filter.expr(totalField.expr > limitField.expr) // $expr, typed — see Aggregation expressions
+Filter.expr[User](someBsonDocument)      // $expr, raw
 Filter.jsonSchema[User](schema)          // $jsonSchema
 locationField.near(berlin, maxDistance = Some(1500)) // $near — also $nearSphere
 locationField.within(GeoShape.Within(area))          // $geoWithin
@@ -248,9 +250,22 @@ val bigOrder = itemsField.elemMatch(
 )
 ```
 
+An array of scalars has no fields to name, so `Field.self[A]` stands for the element itself. A condition on it renders
+as the bare operator, and conditions joined with `&&` merge into one document — which is how `$elemMatch` takes a
+range that a single comparison could not:
+
+```scala
+val inRange = scoresField.elemMatch(Field.self[Int].gte(80) && Field.self[Int].lt(85))
+// {"scores": {"$elemMatch": {"$gte": 80, "$lt": 85}}}
+```
+
 `Filter.and`/`or` fold `Filter.all` and `Filter.none` away rather than emitting a one-element `$and`. That is what
 makes an empty list safe: `field.in(Nil)` is `Filter.none`, not "match everything". A chain — `a && b && c` — renders
 as one flat `$and` rather than each one nested inside the next.
+
+The empty lists answer what the server answers: `in(Nil)` matches nothing, `notIn(Nil)` matches everything, and
+`containsAll(Nil)` matches nothing, the way `$all: []` does — no document is ever counted as containing all of an
+empty list.
 
 ### Updates
 
@@ -259,8 +274,11 @@ ageField.set(31)                  // $set
 ageField.inc(1)                   // $inc — also $mul, $min, $max
 nameField.unset                   // $unset
 tagsField.push("vip")             // $push — also $pull, $addToSet, and the $each variants
+itemsField.pullWhere(qtyField.lt(1))         // $pull by a condition on the elements
+scoresField.pullWhere(Field.self[Int].gte(6)) // ...or on a scalar element itself
 Update.setOnInsert(nameField, "") // $setOnInsert, for merge-style upserts
 Update.rename(oldField, newField) // $rename — also currentDate, popFirst/popLast
+Update.currentTimestamp(syncedField) // $currentDate as a BSON timestamp, on a Field[E, BsonTimestamp]
 flagsField.bitOr(4)               // $bit — also bitAnd, bitXor
 ```
 
@@ -284,8 +302,8 @@ is what the server compares. `$inc` and `$mul` stay numeric, since arithmetic is
 `$set`. `Update.Raw` carries operators the `AST` does not model and merges the same way:
 
 ```scala
-Update.set(nameField, "bob").and(Update.Raw[User](BsonDocument("$currentDate", BsonDocument("seenAt", BsonDocument("$type", BsonString("timestamp"))))))
-// {"$set": {"name": "bob"}, "$currentDate": {"seenAt": {"$type": "timestamp"}}}
+Update.set(nameField, "bob").and(Update.Raw[User](BsonDocument("$unset", BsonDocument("legacyNickname", BsonString("")))))
+// {"$set": {"name": "bob"}, "$unset": {"legacyNickname": ""}}
 ```
 
 Rendering never mutates the document you handed to `Raw`, so the same value can be reused across updates and
@@ -300,11 +318,12 @@ a `set` on `notes.0.rank` — which the server would refuse anyway, one round tr
 
 An update that computes from the document itself — a field built from two others, a value run through an
 aggregation expression — is a pipeline, not operators. `Update.pipeline` takes the stages the server accepts in one
-(`$addFields`, `$project`, `$unset`, `$replaceRoot`, or a `Stage.raw`) and refuses any other:
+(`$addFields`, `$project`, `$unset`, `$replaceRoot`, `$replaceWith`, or a `Stage.raw`) and refuses any other. The
+values are [aggregation expressions](#aggregation-expressions):
 
 ```scala
 val exclaimed = Update.pipeline(
-  Stage.addFields[User]("name" -> BsonDocument("$concat", BsonArray(java.util.List.of(BsonString("$name"), BsonString("!")))))
+  Stage.addFields[User]("name" := Field.of[User, String](_.name).expr ++ Expr.lit("!"))
 )
 
 collection.updateMany(Filter.all, exclaimed)
@@ -329,32 +348,41 @@ documents — `PushOptions.default[Note].sortedBy(Sort.desc(rankField))` renders
 
 #### Updating array elements
 
-The positional operators are path segments, so `/` builds them — `$[]` updates every element and needs nothing else:
+The positional operators are methods on an array field, each giving a field of the element type, and `/` with another
+`Field` reaches into the element — spelled through the collection's `FieldNaming` like every other selector. `each` is
+`$[]`, every element:
 
 ```scala
-val orderId: Field[Order, String]  = Field.of[Order, String](_.id)
-val everyQty: Field[Order, Int]    = Field.of[Order, List[Item]](_.items) / "$[]" / "qty"
+val orderId  = Field.of[Order, String](_.id)
+val items    = Field.of[Order, List[Item]](_.items)
+val quantity = Field.of[Item, Int](_.quantity)
 
-collection.updateOne(orderId.equalTo("1"), Update.set(everyQty, 0))
+collection.updateOne(orderId.equalTo("1"), Update.set(items.each / quantity, 0))
 ```
 
-`$[identifier]` updates only the elements an *array filter* selects, and those go in `arrayFilters` on
-`updateOne`/`updateMany`/`findOneAndUpdate`:
+`matched` is `$`, the first element the query matched — so the query has to match one:
 
 ```scala
-val lowQty: Field[Order, Int]    = Field.of[Order, List[Item]](_.items) / "$[low]" / "qty"
-val elementQty: Field[Item, Int] = Field.stored("low.qty")
+collection.updateOne(items.elemMatch(Field.of[Item, String](_.sku).equalTo("abc")), Update.inc(items.matched / quantity, 1))
+```
+
+`where` is `$[identifier]`, the elements an *array filter* selects. The identifier is a `Field.element`, and the same
+value builds both the update path and the filter, so the two cannot drift apart:
+
+```scala
+val low = Field.element[Item]("low")
 
 collection.updateOne(
   orderId.equalTo("1"),
-  Update.set(lowQty, 100),
-  UpdateOptions.default.withArrayFilters(Seq(elementQty.lt(3))),
+  Update.set(items.where(low) / quantity, 100),
+  UpdateOptions.default.withArrayFilters(Seq((low / quantity).lt(3))),
 )
+// {"$set": {"items.$[low].quantity": 100}} with arrayFilters [{"low.quantity": {"$lt": 3}}]
 ```
 
-Array-filter paths are written against the **stored** document — the identifier is not a field of your model, so
-build them with `Field.stored` and spell the field names as they appear on the wire. Everything reached through `/`
-is a stored segment too, so neither the identifier nor `$[]` is touched by the collection's `FieldNaming`.
+On an array of scalars the element is the value itself: `scores.where(high)` with `high.gte(90)` as its filter. An
+identifier the server would refuse — anything but a lowercase letter followed by letters and digits — is refused
+when it is built.
 
 #### Write options
 
@@ -376,8 +404,26 @@ collection.deleteMany(filter, DeleteOptions.default.withCollation(caseInsensitiv
 collection.count(filter, CountOptions.default.withSkip(20).withLimit(10))
 ```
 
-What each type carries today: `collation` and `hint` everywhere, `comment` on everything but `count`; `bypassDocumentValidation` on the two
-that write whole documents (`UpdateOptions`, `ReplaceOptions`); `limit`, `skip` and `maxTime` on `CountOptions`.
+What each type carries today: `collation`, `hint` and `comment` everywhere; `let` variables on every write, which an
+`$expr` reads as `Expr.variable`; `bypassDocumentValidation` on the two that write whole documents (`UpdateOptions`,
+`ReplaceOptions`); `limit`, `skip` and `maxTime` on `CountOptions`.
+
+`UpdateOptions` and `ReplaceOptions` also take a `sort`, which picks the one document `updateOne`/`replaceOne` changes
+when the filter matches several (MongoDB 8.0+). It means nothing to `updateMany`, which changes every match, so
+`updateMany` refuses one rather than letting the driver drop it without a word:
+
+```scala
+collection.updateOne(Filter.all, Update.set(nameField, "oldest"), UpdateOptions.default.withSort(Sort.asc(ageField)))
+```
+
+Inserts take options on the same pattern — `InsertOneOptions` and `InsertManyOptions`, with `comment` and
+`bypassDocumentValidation`. An `insertMany` is ordered by default and stops at the first document that fails;
+`InsertManyOptions.unordered` has the server carry on past it, and the `BulkWriteFailed` it raises lists every
+failure, with the count of what landed:
+
+```scala
+collection.insertMany(users, InsertManyOptions.unordered)
+```
 
 Each operation family has its own options type on purpose rather than one shared bag: `upsert` means nothing on a
 delete, and a type that offered it there would let you write down a request the server cannot answer.
@@ -411,9 +457,32 @@ collection.bulkWrite(
 )
 ```
 
-Commands run in the order given; `ordered = false` lets the server carry on past one that fails instead of stopping
-there. `BulkWriteResult.upsertedIds` is keyed by each command's position in the sequence, and so is a failure: a
+Commands run in the order given; `BulkWriteOptions.unordered` lets the server carry on past one that fails instead of
+stopping there, and `BulkWriteOptions` carries `comment`, `bypassDocumentValidation` and `let` for the whole bulk. The
+delete commands take a `DeleteOptions` — `WriteCommand.deleteOne(filter, DeleteOptions.default.withHint(byAge))`.
+`BulkWriteResult.upsertedIds` is keyed by each command's position in the sequence, and so is a failure: a
 `MongoError.BulkWriteFailed` names each command that failed by its index, and its `result` is what the others wrote.
+
+#### Writing across collections at once
+
+MongoDB 8.0 writes to several collections — in several databases — in one command, the client-level `bulkWrite`. Each
+collection turns its own `WriteCommand` into a write addressed to it, with its own codec and naming, and the client
+sends them together:
+
+```scala
+client.bulkWrite(
+  List(
+    users.write(WriteCommand.InsertOne(User("3", "Cleo", 28))),
+    orders.write(WriteCommand.updateOne(orderId.equalTo("1"), Update.inc(totalField, 5))),
+  )
+)
+```
+
+It takes the same `BulkWriteOptions` and returns a `ClientBulkWriteResult` of counts. A failure is a
+`MongoError.ClientBulkWriteFailed` naming each failed write by its position and carrying the partial result. A
+`comment`, `let` or `bypassDocumentValidation` belongs to the whole bulk here, so setting one on a single command's
+options is refused rather than quietly dropped. It is not a transaction — the writes before a failure stay — but it
+runs inside one, through `withTransaction`, when they must land together.
 
 ### Queries
 
@@ -435,9 +504,23 @@ collection
 ```
 
 `filter` narrows what is already there — it ands with the filter the query was built from — while `sort`,
-`projection`, `skip` and `limit` replace. `first` reads one document rather than the query's `limit`. The same
-`hint`/`collation`/`maxTime`/`batchSize`/`comment` options are on `aggregate`, which adds `allowDiskUse`, and
-`collation`/`maxTime`/`batchSize` on `distinct`.
+`projection`, `skip` and `limit` replace. `first` reads one document rather than the query's `limit`. `find` also
+takes `let` variables for its `$expr`, `allowDiskUse`, `noCursorTimeout`, and the cursor's `cursorType` and
+`maxAwaitTime`. The same `hint`/`collation`/`maxTime`/`batchSize`/`comment` options are on `aggregate`, which adds
+`allowDiskUse`, `let`, `maxAwaitTime` and `bypassDocumentValidation` — the last for a `$out` or `$merge` into a
+validated collection — and `distinct` takes `collation`, `hint`, `comment`, `maxTime` and `batchSize`.
+`estimatedCount` takes an `EstimatedCountOptions` with `maxTime` and `comment`.
+
+A tailable cursor on a capped collection stays open after the last document and delivers each one written after it,
+the way a log is tailed:
+
+```scala
+collection.find().cursorType(CursorType.TailableAwait).maxAwaitTime(1.second).stream
+```
+
+Its stream is bridged as a live stream, emitting each document as it arrives rather than once a batch fills — the
+same bridge a change stream takes. `all` on it never finishes, since the cursor never ends; take from the stream
+instead.
 
 The numbers are checked where you write them, because MongoDB reads the edge cases as something else: a `limit` or
 `batchSize` below one — 0 is no limit at all, and a negative one a single batch — a negative `skip`, and a `maxTime`
@@ -463,6 +546,14 @@ Projection.empty[Post].include(titleField).slice(commentsField, 5) // and still 
 
 The field has to be an array — `slice` on a scalar does not compile. The document still decodes through the entity's
 own codec, because the field is present and merely shorter.
+
+Slicing a field the projection also includes keeps it once, sliced. A `$slice` alone would put the server back into
+returning every field, so when the sliced fields are all an inclusion holds, `_id` is kept explicitly to hold it in
+inclusion mode — and the one combination the server cannot express, only sliced fields and no `_id`, is refused
+rather than answered with the whole document.
+
+An inclusion projection can also compute fields from [aggregation expressions](#aggregation-expressions), in `find`
+as well as in `$project` — `Projection.empty[User].include(nameField).compute("initial" := nameField.expr.substring(0, 1))`.
 
 Sorting by `$text` relevance is `Sort.byTextScore()`, which renders `{"score": {"$meta": "textScore"}}` and takes
 the output field's name if you want a different one. It is what makes `Filter.text` useful — an unranked text search
@@ -848,9 +939,21 @@ deviations compile only on a numeric field, and the first two always ask for the
 `approximate`. An `n` below one, an empty sort and a percentile outside `0..1` are refused where they are written.
 
 `Stage` covers `$match`/`$project`/`$sort`/`$limit`/`$skip`/`$count`/`$unwind`/`$lookup`/`$graphLookup`/`$group`/
-`$addFields`/`$unset`/`$replaceRoot`/`$facet`/`$sample`/`$sortByCount`/`$unionWith`/`$bucket`/`$bucketAuto`/
-`$densify`/`$fill`/`$setWindowFields`/`$geoNear`/`$redact`/`$out`/`$merge`, with `Stage.raw(document)` as the escape
-hatch for anything else.
+`$addFields`/`$unset`/`$replaceRoot`/`$replaceWith`/`$facet`/`$sample`/`$sortByCount`/`$unionWith`/`$bucket`/
+`$bucketAuto`/`$densify`/`$fill`/`$setWindowFields`/`$geoNear`/`$redact`/`$out`/`$merge`, and Atlas Search's
+`$search`/`$searchMeta`/`$vectorSearch` (see [Atlas Search](#atlas-search)), with `Stage.raw(document)` as the
+escape hatch for anything else. `$unwind` takes `includeArrayIndex` to number each element it unwinds, and
+`$unionWith` a pipeline over the other collection — `Stage.unionWith[Order, Order]("archive", List(Stage.matching(recent)))`.
+
+`$addFields`, a `$group` key, an accumulator's input, `$replaceWith` and `$redact` take
+[aggregation expressions](#aggregation-expressions) — computed values, typed:
+
+```scala
+Stage.addFields[Order]("total" := priceField.expr * qtyField.expr)
+Stage.groupByExpr(createdAtField.expr.year)("revenue" -> Accumulator.sum(priceField.expr * qtyField.expr))
+Stage.groupByKeys[Order]("city" := cityField.expr, "month" := createdAtField.expr.month)("orders" -> Accumulator.count[Order])
+Stage.replaceWith(Expr.mergeObjects(Expr.root[Order], Expr.document("total" := priceField.expr * qtyField.expr)))
+```
 
 `$unset` drops fields by name — the pipeline's spelling of an excluding `$project`. It takes one field, and more with
 `and`, because several fields of unrelated types have no single `Field` type to share:
@@ -859,17 +962,14 @@ hatch for anything else.
 Stage.unset(ageField).and(tagsField)
 ```
 
-`$redact` keeps, prunes or descends into each level of a document by an aggregation expression. The expression is
-not modelled, so the stage takes it as BSON; `Stage.Descend`, `Stage.Prune` and `Stage.Keep` are the three answers
-it can give:
+`$redact` keeps, prunes or descends into each level of a document by an aggregation expression, and `Expr.keep`,
+`Expr.prune` and `Expr.descend` are the three answers it can give:
 
 ```scala
-Stage.redact[User](
-  BsonDocument("$cond", BsonDocument("if", BsonDocument("$eq", BsonArray(java.util.List.of(BsonString("$level"), BsonInt32(1)))))
-    .append("then", Stage.Prune)
-    .append("else", Stage.Descend))
-)
+Stage.redact(Expr.cond(levelField.expr === Expr.lit(1), Expr.prune, Expr.descend))
 ```
+
+A raw `BsonValue` still works, with `Stage.Descend`, `Stage.Prune` and `Stage.Keep` as the answers spelled in BSON.
 
 `$lookup` has three forms. `Stage.lookup` is the equality join on `localField`/`foreignField`; `Stage.lookupWith`
 takes a sub-pipeline that runs against the foreign collection, with `let` binding values from the outer document; and
@@ -922,6 +1022,55 @@ Stage.merge[Order](
     .whenNotMatched(MergeOptions.WhenNotMatched.Insert),
 )
 ```
+
+#### Aggregation expressions
+
+An `Expr[E, A]` is an aggregation expression that reads a document of `E` and computes an `A`. `field.expr` turns a
+`Field` into one — spelled through the collection's `FieldNaming`, and reading an `Option[A]` field as the `A` it
+holds — `Expr.lit` a value, and `"name" := expr` or `field := expr` a computed field:
+
+```scala
+val total: Expr[Order, Double] = priceField.expr * qtyField.expr        // a Double times an Int is a Double
+val net                         = total - discountField.expr.orElse(Expr.lit(0.0)) // $ifNull when the field is null
+val size                        = Expr.cond(qtyField.expr > Expr.lit(10), Expr.lit("bulk"), Expr.lit("single"))
+
+Stage.addFields[Order]("total" := total, "size" := size)
+```
+
+The operators are typed by the capability the server needs, the same way filters are. Arithmetic compiles on numbers
+and combines widths the way the server does — an `Int` with a `Long` is a `Long`, anything with a `Double` a `Double`,
+anything with a `BigDecimal` a `BigDecimal` — and `/` is always a `Double`. A comparison takes two values of one kind,
+or two numbers. The string operators compile on text, the array ones on a collection, the date ones on an `Instant`:
+
+| | |
+| --- | --- |
+| numbers | `+` `-` `*` `/` `%` `abs` `ceil` `floor` `sqrt` `round` |
+| comparison | `equalTo` `notEqualTo` `lt` `lte` `gt` `gte`, or `===` `=!=` `<` `<=` `>` `>=` |
+| logic | `&&` `\|\|` `!`, `Expr.cond`, `Expr.switch`, `orElse` |
+| text | `++` `toLower` `toUpper` `trimmed` `length` `substring` `split` `matches` |
+| arrays | `size` `at` `contains` `concatArrays` `filter` `map` |
+| dates | `year` `month` `dayOfMonth` `dayOfWeek` `hour` `minute` `second` `millisecond` `truncated` `formatAs` `plus` `minus` `until` |
+| conversion | `asString` `toInt` `toLong` `toDouble` `toDecimal` `toBoolean` `toDate` `typeName` |
+| documents | `Expr.document`, `Expr.mergeObjects`, `Expr.root` |
+| variables | `Expr.variable` for `let`, `Expr.now`, `Expr.searchScore` / `vectorSearchScore` / `textScore` |
+
+`filter` and `map` hand you the element as an expression, and `get` reads a field of it:
+
+```scala
+itemsField.expr.filter(item => item.get(itemQty) > Expr.lit(1))
+itemsField.expr.map(item => item.get(itemPrice) * item.get(itemQty))
+```
+
+The element is MongoDB's `$$this`; nesting one `filter` or `map` inside another needs `filterAs`/`mapAs` with a name of
+its own, so the inner one does not hide the outer.
+
+Three things the Scala syntax decides rather than the library. `->` binds tighter than `>`, so a `switch` branch whose
+condition is a comparison needs parentheses — `(qtyField.expr > Expr.lit(10)) -> Expr.lit("big")`. ScalaTest's
+`Matchers` bring a `===` of their own that wins inside a spec, so write `equalTo` there. And a `let` variable is read
+with `Expr.variable[Int]("limit")`, which has no field to check the name against.
+
+`Expr.raw` carries any expression the AST does not model. The fake does not evaluate expressions, so it refuses every
+stage, projection and filter that holds one, by name.
 
 #### Nearest first
 
@@ -1067,7 +1216,7 @@ decode error rather than a default. `attempting` reports it per document.
 On a collection opened with `getCollection` the same call still works — the `WireCodec` is bridged to a document
 codec — so the method is about the codec you have, not about which constructor you used.
 
-It is worth reaching for when the pipeline returns *a lot*. Measured against a real MongoDB it is **1.6×** the
+It is worth reaching for when the pipeline returns *a lot*. Measured against a real MongoDB it is **1.40×** the
 bridged path over ten thousand documents and indistinguishable from it over ten, where the round trip is all there is
 — see [BENCHMARKS.md](BENCHMARKS.md#aggregation-through-a-cursor--real-mongodb).
 
@@ -1083,6 +1232,7 @@ collection.createIndex(Index.unique(idField))
 collection.createIndex(Index.ascending(createdAtField).expiringAfter(30.days)) // TTL
 collection.createIndex(Index.ascending(ageField).where(ageField.gte(18))) // partial
 collection.createIndex(Index.text(bioField).withSparse)
+collection.createIndex(Index.text(titleField).text(bioField).withWeight(titleField, 10).withDefaultLanguage("spanish"))
 collection.createIndex(Index.hashed(idField)) // sharding
 collection.createIndex(Index.geo2DSphere(Field.stored[User, Any]("location"))) // also geo2D
 collection.createIndex(Index.ascending(ageField).withHidden) // built, but ignored by the planner
@@ -1112,8 +1262,67 @@ go when that time comes — say so with `expiringAtFieldTime`, which is a `TTL` 
 collection.createIndex(Index.ascending(expiresAtField).expiringAtFieldTime)
 ```
 
+A text index weighs its fields with `withWeight` — a match in a field of weight 10 scores ten times one of weight 1 — and
+`withDefaultLanguage` and `withLanguageOverride` choose the stemming language, the second from a field of each
+document.
+
+A partial index takes the filter operators the server accepts there: equality, the comparisons, `$in`, `exists`,
+`hasType`, `$and` and `$or`. Negations are not among them — and `!f` renders as `$nor`, so `Index.where(!f)` is one
+the server refuses. Write the positive form of the condition instead.
+
 From a repository, `ensureKeyIndex` builds the unique index the `PrimaryKey` describes, without you restating its
-fields.
+fields. A key stored as `_id` needs none — the server keeps `_id` unique on its own and refuses a `unique` flag on it
+— so for such a key `ensureKeyIndex` builds nothing and answers `_id_`, the index that is already there.
+
+### Atlas Search
+
+Full-text and vector search run on Atlas Search indexes, which live beside the collection rather than in it. A
+collection creates, lists, redefines and drops them:
+
+```scala
+collection.createSearchIndexes(
+  List(
+    SearchIndex.dynamic[Movie](),                                                       // named "default", every field mapped
+    SearchIndex.vector("plots", embeddingField, 1536, VectorSimilarity.Cosine).filteringOn(yearField),
+  )
+)
+collection.listSearchIndexes // F[List[BsonDocument]], each with its status and whether it is queryable
+collection.dropSearchIndex("plots")
+```
+
+An index builds in the background, and a search against it finds nothing until `listSearchIndexes` reports it
+`queryable`. `SearchIndex.of(name, definition)` takes a mapping you write yourself, and the vector index compiles only
+on a numeric array field.
+
+`$search` takes a `SearchOperator`. The common ones are typed — the text ones on text fields, `between`/`atLeast`/
+`below` on fields the server orders — and `compound` combines them; `SearchOperator.raw` carries the rest:
+
+```scala
+val matrix = SearchOperator.compound[Movie](
+  must = List(SearchOperator.text(plotField, "hacker").orIn(titleField).fuzzy(1)),
+  filter = List(SearchOperator.atLeast(yearField, 1999)),
+)
+
+collection.aggregate[Movie](
+  Seq(
+    Stage.search(matrix, SearchOptions.default.withCount(SearchCount.total)),
+    Stage.project(Projection.empty[Movie].include(titleField).compute("score" := Expr.searchScore)),
+  )
+)
+```
+
+`SearchOperator` also has `phrase`, `autocomplete`, `wildcard`, `regex`, `equalTo`, `below` and `exists`.
+`$searchMeta` takes the same operator and answers with counts instead of documents. `$vectorSearch` finds the nearest
+documents to a vector, among `numCandidates` approximate ones or exactly with `exactVectorSearch`, optionally narrowed
+by a `Filter` on the fields the index declared with `filteringOn`:
+
+```scala
+Stage.vectorSearch("plots", embeddingField, queryVector, limit = 10, numCandidates = 200, filter = Some(yearField.gte(2000)))
+```
+
+All of this runs against a local `mongodb/mongodb-atlas-local` container as well as against Atlas — Testcontainers
+ships `MongoDBAtlasLocalContainer` for it, which is how this library's own tests exercise it. The fake has no search
+index, so it refuses both the index calls and the stages by name.
 
 ### Creating a collection
 
@@ -1606,10 +1815,10 @@ users.deleteByField(ageField, 30)                 // likewise
 A `…ByField` call is exactly its `…ByFilter` counterpart over `field.equalTo(value)` — there for the common case
 that would otherwise spell out a one-field filter.
 
-`bulkWrite` takes the same `ordered` flag the collection does. An ordered bulk is sent in batches, which keeps its
-meaning — it stops at the first failure and what came before it stays applied. An **unordered** bulk is sent as one
-command, because the point of `ordered = false` is that the server applies everything it can, and batching would
-stop at the first batch that failed instead.
+`bulkWrite` takes the same `BulkWriteOptions` the collection does, and `insertMany` the same `InsertManyOptions`. An
+ordered write is sent in batches, which keeps its meaning — it stops at the first failure and what came before it
+stays applied. An **unordered** one is sent as one command, because the point of `unordered` is that the server
+applies everything it can, and batching would stop at the first batch that failed instead.
 
 A failure in a later batch is reported as the whole write, the way the driver reports its own internal batches:
 `BulkWriteFailed` names the failing command by its position in the sequence you passed, not within its batch, and
@@ -1691,7 +1900,7 @@ repository call can join a [transaction](#sessions--transactions) the same way a
 directly, not reimplementing what's already there.
 
 For unit tests, `FakeMongoCollection` (in `mongo4s-testkit`, a published module — add it as
-`"org.mongo4s" %% "mongo4s-testkit" % "4.1.0" % Test`) implements `MongoCollection` in memory. The exact same
+`"org.mongo4s" %% "mongo4s-testkit" % "5.0.0" % Test`) implements `MongoCollection` in memory. The exact same
 `Filter`/`Update`/`Field` AST the real driver interprets is interpreted against an in-memory buffer instead, so
 repository logic is testable without a running MongoDB.
 
@@ -1704,9 +1913,11 @@ test to reach for Docker.
 `distinct` is simulated too, array fields flattened into their elements the way the server does, and so is `$slice`
 in a projection. Filters follow the server's array semantics — a filter on an array field matches its elements, and a
 dotted path descends through an array of documents — `$regex` searches rather than anchors and honours its options,
-`$eq null` matches a missing field, `$inc` keeps the width the server keeps, and an insert stamps an `_id` and
-refuses a duplicate one — through `insertOne`, `insertMany`, a `bulkWrite` insert, and an upsert that inserts, so
-`wasUpserted` and `upsertedIds` say what the server would say.
+`$eq null` matches a missing field, `$all: []` matches nothing, `$elemMatch` and `pullWhere` take a condition on a scalar
+element as well as on a document one, `$inc` keeps the width the server keeps, and an insert stamps an `_id` and
+refuses a duplicate one — through `insertOne`, `insertMany` (ordered or not), a `bulkWrite` insert, and an upsert that
+inserts, so `wasUpserted` and `upsertedIds` say what the server would say. A `sort` on `updateOne`/`replaceOne` picks
+the document the server would pick.
 
 Numbers compare the way the server compares them: an `Int64` of 5 equals an `Int32` of 5 and a `Double` of 5.0,
 `Long`s past `Double`'s precision sort exactly, and `NaN` sorts below every number. A duplicate in `insertMany` or a
@@ -1715,7 +1926,8 @@ it too. A unique index is enforced, sparse and partial ones included, and is nam
 (`email_1`), so `dropIndex` finds it. `listIndexes` describes each index as the server does — `v`, `key`, `name` and
 its options, after the `_id_` index — creating one that already exists changes nothing, one that clashes with an
 existing index's name or keys fails with the server's code, `createIndexes` builds all or none, and `dropIndex`
-refuses an index that is not there, and `_id_`. A replacement keeps the `_id` of the document it replaces, an update that
+refuses an index that is not there, and `_id_`. A `unique` index on `_id` alone is refused with the server's code too, and
+so is a partial index whose filter holds an operator the server does not accept there. A replacement keeps the `_id` of the document it replaces, an update that
 changes nothing counts as matched but not modified, and a `findOneAnd*` whose projection leaves a document the codec
 cannot read fails, as the real collection does, rather than answering `None`.
 
@@ -1729,14 +1941,17 @@ all land, a duplicate `_id` or unique key lets exactly one of them through, `$in
 stricter than the server, which promises atomicity per document: every answer the fake gives is one MongoDB could
 give, but a race across documents that the server could expose will not show here.
 
-Every update operator is simulated — `$set`, `$unset`, `$inc`, `$mul`, `$min`, `$max`, `$rename`, `$currentDate`,
-`$push` with its `$each`/`$position`/`$slice`/`$sort` modifiers, `$pull`, `$pullAll`, `$pop`, `$addToSet` and `$bit` — and
-`$setOnInsert` correctly does nothing on an update that matches.
+Every update operator is simulated — `$set`, `$unset`, `$inc`, `$mul`, `$min`, `$max`, `$rename`, `$currentDate` (a date or a
+timestamp), `$push` with its `$each`/`$position`/`$slice`/`$sort` modifiers, `$pull` by value or by condition, `$pullAll`,
+`$pop`, `$addToSet` and `$bit` — and `$setOnInsert` correctly does nothing on an update that matches. The positional
+operators are not: `each`, `matched` and `where` paths are refused by name, rather than written to a field called
+`$[]`.
 
 Everything else throws `UnsupportedOperationException` naming what was asked for, rather than quietly answering
 wrong — a fake that lies is worse than no fake. That includes `watch`, `explain`, `renameCollection` — the fake
-holds a single namespace, with nowhere to move it — `$text` and ranking by
-`$meta textScore`, `$expr`, `$jsonSchema`, the geospatial operators, `Filter.Raw`, `Stage.Raw`, `Update.Raw`, a pipeline update, a
+holds a single namespace, with nowhere to move it — a write for the client-level `bulkWrite`, for the same reason,
+`$text` and ranking by `$meta textScore`, every [aggregation expression](#aggregation-expressions) and so `$expr`,
+Atlas Search's indexes and stages, a tailable cursor, `$jsonSchema`, the geospatial operators, `Filter.Raw`, `Stage.Raw`, `Update.Raw`, a pipeline update, a
 collation anywhere it is accepted, an update carrying `arrayFilters`, a unique index over an array field, every
 aggregation stage outside the list above, `$median` and `$percentile`, whose `approximate` method only the server
 knows, and the `$addToSet` *accumulator*, which is refused on purpose: MongoDB leaves the order of its result
@@ -1845,7 +2060,7 @@ the other single-result publishers that it guards.
 Published for `Scala 3.9 LTS` under `org.mongo4s`:
 
 ```scala
-"org.mongo4s" %% "mongo4s-<module>" % "4.1.0"
+"org.mongo4s" %% "mongo4s-<module>" % "5.0.0"
 ```
 
 | | Module | Notes |
@@ -1859,7 +2074,7 @@ Published for `Scala 3.9 LTS` under `org.mongo4s`:
 | | `mongo4s-bson-calypso` | bridges `calypso`'s `forProductN` |
 | runtime | `mongo4s-cats` | `cats-effect 3` + `fs2` |
 | | `mongo4s-zio` | ZIO 2 + `zio-streams` |
-| | `mongo4s-kyo` | kyo 1.0.0-RC6 |
+| | `mongo4s-kyo` | kyo 1.0.0-RC7 |
 | | `mongo4s-rapid` | rapid |
 | repositories | `mongo4s-repositories` | `BaseMongoRepository`, `Repository`, `Page` |
 | testkit | `mongo4s-testkit` | `FakeMongoCollection`, `FakeRepository` — in-memory doubles for unit tests |
@@ -1867,16 +2082,28 @@ Published for `Scala 3.9 LTS` under `org.mongo4s`:
 Every module is built with the same Scala version, so there is no longer a subset that a project on an older
 compiler has to do without.
 
+**Java.** The published class files target Java 17, so every module runs on JDK 17 or newer — except `mongo4s-kyo`,
+whose kyo dependency ships Java 25 class files and so needs JDK 25 at runtime as well as to build. Building the
+project itself needs JDK 25 throughout.
+
+**MongoDB.** The integration suite runs against MongoDB 8.2, and Atlas Search against the `mongodb-atlas-local` 8.2
+image. A few operations need a newer server than the driver's minimum: `$median`/`$percentile` and the ranking
+accumulators need 7.0, and the client-level `bulkWrite` and a `sort` on `updateOne`/`replaceOne` need 8.0.
+
 ### Compatibility
 
 Binary compatibility within a major version is checked by [MiMa](https://github.com/lightbend/mima) on every build,
 new `Effect`/`RsBridge` methods carry default implementations, and deprecations get at least one minor release before
 removal. `mongo4s-kyo` sits outside the promise while kyo is on a release candidate.
 
-`4.1.0` is binary compatible with `4.0.0`, checked by MiMa. It adds cases to `Accumulator`, `Filter`, `Update` and
-`Stage`, so a match over one of them that the compiler checks for exhaustiveness warns about the new cases, and
-`setWindowFields` takes `WindowField`s — the common parent of `WindowOutput` and the new `WindowFunction` — which every
-existing call already passes.
+`5.0.0` is a breaking release, almost entirely in binary shape rather than in what a call says: most existing calls
+compile unchanged against it. `insertOne`/`insertMany` take options, `bulkWrite` takes `BulkWriteOptions` instead of
+an `ordered` flag, `$addFields` takes computed fields rather than raw `BSON` pairs, and several AST cases changed
+shape — `Group`'s key, `Filter.Expr`, `Filter.Type`, `Update.CurrentDate`, `Projection.Include`,
+`Stage.Unwind`/`UnionWith`/`Redact`, and the bulk delete commands. `FindQuery`, `AggregateQuery`, `DistinctQuery`,
+`MongoCollection` and `MongoClient` gain members an implementation of your own has to provide. Two behaviours change
+without a compile error: `containsAll(Nil)` matches nothing, as `$all: []` does on the server, and a `sort` on
+`updateMany` is refused rather than dropped. Each has a migration note in [COMPATIBILITY.md](COMPATIBILITY.md).
 
 `4.0.0` changes shapes MiMa would flag, and behaviour a recompile alone would not reveal: an `Update` that changes one
 path twice is refused rather than keeping only the last change, `findPage` returns a `KeysetPage` with its next
