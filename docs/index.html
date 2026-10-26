@@ -1538,7 +1538,7 @@ final case class Person(firstName: String, lastName: String) derives WireCodec /
         Field naming and discriminator naming (the <code>_type</code> value for sealed traits/enums) are independently
         configurable: start from <code>WireCodecConfig.Default</code> (or <code>SnakeCase</code>) and chain
         <code>withFieldNaming</code>, <code>withDiscriminatorNaming</code>, <code>withEncodeEmptyCasesAsString</code>,
-        <code>withOmitNoneFields</code> — the same shape <code>WatchOptions</code> uses, and the reason new derivation
+        <code>withOmitNoneFields</code>, <code>withDecodeMissingAsDefault</code> — the same shape <code>WatchOptions</code> uses, and the reason new derivation
         options can be added in a minor release without breaking binary compatibility. <code>getDirectCollection</code>
         takes no <code>naming</code> of its own: the codec
         is what writes the field names, so it is what decides how a query spells them, and a derived
@@ -1577,6 +1577,24 @@ Contact("bob", None) // {"name": "bob"} — no "email" key at all</code></pre>
         <code>Some(None)</code> is written as <code>null</code> and reads back as <code>None</code>, because BSON has
         one null and both layers map onto it. To tell "absent" from "present but empty", model it as an
         <code>enum</code> or a wrapper case class rather than <code>Option[Option[A]]</code>.
+    </p>
+
+    <h4>Missing fields and case-class defaults</h4>
+    <p>
+        A missing field fails the decode unless it is an <code>Option</code>, even when the case class gives it a
+        default: a default is the constructor's, and silently standing in for what the database holds is how a document
+        written without the field reads back as something nobody stored. <code>withDecodeMissingAsDefault(true)</code>
+        is the opt-in for a field added to a case class that older documents do not have:
+    </p>
+    <pre><code>given WireCodecConfig = WireCodecConfig.Default.withDecodeMissingAsDefault(true)
+
+final case class Account(name: String, status: Status = Status.Active) derives WireCodec
+// {"name": "ann"} reads back as Account("ann", Status.Active)</code></pre>
+    <p class="muted">
+        A field that is there always wins, a field with no default still fails when missing, and a default is
+        evaluated per decode, as the constructor would. An <code>Option</code> field <em>with</em> a default takes that
+        default when missing, not <code>None</code>; an explicit <code>null</code> is a value and still reads as
+        <code>None</code>. Encoding does not change.
     </p>
 
     <h4>Hand-writing a codec: contramap/map/emap/imap</h4>
@@ -1780,6 +1798,20 @@ users.deleteByField(ageField, 30)                 // likewise</code></pre>
         <code>InsertOneResult</code>/<code>InsertManyResult</code> &mdash; that is where the server's own
         <code>_id</code> still lives.
     </p>
+    <p>
+        <code>insertIfAbsent</code> inserts an entity only when nothing holds its key yet, and answers whether it did
+        &mdash; an upsert that only writes on insert, so a taken key leaves the stored entity untouched and, unlike a
+        caught <code>DuplicateKey</code>, a transaction intact. <code>replace</code> swaps the entity stored under the
+        same key, never inserts, and takes an optional condition the stored entity must still meet, which is what
+        optimistic concurrency needs:
+    </p>
+    <pre><code>users.insertIfAbsent(User("1", "alice", 30)) // F[Boolean]: true when it inserted, false when the key was taken
+
+users.replace(user.copy(name = "alicia", version = user.version + 1), versionField.equalTo(user.version))
+// matchedCount == 0 → it changed (or went) under you: read it again and retry
+
+orders.updateByFilter(orderId.equalTo("1") &amp;&amp; !items.elemMatch(sku.equalTo("abc")), Update.push(items, item))
+// add an element only when none with the same sku is there yet</code></pre>
     <p class="muted">
         A batched write that fails in a later batch is reported as the whole write, the way the driver reports its own
         batches: <code>BulkWriteFailed</code> names the failing command by its position in the sequence you passed, and
@@ -1811,7 +1843,9 @@ users.findPage(20, descending = true)                       // newest key first<
         indexed.
     </p>
     <p>
-        <code>ensureKeyIndex</code> builds the unique index the <code>PrimaryKey</code> describes.
+        <code>ensureKeyIndex</code> builds the unique index the <code>PrimaryKey</code> describes. Nothing builds it
+        for you &mdash; indexes are often owned by migration scripts &mdash; and a key on <code>_id</code> needs nothing;
+        any other key without the index is not unique, so two inserts with the same key both land.
         <code>WithId[Id, E]</code> wraps an entity with a separately-typed id (<code>type Oid[E] = WithId[ObjectId,
         E]</code>) and ships its own <code>PrimaryKey</code>/<code>BsonDocumentCodec</code> instances, for entities
         that don't carry their own id field — it lives in <code>mongo4s-core</code>, so it's available whether or not
@@ -1823,6 +1857,28 @@ users.findPage(20, descending = true)                       // newest key first<
         way a raw <code>collection</code> call can. <code>BaseMongoRepository</code> is <code>open</code>: adding a
         domain query means declaring it against <code>collection</code>/<code>Filter</code>/<code>Field</code>
         directly, not reimplementing what's already there.
+    </p>
+    <h3 id="counters">Counters</h3>
+    <p>
+        MongoDB has no sequences. The usual stand-in is a collection of counters, one document per name, moved by a
+        single <code>findOneAndUpdate</code> that increments and upserts &mdash; one round trip, atomic on the server,
+        and the first call creates the counter. <code>MongoCounters</code> is that, given a database and a collection
+        name:
+    </p>
+    <pre><code>import mongo4s.repositories.MongoCounters
+
+for
+  counters &lt;- MongoCounters.create[IO, S](database)            // the "counters" collection, or name your own
+  number   &lt;- counters.next("orders")                           // 1, then 2, 3, …
+  block    &lt;- counters.next("ids", step = 100L)                 // reserve a block of 100: this is its last value
+  current  &lt;- counters.current("orders")                        // Option[Long], without moving it
+  _        &lt;- counters.reset("orders", 1000L)                   // the next one is 1001
+yield number</code></pre>
+    <p class="muted">
+        Each counter is a document <code>{_id: name, value: n}</code>, so the <code>_id</code> index is all it needs.
+        <code>next</code> hands every value out exactly once however many callers race for it, and takes a session
+        like everything else. <code>Counters[F]</code> is the trait; <code>FakeCounters</code> in the testkit is the
+        real implementation over a <code>FakeMongoCollection</code>.
     </p>
     <p>
         For unit tests, <code>FakeMongoCollection</code> (in <code>mongo4s-testkit</code>, a published module — add it
@@ -1845,10 +1901,11 @@ users.findPage(20, descending = true)                       // newest key first<
         all it takes. One fake can be shared between fibers: each operation runs under one lock, so concurrent
         inserts all land, a duplicate <code>_id</code> lets exactly one through, <code>$inc</code>s add up and
         <code>findOneAndUpdate</code> hands each document to one caller.
-        Replace-based upserts — what <code>upsert</code>/<code>upsertMany</code> go through — insert on a miss the way
-        the server does; an <code>update</code>-based <code>UpdateOptions.upsert</code> that matches nothing throws
-        instead of
-        guessing what the operators would have built.
+        Upserts insert on a miss the way the server does, whether they replace or update: an update builds the new
+        document from the filter's equalities &mdash; <code>$eq</code>, a one-value <code>$in</code> or
+        <code>$or</code>, every value of an <code>$all</code>, through <code>$and</code> &mdash; applies its operators,
+        <code>$setOnInsert</code> included, and stamps an <code>_id</code> first if the filter pinned none; a
+        replacement keeps only the filter's <code>_id</code>.
     </p>
 
     <h2 id="runtime">Runtime backends</h2>
@@ -2016,7 +2073,7 @@ given RsBridgeConfig = RsBridgeConfig.default
         <tr>
             <td>testkit</td>
             <td><code>mongo4s-testkit</code></td>
-            <td>FakeMongoCollection, FakeRepository — in-memory doubles for unit tests</td>
+            <td>FakeMongoCollection, FakeRepository, FakeCounters — in-memory doubles for unit tests</td>
         </tr>
     </table>
     <p class="muted">
@@ -2938,6 +2995,19 @@ findOne     0.129 ms/op → ~7,750 ops/s</code></pre>
         publisher ends, and a tailable cursor never ends.
     </p>
 
+    <h3 id="design-conditional">Conditional writes, counters and defaults</h3>
+    <p>
+        <code>insertIfAbsent</code> is an upsert with every field under <code>$setOnInsert</code> rather than an
+        <code>insertOne</code> that catches <code>DuplicateKey</code>, because a duplicate-key error inside a transaction
+        ends the transaction, while an upsert that matches simply writes nothing. A counter is a document moved by one
+        <code>findOneAndUpdate</code> with <code>$inc</code> and <code>upsert</code> &mdash; one round trip, atomic, and
+        the first call creates it &mdash; kept apart from the repository because it has no entity and no key of the
+        caller's. A case-class default fills a missing field only under <code>withDecodeMissingAsDefault</code>: the
+        default is the constructor's, and using it on a read makes a document that never held a field read back as if
+        it did. The fake builds an upserted document from the filter the way the server does, rule by rule as
+        <code>FakeUpsertParityItSpec</code> asked the server, rather than refusing the upsert.
+    </p>
+
     <h3 id="design-evolution">Evolving the API</h3>
     <p>
         Three commitments, and the mechanics that make each keepable. <strong>New <code>Effect</code>/
@@ -2961,6 +3031,10 @@ findOne     0.129 ms/op → ~7,750 ops/s</code></pre>
             <code>_type</code> and trying branch A then branch B via <code>getMark()</code>/<code>reset()</code> is
             technically feasible, and was rejected because it is silently unsafe whenever the two branches are
             structurally similar enough that both decode "successfully" — the wrong branch wins with no error.
+        </li>
+        <li><strong>Building the key index without being asked.</strong> Indexes are as often owned by migration
+            scripts as by the application, and a build on start-up competes with every replica starting at once;
+            <code>ensureKeyIndex</code> is one call for those who want it.
         </li>
         <li><strong>A global <code>CodecProvider</code> convenience.</strong> It would remove one implicit parameter
             and reintroduce process-wide coupling between unrelated collections.

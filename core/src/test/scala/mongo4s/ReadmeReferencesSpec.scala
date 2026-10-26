@@ -34,6 +34,7 @@ object ReadmeReferencesSpec:
     "InsertOneOptions"         -> "core/src/main/scala/mongo4s/operations/InsertOneOptions.scala",
     "MergeOptions"             -> "core/src/main/scala/mongo4s/operations/MergeOptions.scala",
     "MongoClient"              -> "core/src/main/scala/mongo4s/MongoClient.scala",
+    "MongoCounters"            -> "repositories/src/main/scala/mongo4s/repositories/Counters.scala",
     "OutOptions"               -> "core/src/main/scala/mongo4s/operations/OutOptions.scala",
     "PrimaryKey"               -> "core/src/main/scala/mongo4s/PrimaryKey.scala",
     "Projection"               -> "core/src/main/scala/mongo4s/operations/Projection.scala",

@@ -10,7 +10,7 @@ import com.mongodb.client.model.changestream.FullDocument
 import mongo4s.cats.{CatsStream, MongoClientResource}
 import mongo4s.results.{BulkWriteResult, ExplainSummary, UpdateResult}
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
-import mongo4s.repositories.{BaseMongoRepository, Page}
+import mongo4s.repositories.{BaseMongoRepository, MongoCounters, Page}
 import mongo4s.bson.{BsonDocumentCodec, BsonTypeName, DecodeResult, FieldNaming}
 import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec, WireCodecConfig}
 import mongo4s.operations.*
@@ -33,6 +33,10 @@ object ReadmeSnippets:
 
   final case class Address(city: String, zip: String) derives WireCodec
   final case class Item(sku: String, quantity: Int) derives WireCodec
+
+  object Item:
+    given BsonDocumentCodec[Item] = DocumentCodecBridge.toDocumentCodec[Item]
+
   final case class Order(userId: String, seq: Int, address: Address, items: List[Item], totals: Map[String, Int]) derives WireCodec
 
   object Order:
@@ -382,6 +386,38 @@ object ReadmeSnippets:
   def atomically(users: BaseMongoRepository[IO, S, User, String]): IO[Option[User]] =
     users.findOneAndUpdate("1", birthday)
 
+  // --- Repositories: conditional writes ---
+
+  final case class Account(id: String, name: String, version: Long) derives WireCodec
+
+  object Account:
+    given PrimaryKey[Account, String] = PrimaryKey.single("id")(_.id)
+    given BsonDocumentCodec[Account]  = DocumentCodecBridge.toDocumentCodec[Account]
+
+  def claimed(users: BaseMongoRepository[IO, S, User, String]): IO[Boolean] =
+    users.insertIfAbsent(User("1", "alice", 30, Nil, None))
+
+  def renamed(accounts: BaseMongoRepository[IO, S, Account, String], account: Account): IO[UpdateResult] =
+    val versionField = Field.of[Account, Long](_.version)
+    accounts.replace(account.copy(name = "alicia", version = account.version + 1), versionField.equalTo(account.version))
+
+  def itemAdded(orders: BaseMongoRepository[IO, S, Order, (userId: String, seq: Int)], item: Item): IO[UpdateResult] =
+    orders.updateByFilter(
+      Field.of[Order, String](_.userId).equalTo("1") && !itemsField.elemMatch(Field.of[Item, String](_.sku).equalTo("abc")),
+      Update.push(itemsField, item)
+    )
+
+  // --- Counters ---
+
+  def numbered(database: MongoDatabase[IO, S]): IO[Long] =
+    for
+      counters <- MongoCounters.create[IO, S](database)
+      number   <- counters.next("orders")
+      _        <- counters.next("ids", step = 100L)
+      _        <- counters.current("orders")
+      _        <- counters.reset("orders", 1000L)
+    yield number
+
   // --- Change streams ---
 
   def allEvents(collection: MongoCollection[IO, S, User]): S[ChangeEvent[User]] =
@@ -447,6 +483,16 @@ object ReadmeSnippets:
     given WireCodecConfig = WireCodecConfig.Default.withOmitNoneFields(false)
 
     final case class LegacyContact(name: String, email: Option[String]) derives WireCodec
+
+  // --- Missing fields and case-class defaults ---
+
+  object defaultsFilled:
+    given WireCodecConfig = WireCodecConfig.Default.withDecodeMissingAsDefault(true)
+
+    enum Status derives WireCodec:
+      case Active, Closed
+
+    final case class Account(name: String, status: Status = Status.Active) derives WireCodec
 
   // --- Bridge configuration ---
 

@@ -44,8 +44,19 @@ A breaking release, mostly in binary shape: most existing calls compile unchange
 - **`$type` over several types** (`hasAnyType`), **`$currentDate` as a timestamp** (`Update.currentTimestamp`),
   `$unwind`'s `includeArrayIndex`, `$unionWith` with a pipeline, and a text index's weights, default language and
   language override.
+- **`insertIfAbsent`** on the repository inserts an entity only when its key is free and answers whether it did,
+  through an upsert that only writes on insert, so a taken key neither overwrites nor fails a transaction.
+- **`replace(entity, condition)`** on the repository replaces by key, never inserts, and only while the condition
+  holds — the optimistic-concurrency write.
+- **Counters**: `MongoCounters.create(database, name)` gives `next`, `current` and `reset` over one document per
+  counter, `next` being one atomic `findOneAndUpdate`; `FakeCounters` in the testkit.
+- **`WireCodecConfig.withDecodeMissingAsDefault`** fills a missing field from the case-class default, for documents
+  written before the field existed. It is off by default.
 - The fake simulates unordered inserts, a `sort` on single-document updates, `pullWhere`, conditions on scalar
   elements, `$type` over several types and a timestamp `$currentDate`.
+- **The fake simulates update-based upserts** — `updateOne`, `updateMany`, `findOneAndUpdate`, `findOneAndReplace`
+  and the `bulkWrite` update commands — building the inserted document from the filter's equalities the way the
+  server does, checked against it case by case. A replacement upsert takes its `_id` from the filter.
 
 ### Changed
 
@@ -56,7 +67,8 @@ A breaking release, mostly in binary shape: most existing calls compile unchange
   `Filter.Type` a list of types, `Update.CurrentDate` whether it writes a timestamp, `Projection.Include` its computed
   fields, `Stage.Unwind` `includeArrayIndex`, `Stage.UnionWith` a pipeline, and `WriteCommand.DeleteOne`/`DeleteMany`
   their `DeleteOptions`.
-- `FindQuery`, `AggregateQuery`, `DistinctQuery`, `MongoCollection` and `MongoClient` have new abstract members.
+- `FindQuery`, `AggregateQuery`, `DistinctQuery`, `MongoCollection`, `MongoClient` and `Repository` have new abstract
+  members.
 - **`containsAll(Nil)` matches nothing**, as `$all: []` does on the server — it matched everything before.
 - **A `sort` on `updateMany` is refused**, where the driver drops it without a word.
 - **The build fails on any compiler warning.**

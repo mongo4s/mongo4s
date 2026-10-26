@@ -1594,7 +1594,7 @@ final case class Person(firstName: String, lastName: String) derives WireCodec /
 
 Field naming and discriminator naming (the `_type` value for sealed traits/enums) are independently configurable.
 `WireCodecConfig` is built by starting from `Default` (or `SnakeCase`) and chaining `withFieldNaming`,
-`withDiscriminatorNaming`, `withEncodeEmptyCasesAsString`, `withOmitNoneFields` — the same shape `WatchOptions` uses,
+`withDiscriminatorNaming`, `withEncodeEmptyCasesAsString`, `withOmitNoneFields`, `withDecodeMissingAsDefault` — the same shape `WatchOptions` uses,
 and the reason new derivation options can be added in a minor release without breaking binary compatibility:
 
 ```scala
@@ -1653,6 +1653,26 @@ The flag governs *fields of a derived product* only. A `None` inside an array is
 because dropping an element would shift every position after it. `Update.set(field, None)` also still writes `null` —
 that is `BsonEncoder`, not `WireCodec`, and `$set: null` and `$unset` are different intents; use `field.unset` for
 the latter. The AST bridges (`medeia`, `zio-bson`, `calypso`) follow their own library's rule here, not this flag.
+
+#### Missing fields and case-class defaults
+
+A missing field fails the decode unless it is an `Option`, even when the case class gives it a default. That is
+deliberate: a default is the constructor's, and silently standing in for what the database holds is how a document
+written without the field reads back as something nobody stored. `withDecodeMissingAsDefault(true)` is the opt-in for
+the case it exists for — a field added to a case class that older documents do not have:
+
+```scala
+given WireCodecConfig = WireCodecConfig.Default.withDecodeMissingAsDefault(true)
+
+final case class Account(name: String, status: Status = Status.Active) derives WireCodec
+// {"name": "ann"} reads back as Account("ann", Status.Active)
+```
+
+A field that is there always wins, and a field with no default still fails when it is missing. The default is
+evaluated per decode, as the constructor would — a `UUID.randomUUID()` default gives each document its own. One case
+to know before turning it on: an `Option` field *with* a default takes that default when it is missing, not `None` —
+`since: Option[Int] = Some(2020)` reads a document without `since` as `Some(2020)`. An explicit `null` is a value,
+not a missing field, and still reads as `None`. Encoding does not change: a default is written like any other value.
 
 #### Hand-writing a codec: `contramap`/`map`/`emap`/`imap`
 
@@ -1853,6 +1873,33 @@ batches. A repository carries a `PrimaryKey[E, K]`, so it can name what it just 
 raw `BsonValue` for you to decode. `MongoCollection` has no key type and keeps returning the driver's
 `InsertOneResult`/`InsertManyResult` — that is where the server's own `_id` still lives.
 
+`insertIfAbsent` inserts an entity only when nothing holds its key yet, and answers whether it did. `upsert`
+overwrites what is there; `insertOne` fails with `MongoError.DuplicateKey`, and inside a transaction that failure
+ends the transaction. `insertIfAbsent` is an upsert that only writes on insert — every field of the entity under
+`$setOnInsert`, matched by key — so a key that is already there leaves the stored entity untouched and the
+transaction intact:
+
+```scala
+users.insertIfAbsent(User("1", "alice", 30)) // F[Boolean]: true when it inserted, false when the key was taken
+```
+
+`replace` swaps the entity stored under the same key, and never inserts. It takes an optional condition the stored
+entity must still meet, which is what optimistic concurrency needs. Keep a version on the entity, replace only while the
+version is the one you read, and treat a `matchedCount` of zero as "someone else wrote first":
+
+```scala
+users.replace(user.copy(name = "alicia", version = user.version + 1), versionField.equalTo(user.version))
+// matchedCount == 0 → it changed (or went) under you: read it again and retry
+```
+
+An operator update under the same guard is `updateByFilter` with the key and the version in the filter. Adding an
+array element only when no element with the same id is there yet is the same shape — the condition goes in the filter,
+and a miss means it was already there:
+
+```scala
+orders.updateByFilter(orderId.equalTo("1") && !items.elemMatch(sku.equalTo("abc")), Update.push(items, item))
+```
+
 Paging goes through `Page`:
 
 ```scala
@@ -1888,7 +1935,11 @@ longer means the same thing. The walk is only as sound as the key: it has to be 
 the server orders it — keep one BSON type per key field, since a mixed-type field sorts by type before value — and it
 should be indexed, which is what `ensureKeyIndex` is for.
 
-`ensureKeyIndex` builds the unique index the `PrimaryKey` describes. `WithId[Id, E]` wraps an entity with a
+`ensureKeyIndex` builds the unique index the `PrimaryKey` describes. Nothing builds it for you: indexes are often
+owned by migration scripts rather than by the application, so the repository leaves the decision where it belongs.
+A key on `_id` needs nothing, since the server indexes `_id` uniquely on its own; any other key without that index
+is not unique — two inserts with the same key both land, and so do two `insertIfAbsent` calls that race.
+`WithId[Id, E]` wraps an entity with a
 separately-typed id (`type Oid[E] = WithId[ObjectId, E]`) and ships its own `PrimaryKey`/`BsonDocumentCodec`
 instances, for entities that don't carry their own id field — it lives in `mongo4s-core`, so it's available whether
 or not you use the repository layer.
@@ -1898,6 +1949,29 @@ repository call can join a [transaction](#sessions--transactions) the same way a
 
 `BaseMongoRepository` is `open`: adding a domain query means declaring it against `collection`/`Filter`/`Field`
 directly, not reimplementing what's already there.
+
+### Counters
+
+MongoDB has no sequences. The usual stand-in is a collection of counters, one document per name, moved by a single
+`findOneAndUpdate` that increments and upserts — one round trip, atomic on the server, and the first call creates the
+counter. `MongoCounters` is that, given a database and a collection name:
+
+```scala
+import mongo4s.repositories.MongoCounters
+
+for
+  counters <- MongoCounters.create[IO, S](database)            // the "counters" collection, or name your own
+  number   <- counters.next("orders")                           // 1, then 2, 3, …
+  block    <- counters.next("ids", step = 100L)                 // reserve a block of 100: this is its last value
+  current  <- counters.current("orders")                        // Option[Long], without moving it
+  _        <- counters.reset("orders", 1000L)                   // the next one is 1001
+yield number
+```
+
+Each counter is a document `{_id: name, value: n}`, so the key is the counter's name and the `_id` index is all it
+needs. `next` hands every value out exactly once however many callers race for it, and like everything else it takes
+a session, so a number can be drawn inside a transaction. `Counters[F]` is the trait, for a double of your own;
+`FakeCounters` in the testkit is the real implementation over a `FakeMongoCollection`.
 
 For unit tests, `FakeMongoCollection` (in `mongo4s-testkit`, a published module — add it as
 `"org.mongo4s" %% "mongo4s-testkit" % "5.0.0" % Test`) implements `MongoCollection` in memory. The exact same
@@ -1955,9 +2029,14 @@ Atlas Search's indexes and stages, a tailable cursor, `$jsonSchema`, the geospat
 collation anywhere it is accepted, an update carrying `arrayFilters`, a unique index over an array field, every
 aggregation stage outside the list above, `$median` and `$percentile`, whose `approximate` method only the server
 knows, and the `$addToSet` *accumulator*, which is refused on purpose: MongoDB leaves the order of its result
-undefined, so no fake can be faithful to it. Replace-based upserts — what `upsert`/`upsertMany` go through — insert on a miss the way the
-server does; an `update`-based `UpdateOptions.upsert` that matches nothing throws instead of guessing what the
-operators would have built.
+undefined, so no fake can be faithful to it.
+
+Upserts insert on a miss the way the server does, whether they replace or update — `updateOne`, `updateMany`,
+`findOneAndUpdate`, `findOneAndReplace`, `replaceOne` and their `bulkWrite` commands. An update builds the new
+document from the filter's equality conditions — `$eq`, a one-value `$in` or `$or`, every value of an `$all`, through
+`$and` — then applies its operators, `$setOnInsert` included, and stamps an `_id` first if none came from the filter.
+Two equalities on one path are refused with the server's code 54, `$all` with several values among them. A
+replacement keeps only the `_id` from the filter.
 
 One caveat carries over from `find`: where MongoDB does not define an order, neither does the fake, and the two need
 not agree. `$group` emits its buckets in the order their keys were first seen, and `distinct` the order it first met
@@ -2077,7 +2156,7 @@ Published for `Scala 3.9 LTS` under `org.mongo4s`:
 | | `mongo4s-kyo` | kyo 1.0.0-RC7 |
 | | `mongo4s-rapid` | rapid |
 | repositories | `mongo4s-repositories` | `BaseMongoRepository`, `Repository`, `Page` |
-| testkit | `mongo4s-testkit` | `FakeMongoCollection`, `FakeRepository` — in-memory doubles for unit tests |
+| testkit | `mongo4s-testkit` | `FakeMongoCollection`, `FakeRepository`, `FakeCounters` — in-memory doubles for unit tests |
 
 Every module is built with the same Scala version, so there is no longer a subset that a project on an older
 compiler has to do without.

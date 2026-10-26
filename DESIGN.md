@@ -763,6 +763,56 @@ a tailable `find` streams through `RsBridge.liveStream`, the chunk-of-one bridge
 other `find` keeps its batching. `all` on a tailable cursor still never returns, which is the cursor's nature rather
 than the bridge's.
 
+## Insert-if-absent writes only on insert
+
+There were two ways to insert an entity unless its key is taken: `insertOne` and catch `DuplicateKey`, or an upsert
+whose every field sits under `$setOnInsert`. The second is the one `insertIfAbsent` uses. A duplicate-key error inside
+a transaction ends the transaction, so catching it leaves the caller holding a transaction that can only abort,
+while an upsert that matches simply writes nothing and reports `wasUpserted = false`. The entity's fields go under
+`$setOnInsert` by their stored names, key fields included — the server accepts setting on insert the value the
+equality already pins, which `ConditionalWritesItSpec` checks for an `_id` key, a field key and a compound one.
+
+The answer is only as strong as the key's uniqueness. On `_id` the server guarantees it; on any other key it takes
+the index `ensureKeyIndex` builds, and without that index two racing calls can both insert.
+
+## A counter is a document
+
+MongoDB has no sequence, and the usual stand-in has one shape: a document per counter, moved by `findOneAndUpdate`
+with `$inc`, `upsert` and the updated document returned. One round trip, atomic on the server, and the first call
+creates the counter — so there is no separate "create" step to forget, and no read-then-write window for two
+callers to share a number in. `MongoCounters` is that shape behind a name, keyed by `_id` so the only index it needs
+is the one every collection already has. A step larger than one reserves a block, and the value returned is the
+block's last. A step below one is refused: a counter that moves back hands out numbers twice.
+
+It is a separate trait and a separate class rather than a repository method, because a counter has no entity type
+and no key of the caller's — it is its own collection with its own fixed codec — and a test wants it as a whole:
+`FakeCounters` is the real implementation over a fake collection, which is why the fake had to learn update-based
+upserts first.
+
+## A default stands in for the database only when asked
+
+`WireCodec` fails on a missing field unless its type has a missing value of its own — `Option`'s `None`. A
+case-class default is not consulted, and that stays the default after `withDecodeMissingAsDefault` arrived. The
+default belongs to the constructor; using it on a read means a document that never held the field reads back as if
+it did. For a field added to a model that is exactly what is wanted, and the flag says so. Otherwise it is a quiet
+substitution: an `Option[Status] = Some(Active)` reads a missing field as `Some(Active)` rather than `None`, and a
+reader cannot tell a stored value from an invented one.
+
+Defaults are read by a macro, because `Mirror` carries labels and types but not defaults. It reaches the
+companion's default getters and wraps each in a thunk, so a default is evaluated per decode as the constructor would
+evaluate it, and a generic case class's getter is applied to the decoded type's arguments. The thunks are built
+whatever the flag says — the configuration is a value, known only at run time — and are used only when it is on.
+
+## The fake builds an upserted document the way the server does
+
+An update-based upsert that matches nothing inserts a document the server assembles from the filter and then
+updates. The rules are not in one place in the manual, so `FakeUpsertParityItSpec` asked the server shape by shape
+and the fake follows its answers: every equality in a conjunction is seeded, dotted paths as nested documents; an
+`$in` or an `$or` with a single value or branch counts as an equality, and with several they seed nothing; an `$all`
+is one equality per value, so two values on one path are refused, with code 54, the same way two `$eq` on one path
+are; `$elemMatch` and the range operators seed nothing. The update then applies on top, `$setOnInsert` included,
+and an `_id` the filter did not pin is generated and placed first. A replacement keeps only the filter's `_id`.
+
 ## The build fails on a warning
 
 The warnings the build turns on are only a test if something fails on them, so `-Werror` is on — except for the
@@ -811,6 +861,12 @@ restated.
 `BsonReader.getMark()`/`.reset()` is technically feasible — the driver supports mark/reset. It was rejected because
 it is silently unsafe whenever the two branches are structurally similar enough that both decode "successfully": the
 wrong branch wins with no error. That is precisely the bug class the codec audit existed to eliminate.
+
+**Building the key index without being asked.** A repository whose key is not `_id` is not unique until something
+builds its index, and the repository could do it on creation. It does not: indexes are as often owned by migration
+scripts as by the application, a build on start-up competes with every replica starting at once, and an index the
+library builds behind the user's back is one their migrations then find already there. `ensureKeyIndex` is one call
+for those who want it.
 
 **A global `CodecProvider` convenience.** It would remove one implicit parameter and reintroduce process-wide
 coupling between unrelated collections. Not worth it.

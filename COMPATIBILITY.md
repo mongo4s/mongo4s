@@ -62,8 +62,9 @@ noted:
 
 `FindQuery` has `let`, `allowDiskUse`, `cursorType`, `maxAwaitTime` and `noCursorTimeout`; `AggregateQuery` has `let`,
 `maxAwaitTime` and `bypassDocumentValidation`; `DistinctQuery` has `hint` and `comment`; `MongoCollection` has
-`estimatedCount(options)` and the five search-index methods; `MongoClient` has `bulkWrite`. A class of your own that
-implements one of them has these to write; code that only calls them is unaffected.
+`estimatedCount(options)` and the five search-index methods; `MongoClient` has `bulkWrite`; `Repository` has
+`insertIfAbsent` and `replace`. A class of your own that implements one of them has these to write; code that only
+calls them, or extends `BaseMongoRepository`, is unaffected.
 
 ### Positional paths are typed
 
@@ -83,6 +84,9 @@ and an array filter built on the same `Field.element` replaces a hand-spelled `F
 * **The fake refuses more**: positional updates, tailable cursors, aggregation expressions, Atlas Search, a write for
   the client-level `bulkWrite`, a `unique` index on `_id` alone, and partial indexes the server refuses. Each of them
   answered wrong, or not at all, before.
+* **The fake simulates update-based upserts** where it threw `UnsupportedOperationException` before, and a
+  replacement upsert takes its `_id` from the filter, as the server does, instead of generating one. A test that
+  relied on the refusal now sees the insert.
 
 ### Java and the server
 
