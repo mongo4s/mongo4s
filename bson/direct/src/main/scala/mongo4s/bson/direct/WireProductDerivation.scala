@@ -23,6 +23,7 @@ object WireProductDerivation:
       labels = labels,
       naming = config.fieldNaming,
       omitAbsentFields = config.omitNoneFields,
+      defaults = if config.decodeMissingAsDefault then WireDefaults.of[A] else Map.empty,
       codecsThunk = () => summonAll[Tuple.Map[m.MirroredElemTypes, WireCodec]].toList.asInstanceOf[List[WireCodec[Any]]].toArray
     )
   end derived
@@ -32,6 +33,7 @@ object WireProductDerivation:
       labels: Array[String],
       naming: mongo4s.bson.FieldNaming,
       omitAbsentFields: Boolean,
+      defaults: Map[Int, () => Any],
       codecsThunk: () => Array[WireCodec[Any]],
   ): WireCodec[A] =
     lazy val codecs = codecsThunk()
@@ -77,7 +79,10 @@ object WireProductDerivation:
         while i < values.length
         do
           if values(i) == null
-          then values(i) = codecs(i).defaultOnMissing.getOrElse(throw BsonError.DecodingFailure(BsonError.MissingField(labels(i))))
+          then
+            values(i) = defaults.get(i) match
+              case Some(default) => default()
+              case None          => codecs(i).defaultOnMissing.getOrElse(throw BsonError.DecodingFailure(BsonError.MissingField(labels(i))))
           i += 1
         end while
 

@@ -7,6 +7,7 @@ final class WireCodecConfig private (
     val discriminatorNaming: FieldNaming,
     val encodeEmptyCasesAsString: Boolean,
     val omitNoneFields: Boolean,
+    val decodeMissingAsDefault: Boolean,
 ):
   def withFieldNaming(value: FieldNaming): WireCodecConfig =
     copy(fieldNaming = value)
@@ -20,17 +21,22 @@ final class WireCodecConfig private (
   def withOmitNoneFields(value: Boolean): WireCodecConfig =
     copy(omitNoneFields = value)
 
+  def withDecodeMissingAsDefault(value: Boolean): WireCodecConfig =
+    copy(decodeMissingAsDefault = value)
+
   private def copy(
       fieldNaming: FieldNaming = fieldNaming,
       discriminatorNaming: FieldNaming = discriminatorNaming,
       encodeEmptyCasesAsString: Boolean = encodeEmptyCasesAsString,
       omitNoneFields: Boolean = omitNoneFields,
+      decodeMissingAsDefault: Boolean = decodeMissingAsDefault,
   ): WireCodecConfig =
     new WireCodecConfig(
       fieldNaming = fieldNaming,
       discriminatorNaming = discriminatorNaming,
       encodeEmptyCasesAsString = encodeEmptyCasesAsString,
-      omitNoneFields = omitNoneFields
+      omitNoneFields = omitNoneFields,
+      decodeMissingAsDefault = decodeMissingAsDefault,
     )
 
 object WireCodecConfig:
@@ -39,6 +45,7 @@ object WireCodecConfig:
     discriminatorNaming = FieldNaming.identity,
     encodeEmptyCasesAsString = false,
     omitNoneFields = true,
+    decodeMissingAsDefault = false,
   )
 
   val SnakeCase: WireCodecConfig = Default.withFieldNaming(FieldNaming.snakeCase)
