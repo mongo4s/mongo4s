@@ -51,14 +51,15 @@ enum Stage[E](val key: String):
       options: GraphLookupOptions[B],
   ) extends Stage[T]("$graphLookup")
 
-  case Group(by: Option[FieldPath], accumulators: List[(String, Accumulator[E])]) extends Stage[E]("$group")
-  case AddFields(fields: List[(String, BsonValue)])                               extends Stage[E]("$addFields")
-  case Unset(paths: List[FieldPath])                                              extends Stage[E]("$unset")
-  case ReplaceRoot(path: FieldPath)                                               extends Stage[E]("$replaceRoot")
-  case Sample(size: Int)                                                          extends Stage[E]("$sample")
-  case SortByCount(path: FieldPath)                                               extends Stage[E]("$sortByCount")
-  case UnionWith(collection: String, pipeline: List[Stage[?]])                    extends Stage[E]("$unionWith")
-  case Facet(facets: List[(String, List[Stage[E]])])                              extends Stage[E]("$facet")
+  case Group(by: GroupKey[E], accumulators: List[(String, Accumulator[E])]) extends Stage[E]("$group")
+  case AddFields(fields: List[Computed[E]])                                 extends Stage[E]("$addFields")
+  case ReplaceWith(expression: Expr[E, ?])                                  extends Stage[E]("$replaceWith")
+  case Unset(paths: List[FieldPath])                                        extends Stage[E]("$unset")
+  case ReplaceRoot(path: FieldPath)                                         extends Stage[E]("$replaceRoot")
+  case Sample(size: Int)                                                    extends Stage[E]("$sample")
+  case SortByCount(path: FieldPath)                                         extends Stage[E]("$sortByCount")
+  case UnionWith(collection: String, pipeline: List[Stage[?]])              extends Stage[E]("$unionWith")
+  case Facet(facets: List[(String, List[Stage[E]])])                        extends Stage[E]("$facet")
 
   case Bucket(
       groupBy: FieldPath,
@@ -92,7 +93,7 @@ enum Stage[E](val key: String):
       output: List[FillOutput[E]],
   ) extends Stage[E]("$fill")
 
-  case Redact(expression: BsonValue) extends Stage[E]("$redact")
+  case Redact(expression: Expr[E, ?]) extends Stage[E]("$redact")
 
   case GeoNear(
       near: Geometry.Point,
@@ -172,18 +173,14 @@ enum Stage[E](val key: String):
       BsonDocument(key, graph)
 
     case Stage.Group(by, accumulators) =>
-      val group = BsonDocument(
-        BsonField.Id,
-        by.fold(BsonNull.VALUE: BsonValue)(path => BsonString("$" + path.render(naming)))
-      )
+      val group = BsonDocument(BsonField.Id, by.toBson(naming))
       accumulators.foreach((name, accumulator) => group.append(name, accumulator.toBson(naming)))
       BsonDocument(key, group)
 
     case Stage.AddFields(fields) =>
-      BsonDocument(
-        key,
-        fields.foldLeft(BsonDocument())((acc, entry) => acc.append(entry._1, entry._2))
-      )
+      BsonDocument(key, fields.foldLeft(BsonDocument())((acc, field) => acc.append(field.path.render(naming), field.expression.toBson(naming))))
+
+    case Stage.ReplaceWith(expression) => BsonDocument(key, expression.toBson(naming))
 
     case Stage.Unset(paths) =>
       paths match
@@ -270,7 +267,7 @@ enum Stage[E](val key: String):
 
       BsonDocument(key, fill)
 
-    case Stage.Redact(expression) => BsonDocument(key, expression)
+    case Stage.Redact(expression) => BsonDocument(key, expression.toBson(naming))
 
     case Stage.GeoNear(near, path, distanceField, options) =>
       val geoNear = BsonDocument("near", near.toBson)
@@ -345,17 +342,28 @@ object Stage:
     )
 
   def groupBy[E, A](field: Field[E, A])(accumulators: (String, Accumulator[E])*): Stage[E] =
-    Group(Some(field.path), accumulators.toList)
+    Group(GroupKey.Path(field.path), accumulators.toList)
 
-  def groupAll[E](accumulators: (String, Accumulator[E])*): Stage[E] = Group(None, accumulators.toList)
+  def groupByExpr[E](key: Expr[E, ?])(accumulators: (String, Accumulator[E])*): Stage[E] =
+    Group(GroupKey.Evaluated(key), accumulators.toList)
 
-  def addFields[E](fields: (String, BsonValue)*): Stage[E] = AddFields(fields.toList)
+  def groupByKeys[E](keys: Computed[E]*)(accumulators: (String, Accumulator[E])*): Stage[E] =
+    require(keys.nonEmpty, "a compound $group key needs at least one field")
+    Group(GroupKey.Compound(keys.toList), accumulators.toList)
+
+  def groupAll[E](accumulators: (String, Accumulator[E])*): Stage[E] = Group(GroupKey.All(), accumulators.toList)
+
+  def addFields[E](fields: Computed[E]*): Stage[E] =
+    require(fields.nonEmpty, "$addFields needs at least one field")
+    AddFields(fields.toList)
 
   def unset[E, A](field: Field[E, A]): Unset[E] = new Unset(List(field.path))
 
   extension [E](stage: Unset[E]) def and[A](field: Field[E, A]): Unset[E] = new Unset(stage.paths :+ field.path)
 
   def replaceRoot[E, A](field: Field[E, A]): Stage[E] = ReplaceRoot(field.path)
+
+  def replaceWith[E](expression: Expr[E, ?]): Stage[E] = ReplaceWith(expression)
 
   def sample[E](size: Int): Stage[E]             = Sample(Bounds.atLeastOne(size, "$sample size", "which MongoDB refuses"))
   def unionWith[E](collection: String): Stage[E] = UnionWith(collection, Nil)
@@ -403,7 +411,8 @@ object Stage:
     Fill(partitionBy.toList, sortBy, output.toList)
   end fill
 
-  def redact[E](expression: BsonValue): Stage[E] = Redact(expression)
+  def redact[E](expression: BsonValue): Stage[E]  = Redact(Expr.raw(expression))
+  def redact[E](expression: Expr[E, ?]): Stage[E] = Redact(expression)
 
   def search[E](operator: SearchOperator[E], options: SearchOptions = SearchOptions.default): Stage[E] = Search(operator, options)
 

@@ -5,7 +5,7 @@ import scala.annotation.targetName
 
 import mongo4s.bson.{BsonEncoder, BsonTypeName, FieldNaming}
 import mongo4s.operations.geometry.{GeoShape, Geometry}
-import mongo4s.operations.{Filter, PushOptions, Sort, Update}
+import mongo4s.operations.{Computed, Expr, Filter, PushOptions, Sort, Update}
 
 opaque type Field[E, A] = FieldPath
 
@@ -71,6 +71,11 @@ object Field:
   extension [E, A](field: Field[E, A])
     @targetName("nested")
     infix def /[B](inner: Field[A, B]): Field[E, B] = Field(field.path ++ inner.path)
+
+    def expr[B](using Expr.Unwrapped[A, B]): Expr[E, B] = Expr.of(field)
+
+    @targetName("computedAs")
+    infix def :=(expression: Expr[E, ?]): Computed[E] = Computed(field.path, expression)
 
   extension [E, A](field: Field[E, A])
     def exists: Filter[E]                                                        = Filter.Exists(field.path, true)

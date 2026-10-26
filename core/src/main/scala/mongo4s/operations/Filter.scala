@@ -3,6 +3,7 @@ package mongo4s.operations
 import scala.annotation.targetName
 import org.bson.*
 import mongo4s.FieldPath
+import mongo4s.operations.Expr as Expression
 import mongo4s.bson.{BsonTypeName, FieldNaming}
 import mongo4s.operations.geometry.{GeoShape, Geometry}
 
@@ -42,7 +43,7 @@ enum Filter[E](val key: String):
 
   case GeoWithin[T](path: FieldPath, shape: GeoShape)        extends Filter[T]("$geoWithin")
   case GeoIntersects[T](path: FieldPath, geometry: Geometry) extends Filter[T]("$geoIntersects")
-  case Expr[T](expression: BsonDocument)                     extends Filter[T]("$expr")
+  case Expr[T](expression: Expression[T, Boolean])           extends Filter[T]("$expr")
   case JsonSchema[T](schema: BsonDocument)                   extends Filter[T]("$jsonSchema")
   case BitsAllSet[T](path: FieldPath, mask: Long)            extends Filter[T]("$bitsAllSet")
   case BitsAnySet[T](path: FieldPath, mask: Long)            extends Filter[T]("$bitsAnySet")
@@ -96,7 +97,7 @@ enum Filter[E](val key: String):
 
     case GeoWithin(path, shape)        => Filter.operator(naming, path, key, shape.toBson)
     case GeoIntersects(path, geometry) => Filter.operator(naming, path, key, BsonDocument(Geometry.key, geometry.toBson))
-    case Expr(expression)              => BsonDocument(key, expression)
+    case Expr(expression)              => BsonDocument(key, expression.toBson(naming))
     case JsonSchema(schema)            => BsonDocument(key, schema)
     case BitsAllSet(path, mask)        => Filter.operator(naming, path, key, BsonInt64(mask))
     case BitsAnySet(path, mask)        => Filter.operator(naming, path, key, BsonInt64(mask))
@@ -130,7 +131,8 @@ object Filter:
   def all[E]: Filter[E]                                                   = MatchAll()
   def none[E]: Filter[E]                                                  = MatchNone()
   def text[E](search: String, language: Option[String] = None): Filter[E] = Text(search, language)
-  def expr[E](expression: BsonDocument): Filter[E]                        = Expr(expression)
+  def expr[E](expression: BsonDocument): Filter[E]                        = Expr(Expression.raw(expression))
+  def expr[E](expression: Expression[E, Boolean]): Filter[E]              = Expr(expression)
   def jsonSchema[E](schema: BsonDocument): Filter[E]                      = JsonSchema(schema)
 
   def and[E](filters: Filter[E]*): Filter[E] =

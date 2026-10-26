@@ -389,6 +389,23 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "an aggregation expression" should {
+    "be refused by name wherever it appears, since the fake does not evaluate expressions" in {
+      val c   = fake(BsonDocument("_id", BsonString("a")).append("age", BsonInt32(3)))
+      val age = Field.stored[BsonDocument, Int]("age")
+
+      val refusals = List(
+        () => c.find(Filter.expr(age.expr > Expr.lit(1))).all.unsafeRunSync(),
+        () => c.find().projection(Projection.empty[BsonDocument].compute("twice" := age.expr * Expr.lit(2))).all.unsafeRunSync(),
+        () => c.aggregate[BsonDocument](Seq(Stage.groupByExpr(age.expr * Expr.lit(2))("n" -> Accumulator.count))).all.unsafeRunSync(),
+        () => c.aggregate[BsonDocument](Seq(Stage.groupAll("total" -> Accumulator.sum(age.expr * Expr.lit(2))))).all.unsafeRunSync(),
+        () => c.aggregate[BsonDocument](Seq(Stage.addFields("twice" := age.expr * Expr.lit(2)))).all.unsafeRunSync(),
+      )
+
+      refusals.foreach(run => intercept[UnsupportedOperationException](run()))
+    }
+  }
+
   "a write for a client bulk write" should {
     "be refused, since a fake has no namespace the client could address" in {
       intercept[UnsupportedOperationException](fake(keyed("a")).write(WriteCommand.InsertOne(keyed("b"))))

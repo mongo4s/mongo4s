@@ -122,7 +122,7 @@ final class UpdateSpec extends AnyWordSpec, Matchers:
   }
 
   "a pipeline update" should {
-    val shout = Stage.addFields[Person]("name" -> BsonDocument("$toUpper", BsonString("$name")))
+    val shout = Stage.addFields[Person]("name" := nameField.expr.toUpper)
     val tidy  = Stage.project(Projection.empty[Person].exclude(ageField))
 
     "render as the stages it holds, and not as an operator document" in {

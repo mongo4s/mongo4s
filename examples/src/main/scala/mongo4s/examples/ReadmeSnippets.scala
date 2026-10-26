@@ -110,7 +110,7 @@ object ReadmeSnippets:
 
   // A pipeline computes from the document's own values, which operators cannot.
   val exclaimed = Update.pipeline(
-    Stage.addFields[User]("name" -> BsonDocument("$concat", BsonArray(java.util.List.of(BsonString("$name"), BsonString("!")))))
+    Stage.addFields[User]("name" := Field.of[User, String](_.name).expr ++ Expr.lit("!"))
   )
 
   val scoreDropped = Update.pipeline(Stage.unset(Field.of[User, Option[Long]](_.score)))

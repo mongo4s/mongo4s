@@ -13,6 +13,7 @@ enum Projection[E]:
       fields: List[FieldPath],
       withId: Boolean,
       slices: List[(FieldPath, Slice)] = Nil,
+      computed: List[Computed[T]] = Nil,
   ) extends Projection[T]
 
   case Exclude[T](
@@ -23,21 +24,22 @@ enum Projection[E]:
   def slices: List[(FieldPath, Slice)]
 
   def isEmpty: Boolean = this match
-    case Everything(slices)            => slices.isEmpty
-    case Include(fields, true, slices) => fields.isEmpty && slices.isEmpty
-    case Include(_, false, _)          => false
-    case Exclude(fields, slices)       => fields.isEmpty && slices.isEmpty
+    case Everything(slices)                      => slices.isEmpty
+    case Include(fields, true, slices, computed) => fields.isEmpty && slices.isEmpty && computed.isEmpty
+    case Include(_, false, _, _)                 => false
+    case Exclude(fields, slices)                 => fields.isEmpty && slices.isEmpty
 
   def toBson(naming: FieldNaming): BsonDocument =
     val document = this match
       case Everything(_) => BsonDocument()
 
-      case Include(fields, withId, sliced) =>
+      case Include(fields, withId, sliced, computed) =>
         val plain      = fields.filterNot(path => sliced.exists(_._1 == path))
         val included   = plain.foldLeft(BsonDocument()) { (acc, path) =>
           acc.append(path.render(naming), BsonInt32(1))
         }
-        val onlySliced = plain.isEmpty && sliced.nonEmpty
+        computed.foreach(field => included.append(field.path.render(naming), field.expression.toBson(naming)))
+        val onlySliced = plain.isEmpty && computed.isEmpty && sliced.nonEmpty
 
         (withId, onlySliced) match
           case (true, true)   => included.append(Projection.IdPath.render(naming), BsonInt32(1))
@@ -71,6 +73,8 @@ object Projection:
     def exclude[A](field: Field[E, A]): Exclude[E] = Exclude(List(field.path), projection.slices)
     def withoutId: Exclude[E]                      = Exclude(List(IdPath), projection.slices)
 
+    def compute(field: Computed[E]): Include[E] = Include(Nil, withId = true, projection.slices, List(field))
+
     def slice[C](field: Field[E, C], count: Int)(using ElementOf[C, ?]): Everything[E] =
       Everything(projection.slices :+ (field.path -> Slice(count, None)))
 
@@ -79,15 +83,17 @@ object Projection:
 
   extension [E](projection: Include[E])
     def include[A](field: Field[E, A]): Include[E] =
-      Include(projection.fields :+ field.path, projection.withId, projection.slices)
+      Include(projection.fields :+ field.path, projection.withId, projection.slices, projection.computed)
 
-    def withoutId: Include[E] = Include(projection.fields, withId = false, projection.slices)
+    def withoutId: Include[E] = Include(projection.fields, withId = false, projection.slices, projection.computed)
+
+    def compute(field: Computed[E]): Include[E] = Include(projection.fields, projection.withId, projection.slices, projection.computed :+ field)
 
     def slice[C](field: Field[E, C], count: Int)(using ElementOf[C, ?]): Include[E] =
-      Include(projection.fields, projection.withId, projection.slices :+ (field.path -> Slice(count, None)))
+      Include(projection.fields, projection.withId, projection.slices :+ (field.path -> Slice(count, None)), projection.computed)
 
     def sliceFrom[C](field: Field[E, C], skip: Int, count: Int)(using ElementOf[C, ?]): Include[E] =
-      Include(projection.fields, projection.withId, projection.slices :+ (field.path -> Slice(count, Some(skip))))
+      Include(projection.fields, projection.withId, projection.slices :+ (field.path -> Slice(count, Some(skip))), projection.computed)
 
   extension [E](projection: Exclude[E])
     def exclude[A](field: Field[E, A]): Exclude[E] = Exclude(projection.fields :+ field.path, projection.slices)

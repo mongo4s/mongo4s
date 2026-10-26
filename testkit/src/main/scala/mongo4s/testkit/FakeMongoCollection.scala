@@ -74,6 +74,9 @@ final class FakeMongoCollection[F[*], S[*], E](
         if paths.exists(_.split('.').exists(_.startsWith("$")))
         then throw UnsupportedOperationException("FakeMongoCollection: the positional operators $, $[] and $[identifier] are not simulated")
 
+  private def refuseExpressions(what: String): Nothing =
+    throw UnsupportedOperationException(s"FakeMongoCollection: $what evaluates an aggregation expression, which the fake does not do, so it is not simulated")
+
   private def refuseCollation: Nothing =
     throw UnsupportedOperationException("FakeMongoCollection: a collation changes what matches and how it sorts, so it is not simulated")
 
@@ -769,7 +772,9 @@ final class FakeMongoCollection[F[*], S[*], E](
       case Projection.Exclude(fields, _) =>
         fields.foldLeft(document)((acc, path) => unsetAt(acc, storedSegments(path)))
 
-      case Projection.Include(fields, withId, slices) =>
+      case Projection.Include(fields, withId, slices, computed) =>
+        if computed.nonEmpty then refuseExpressions("a computed projection field")
+
         val kept = (fields ++ slices.map(_._1)).foldLeft(BsonDocument()) { (acc, path) =>
           at(document, path).fold(acc)(value => setAt(acc, storedSegments(path), value))
         }
@@ -850,7 +855,11 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Stage.Unset(paths)                      => documents.map(document => paths.foldLeft(document)((acc, path) => unsetAt(acc, storedSegments(path))))
     case Stage.Count(fieldName)                  =>
       if documents.isEmpty then Nil else List(BsonDocument(fieldName, BsonInt32(documents.size)))
-    case Stage.Group(by, accumulators)           => grouped(documents, by, accumulators)
+    case Stage.Group(by, accumulators)           =>
+      by match
+        case GroupKey.All()      => grouped(documents, None, accumulators)
+        case GroupKey.Path(path) => grouped(documents, Some(path), accumulators)
+        case _                   => refuseExpressions("a $group key computed from an expression")
     case Stage.SortByCount(path)                 => grouped(documents, Some(path), List("count" -> Accumulator.count[E])).sortBy(-_.getInt32("count").getValue)
     case Stage.Fill(partitionBy, sortBy, output) => filled(documents, partitionBy, sortBy, output)
     case other                                   =>
@@ -999,6 +1008,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     expression match
       case Accumulator.Expression.FieldRef(path) => documents.flatMap(at(_, path))
       case Accumulator.Expression.Literal(value) => documents.map(_ => value)
+      case Accumulator.Expression.Evaluated(_)   => refuseExpressions("an accumulator over an expression")
 
   private def summed(values: List[BsonValue]): BsonValue =
     if values.exists(_.isDecimal128)

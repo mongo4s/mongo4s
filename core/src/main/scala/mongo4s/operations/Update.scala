@@ -152,9 +152,9 @@ object Update:
     require(stages.nonEmpty, "A pipeline update needs at least one stage")
 
     stages.foreach {
-      case _: (Stage.AddFields[E] | Stage.ProjectStage[E] | Stage.Unset[E] | Stage.ReplaceRoot[E] | Stage.Raw[E]) => ()
-      case other                                                                                                  =>
-        throw IllegalArgumentException(s"A pipeline update takes $$addFields, $$project, $$unset and $$replaceRoot stages, not ${other.key}")
+      case _: (Stage.AddFields[E] | Stage.ProjectStage[E] | Stage.Unset[E] | Stage.ReplaceRoot[E] | Stage.ReplaceWith[E] | Stage.Raw[E]) => ()
+      case other                                                                                                                         =>
+        throw IllegalArgumentException(s"A pipeline update takes $$addFields, $$project, $$unset, $$replaceRoot and $$replaceWith stages, not ${other.key}")
     }
 
     Pipeline(stages.toList)

@@ -7,7 +7,6 @@ import cats.effect.testing.scalatest.AsyncIOSpec
 import org.testcontainers.mongodb.MongoDBContainer
 
 import cats.effect.IO
-import org.bson.{BsonArray, BsonDocument, BsonString}
 
 import mongo4s.cats.CatsStream
 import mongo4s.operations.*
@@ -33,7 +32,7 @@ final class PipelineUpdateItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, B
 
   private val idField = Field.of[Note, String](_.id)
 
-  private val exclaim = Update.pipeline(Stage.addFields[Note]("body" -> BsonDocument("$concat", BsonArray(java.util.List.of(BsonString("$body"), BsonString("!"))))))
+  private val exclaim = Update.pipeline(Stage.addFields[Note]("body" := Field.of[Note, String](_.body).expr ++ Expr.lit("!")))
 
   private def seeded(name: String) =
     for

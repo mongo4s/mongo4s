@@ -5,7 +5,7 @@ import scala.annotation.unused
 import org.bson.{BsonArray, BsonDocument, BsonDouble, BsonInt32, BsonString, BsonValue}
 
 import mongo4s.bson.FieldNaming
-import mongo4s.{Field, FieldPath, NumericOf}
+import mongo4s.{Field, FieldPath, NumericOf, NumericValue}
 
 import scala.jdk.CollectionConverters.given
 
@@ -71,10 +71,12 @@ object Accumulator:
   enum Expression[E]:
     case FieldRef(path: FieldPath)
     case Literal(value: BsonValue)
+    case Evaluated(expression: Expr[E, ?])
 
     def toBson(naming: FieldNaming): BsonValue = this match
-      case FieldRef(path) => BsonString("$" + path.render(naming))
-      case Literal(value) => value
+      case FieldRef(path)        => BsonString("$" + path.render(naming))
+      case Literal(value)        => value
+      case Evaluated(expression) => expression.toBson(naming)
 
   def of[E, A](field: Field[E, A]): Expression[E] = Expression.FieldRef(field.path)
 
@@ -87,7 +89,15 @@ object Accumulator:
   def push[E, A](field: Field[E, A]): Accumulator[E]     = Push(of(field))
   def addToSet[E, A](field: Field[E, A]): Accumulator[E] = AddToSet(of(field))
   def count[E]: Accumulator[E]                           = Count()
-  def raw[E](document: BsonDocument): Accumulator[E]     = Raw(document)
+
+  def sum[E, A](expression: Expr[E, A])(using @unused numeric: NumericValue[A]): Accumulator[E] = Sum(Expression.Evaluated(expression))
+  def avg[E, A](expression: Expr[E, A])(using @unused numeric: NumericValue[A]): Accumulator[E] = Avg(Expression.Evaluated(expression))
+  def min[E, A](expression: Expr[E, A]): Accumulator[E]                                         = Min(Expression.Evaluated(expression))
+  def max[E, A](expression: Expr[E, A]): Accumulator[E]                                         = Max(Expression.Evaluated(expression))
+  def first[E, A](expression: Expr[E, A]): Accumulator[E]                                       = First(Expression.Evaluated(expression))
+  def last[E, A](expression: Expr[E, A]): Accumulator[E]                                        = Last(Expression.Evaluated(expression))
+  def push[E, A](expression: Expr[E, A]): Accumulator[E]                                        = Push(Expression.Evaluated(expression))
+  def raw[E](document: BsonDocument): Accumulator[E]                                            = Raw(document)
 
   def firstN[E, A](field: Field[E, A], n: Int): Accumulator[E] = FirstN(of(field), Bounds.atLeastOne(n, "$firstN n", "which MongoDB refuses"))
   def lastN[E, A](field: Field[E, A], n: Int): Accumulator[E]  = LastN(of(field), Bounds.atLeastOne(n, "$lastN n", "which MongoDB refuses"))

@@ -12,7 +12,7 @@ import org.bson.BsonDocument
 import mongo4s.cats.CatsStream
 import mongo4s.bson.direct.WireCodec
 import mongo4s.{Field, MongoClient, MongoCollection}
-import mongo4s.operations.{SearchCount, SearchIndex, SearchOperator, SearchOptions, Stage, VectorSimilarity}
+import mongo4s.operations.{:=, Expr, Projection, SearchCount, SearchIndex, SearchOperator, SearchOptions, Stage, VectorSimilarity}
 
 import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
@@ -94,6 +94,27 @@ final class SearchItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAnd
         yield found.map(_.title).toSet
 
       program.timeout(4.minutes).asserting(_ shouldBe Set("The Matrix", "Matrix Reloaded"))
+    }
+
+    "carry each match's relevance score into a computed field" in {
+      val program =
+        for
+          collection <- indexed("scored")
+          scored     <- collection
+                          .aggregate[BsonDocument](
+                            Seq(
+                              Stage.search(SearchOperator.text(plot, "hacker")),
+                              Stage.project(Projection.empty[Movie].include(title).compute("score" := Expr.searchScore).withoutId),
+                            )
+                          )
+                          .all
+        yield scored.map(_.getDouble("score").getValue)
+
+      program.timeout(4.minutes).asserting { scores =>
+        scores should have size 2
+        all(scores) should be > 0.0
+        scores shouldBe scores.sorted.reverse
+      }
     }
 
     "combine a required phrase with a range it must also satisfy" in {
