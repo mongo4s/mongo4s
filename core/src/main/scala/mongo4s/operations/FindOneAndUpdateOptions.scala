@@ -16,6 +16,7 @@ final class FindOneAndUpdateOptions[E] private (
     val maxTime: Option[FiniteDuration],
     val comment: Option[String],
     val bypassDocumentValidation: Option[Boolean],
+    val let: Option[BsonDocument],
 ):
   def returningPrevious: FindOneAndUpdateOptions[E] = copy(returnUpdated = false)
 
@@ -37,6 +38,8 @@ final class FindOneAndUpdateOptions[E] private (
 
   def withBypassDocumentValidation(value: Boolean): FindOneAndUpdateOptions[E] = copy(bypassDocumentValidation = Some(value))
 
+  def withLet(variables: BsonDocument): FindOneAndUpdateOptions[E] = copy(let = Some(variables))
+
   private def copy(
       returnUpdated: Boolean = returnUpdated,
       upsert: Boolean = upsert,
@@ -48,8 +51,9 @@ final class FindOneAndUpdateOptions[E] private (
       maxTime: Option[FiniteDuration] = maxTime,
       comment: Option[String] = comment,
       bypassDocumentValidation: Option[Boolean] = bypassDocumentValidation,
+      let: Option[BsonDocument] = let,
   ): FindOneAndUpdateOptions[E] =
-    new FindOneAndUpdateOptions(returnUpdated, upsert, sort, projection, arrayFilters, collation, hint, maxTime, comment, bypassDocumentValidation)
+    new FindOneAndUpdateOptions(returnUpdated, upsert, sort, projection, arrayFilters, collation, hint, maxTime, comment, bypassDocumentValidation, let)
 
 object FindOneAndUpdateOptions:
   def default[E]: FindOneAndUpdateOptions[E] =
@@ -64,6 +68,7 @@ object FindOneAndUpdateOptions:
       maxTime = None,
       comment = None,
       bypassDocumentValidation = None,
+      let = None,
     )
 
   def upsert[E]: FindOneAndUpdateOptions[E] = default[E].withUpsert

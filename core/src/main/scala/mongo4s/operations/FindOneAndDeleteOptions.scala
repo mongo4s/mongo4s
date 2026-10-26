@@ -12,6 +12,7 @@ final class FindOneAndDeleteOptions[E] private (
     val hint: Option[BsonDocument],
     val maxTime: Option[FiniteDuration],
     val comment: Option[String],
+    val let: Option[BsonDocument],
 ):
   def withSort(value: Sort[E]): FindOneAndDeleteOptions[E] = copy(sort = value)
 
@@ -25,6 +26,8 @@ final class FindOneAndDeleteOptions[E] private (
 
   def withComment(value: String): FindOneAndDeleteOptions[E] = copy(comment = Some(value))
 
+  def withLet(variables: BsonDocument): FindOneAndDeleteOptions[E] = copy(let = Some(variables))
+
   private def copy(
       sort: Sort[E] = sort,
       projection: Projection[E] = projection,
@@ -32,8 +35,9 @@ final class FindOneAndDeleteOptions[E] private (
       hint: Option[BsonDocument] = hint,
       maxTime: Option[FiniteDuration] = maxTime,
       comment: Option[String] = comment,
+      let: Option[BsonDocument] = let,
   ): FindOneAndDeleteOptions[E] =
-    new FindOneAndDeleteOptions(sort, projection, collation, hint, maxTime, comment)
+    new FindOneAndDeleteOptions(sort, projection, collation, hint, maxTime, comment, let)
 
 object FindOneAndDeleteOptions:
   def default[E]: FindOneAndDeleteOptions[E] =
@@ -44,4 +48,5 @@ object FindOneAndDeleteOptions:
       hint = None,
       maxTime = None,
       comment = None,
+      let = None,
     )

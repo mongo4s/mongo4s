@@ -17,6 +17,8 @@ import scala.jdk.CollectionConverters.given
 
 private[mongo4s] object DriverOptions:
 
+  private[mongo4s] val SortOnMany = "a sort picks the one document an update changes, so updateMany cannot take one"
+
   def update(options: UpdateOptions, naming: FieldNaming): DriverUpdateOptions =
     val driverOptions = DriverUpdateOptions().upsert(options.upsert)
 
@@ -27,17 +29,25 @@ private[mongo4s] object DriverOptions:
     options.hint.foreach(value => driverOptions.hint(value))
     options.comment.foreach(value => driverOptions.comment(value))
     options.bypassDocumentValidation.foreach(value => driverOptions.bypassDocumentValidation(value))
+    options.sort.foreach(value => driverOptions.sort(value.toBson(naming)))
+    options.let.foreach(value => driverOptions.let(value))
 
     driverOptions
   end update
 
-  def replace(options: ReplaceOptions): DriverReplaceOptions =
+  def updateMany(options: UpdateOptions, naming: FieldNaming): DriverUpdateOptions =
+    require(options.sort.isEmpty, DriverOptions.SortOnMany)
+    update(options, naming)
+
+  def replace(options: ReplaceOptions, naming: FieldNaming): DriverReplaceOptions =
     val driverOptions = DriverReplaceOptions().upsert(options.upsert)
 
     options.collation.foreach(value => driverOptions.collation(value))
     options.hint.foreach(value => driverOptions.hint(value))
     options.comment.foreach(value => driverOptions.comment(value))
     options.bypassDocumentValidation.foreach(value => driverOptions.bypassDocumentValidation(value))
+    options.sort.foreach(value => driverOptions.sort(value.toBson(naming)))
+    options.let.foreach(value => driverOptions.let(value))
 
     driverOptions
   end replace
@@ -48,6 +58,7 @@ private[mongo4s] object DriverOptions:
     options.collation.foreach(value => driverOptions.collation(value))
     options.hint.foreach(value => driverOptions.hint(value))
     options.comment.foreach(value => driverOptions.comment(value))
+    options.let.foreach(value => driverOptions.let(value))
 
     driverOptions
   end delete
@@ -88,6 +99,7 @@ private[mongo4s] object DriverOptions:
     options.limit.foreach(value => driverOptions.limit(value))
     options.skip.foreach(value => driverOptions.skip(value))
     options.maxTime.foreach(value => driverOptions.maxTime(value.toMillis, TimeUnit.MILLISECONDS))
+    options.comment.foreach(value => driverOptions.comment(value))
 
     driverOptions
   end count
@@ -106,6 +118,7 @@ private[mongo4s] object DriverOptions:
     options.maxTime.foreach(value => driverOptions.maxTime(value.toMillis, TimeUnit.MILLISECONDS))
     options.comment.foreach(value => driverOptions.comment(value))
     options.bypassDocumentValidation.foreach(value => driverOptions.bypassDocumentValidation(value))
+    options.let.foreach(value => driverOptions.let(value))
 
     driverOptions
   end findOneAndUpdate
@@ -123,6 +136,7 @@ private[mongo4s] object DriverOptions:
     options.maxTime.foreach(value => driverOptions.maxTime(value.toMillis, TimeUnit.MILLISECONDS))
     options.comment.foreach(value => driverOptions.comment(value))
     options.bypassDocumentValidation.foreach(value => driverOptions.bypassDocumentValidation(value))
+    options.let.foreach(value => driverOptions.let(value))
 
     driverOptions
   end findOneAndReplace
@@ -137,6 +151,7 @@ private[mongo4s] object DriverOptions:
     options.hint.foreach(value => driverOptions.hint(value))
     options.maxTime.foreach(value => driverOptions.maxTime(value.toMillis, TimeUnit.MILLISECONDS))
     options.comment.foreach(value => driverOptions.comment(value))
+    options.let.foreach(value => driverOptions.let(value))
 
     driverOptions
   end findOneAndDelete

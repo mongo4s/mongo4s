@@ -15,6 +15,7 @@ final class FindOneAndReplaceOptions[E] private (
     val maxTime: Option[FiniteDuration],
     val comment: Option[String],
     val bypassDocumentValidation: Option[Boolean],
+    val let: Option[BsonDocument],
 ):
   def returningPrevious: FindOneAndReplaceOptions[E] = copy(returnUpdated = false)
 
@@ -34,6 +35,8 @@ final class FindOneAndReplaceOptions[E] private (
 
   def withBypassDocumentValidation(value: Boolean): FindOneAndReplaceOptions[E] = copy(bypassDocumentValidation = Some(value))
 
+  def withLet(variables: BsonDocument): FindOneAndReplaceOptions[E] = copy(let = Some(variables))
+
   private def copy(
       returnUpdated: Boolean = returnUpdated,
       upsert: Boolean = upsert,
@@ -44,8 +47,9 @@ final class FindOneAndReplaceOptions[E] private (
       maxTime: Option[FiniteDuration] = maxTime,
       comment: Option[String] = comment,
       bypassDocumentValidation: Option[Boolean] = bypassDocumentValidation,
+      let: Option[BsonDocument] = let,
   ): FindOneAndReplaceOptions[E] =
-    new FindOneAndReplaceOptions(returnUpdated, upsert, sort, projection, collation, hint, maxTime, comment, bypassDocumentValidation)
+    new FindOneAndReplaceOptions(returnUpdated, upsert, sort, projection, collation, hint, maxTime, comment, bypassDocumentValidation, let)
 
 object FindOneAndReplaceOptions:
   def default[E]: FindOneAndReplaceOptions[E] =
@@ -59,6 +63,7 @@ object FindOneAndReplaceOptions:
       maxTime = None,
       comment = None,
       bypassDocumentValidation = None,
+      let = None,
     )
 
   def upsert[E]: FindOneAndReplaceOptions[E] = default[E].withUpsert

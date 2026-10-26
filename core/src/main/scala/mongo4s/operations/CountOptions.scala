@@ -11,6 +11,7 @@ final class CountOptions private (
     val limit: Option[Int],
     val skip: Option[Int],
     val maxTime: Option[FiniteDuration],
+    val comment: Option[String],
 ):
   def withCollation(value: Collation): CountOptions = copy(collation = Some(value))
 
@@ -22,12 +23,15 @@ final class CountOptions private (
 
   def withMaxTime(value: FiniteDuration): CountOptions = copy(maxTime = Some(TimeLimit.millis(value, "maxTime")))
 
+  def withComment(value: String): CountOptions = copy(comment = Some(value))
+
   private def copy(
       collation: Option[Collation] = collation,
       hint: Option[BsonDocument] = hint,
       limit: Option[Int] = limit,
       skip: Option[Int] = skip,
       maxTime: Option[FiniteDuration] = maxTime,
+      comment: Option[String] = comment,
   ): CountOptions =
     new CountOptions(
       collation = collation,
@@ -35,6 +39,7 @@ final class CountOptions private (
       limit = limit,
       skip = skip,
       maxTime = maxTime,
+      comment = comment,
     )
 
 object CountOptions:
@@ -45,4 +50,5 @@ object CountOptions:
       limit = None,
       skip = None,
       maxTime = None,
+      comment = None,
     )

@@ -146,7 +146,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     atomically {
       requireNoCollation(options.collation, "replaceOne")
 
-      matching(filter).headOption match
+      firstMatching(filter, sortedBy(options.sort)) match
         case Some(existing)         =>
           val replaced = replacing(existing, codec.encodeDocument(replacement))
           storage(storage.indexOf(existing)) = checked(replaced, Some(existing))
@@ -164,7 +164,7 @@ final class FakeMongoCollection[F[*], S[*], E](
       requireNoCollation(options.collation, "updateOne")
       requireRenderable(update)
 
-      matching(filter).headOption match
+      firstMatching(filter, sortedBy(options.sort)) match
         case Some(existing)         =>
           val updated = applyUpdate(existing, update)
           storage(storage.indexOf(existing)) = checked(updated, Some(existing))
@@ -179,6 +179,7 @@ final class FakeMongoCollection[F[*], S[*], E](
       requireNoArrayFilters(options.arrayFilters, "updateMany")
       requireNoCollation(options.collation, "updateMany")
       requireRenderable(update)
+      requireNoSort(options.sort)
 
       val matches  = matching(filter)
       val modified = matches.map { doc =>
@@ -277,7 +278,7 @@ final class FakeMongoCollection[F[*], S[*], E](
           inserted += 1
         case (WriteCommand.ReplaceOne(filter, value, options), i)  =>
           requireNoCollation(options.collation, "bulkWrite ReplaceOne")
-          matching(filter).headOption match
+          firstMatching(filter, sortedBy(options.sort)) match
             case Some(existing)         =>
               val replaced = replacing(existing, codec.encodeDocument(value))
               storage(storage.indexOf(existing)) = checked(replaced, Some(existing))
@@ -291,7 +292,7 @@ final class FakeMongoCollection[F[*], S[*], E](
         case (WriteCommand.UpdateOne(filter, update, options), _)  =>
           requireDefaultUpdateOptions(options, "bulkWrite UpdateOne")
           requireRenderable(update)
-          matching(filter).headOption.foreach { doc =>
+          firstMatching(filter, sortedBy(options.sort)).foreach { doc =>
             val updated = applyUpdate(doc, update)
             storage(storage.indexOf(doc)) = checked(updated, Some(doc))
             matched += 1
@@ -300,15 +301,18 @@ final class FakeMongoCollection[F[*], S[*], E](
         case (WriteCommand.UpdateMany(filter, update, options), _) =>
           requireDefaultUpdateOptions(options, "bulkWrite UpdateMany")
           requireRenderable(update)
+          requireNoSort(options.sort)
           matching(filter).foreach { doc =>
             val updated = applyUpdate(doc, update)
             storage(storage.indexOf(doc)) = checked(updated, Some(doc))
             matched += 1
             modified += modifiedBy(doc, updated)
           }
-        case (WriteCommand.DeleteOne(filter), _)                   =>
+        case (WriteCommand.DeleteOne(filter, options), _)          =>
+          requireNoCollation(options.collation, "bulkWrite DeleteOne")
           matching(filter).headOption.foreach { doc => storage -= doc; deleted += 1 }
-        case (WriteCommand.DeleteMany(filter), _)                  =>
+        case (WriteCommand.DeleteMany(filter, options), _)         =>
+          requireNoCollation(options.collation, "bulkWrite DeleteMany")
           val matches = matching(filter)
           storage --= matches
           deleted += matches.size
@@ -499,6 +503,12 @@ final class FakeMongoCollection[F[*], S[*], E](
     throw UnsupportedOperationException("FakeMongoCollection: no real driver collection behind this fake")
 
   private def matching(filter: Filter[E]): List[BsonDocument] = storage.filter(matches(_, filter)).toList
+
+  private def sortedBy(sort: Option[Sort[?]]): Sort[E] = sort.fold(Sort.empty[E])(_.asInstanceOf[Sort[E]])
+
+  private def requireNoSort(sort: Option[Sort[?]]): Unit =
+    if sort.nonEmpty
+    then throw IllegalArgumentException(s"requirement failed: ${mongo4s.internal.DriverOptions.SortOnMany}")
 
   private def firstMatching(filter: Filter[E], sort: Sort[E]): Option[BsonDocument] =
     val matched = matching(filter)

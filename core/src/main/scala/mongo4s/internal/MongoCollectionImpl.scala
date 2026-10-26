@@ -73,7 +73,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       options: ReplaceOptions,
   )(using session: Option[ClientSession]): F[UpdateResult] =
     F.suspend {
-      val driverOptions = DriverOptions.replace(options)
+      val driverOptions = DriverOptions.replace(options, naming)
 
       val publisher = session match
         case Some(s) => underlying.replaceOne(s, filter.toBson(naming), codec.encodeDocument(replacement), driverOptions)
@@ -97,7 +97,7 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       options: UpdateOptions,
   )(using session: Option[ClientSession]): F[UpdateResult] =
     F.suspend {
-      val driverOptions = DriverOptions.update(options, naming)
+      val driverOptions = DriverOptions.updateMany(options, naming)
 
       val publisher = DriverUpdates.updateMany(underlying, session, filter.toBson(naming), update, naming, driverOptions)
 
@@ -373,8 +373,9 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
 
   private def toModel(command: WriteCommand[A]): WriteModel[BsonDocument] = command match
     case WriteCommand.InsertOne(document)                 => InsertOneModel(codec.encodeDocument(document))
-    case WriteCommand.ReplaceOne(filter, value, options)  => ReplaceOneModel(filter.toBson(naming), codec.encodeDocument(value), DriverOptions.replace(options))
+    case WriteCommand.ReplaceOne(filter, value, options)  => ReplaceOneModel(filter.toBson(naming), codec.encodeDocument(value), DriverOptions.replace(options, naming))
     case WriteCommand.UpdateOne(filter, update, options)  => DriverUpdates.updateOneModel(filter.toBson(naming), update, naming, DriverOptions.update(options, naming))
-    case WriteCommand.UpdateMany(filter, update, options) => DriverUpdates.updateManyModel(filter.toBson(naming), update, naming, DriverOptions.update(options, naming))
-    case WriteCommand.DeleteOne(filter)                   => DeleteOneModel(filter.toBson(naming))
-    case WriteCommand.DeleteMany(filter)                  => DeleteManyModel(filter.toBson(naming))
+    case WriteCommand.UpdateMany(filter, update, options) =>
+      DriverUpdates.updateManyModel(filter.toBson(naming), update, naming, DriverOptions.updateMany(options, naming))
+    case WriteCommand.DeleteOne(filter, options)          => DeleteOneModel(filter.toBson(naming), DriverOptions.delete(options))
+    case WriteCommand.DeleteMany(filter, options)         => DeleteManyModel(filter.toBson(naming), DriverOptions.delete(options))

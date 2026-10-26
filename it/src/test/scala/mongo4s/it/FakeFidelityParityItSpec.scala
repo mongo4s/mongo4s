@@ -334,6 +334,33 @@ final class FakeFidelityParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matcher
       }
     }
 
+    "agree on which document a sorted updateOne and replaceOne change" in {
+      val seed = List(("a", 3), ("b", 1), ("c", 2)).map((id, age) => BsonDocument("_id", BsonString(id)).append("age", BsonInt32(age)))
+
+      agree("sorted_single_writes", seed) { collection =>
+        for
+          _        <- collection.updateOne(Filter.all, Update.set(nameF, "updated"), UpdateOptions.default.withSort(Sort.asc(ageF)))
+          _        <- collection.replaceOne(Filter.all, BsonDocument("name", BsonString("replaced")), ReplaceOptions.default.withSort(Sort.desc(ageF)))
+          updated  <- collection.find(nameF.equalTo("updated")).all
+          replaced <- collection.find(nameF.equalTo("replaced")).all
+        yield (updated.map(_.getString("_id").getValue), replaced.map(_.getString("_id").getValue))
+      }
+    }
+
+    "agree on refusing a sort on updateMany, which the driver would drop without a word" in {
+      val sorted = UpdateOptions.default.withSort(Sort.asc(ageF))
+
+      def refusal(outcome: Either[Throwable, Any]): Option[(String, String)] =
+        outcome.left.toOption.map(error => (error.getClass.getSimpleName, error.getMessage))
+
+      agree("sorted_update_many", keyed("a")) { collection =>
+        for
+          many <- collection.updateMany(Filter.all, Update.set(nameF, "x"), sorted).attempt
+          bulk <- collection.bulkWrite(List(WriteCommand.updateMany(Filter.all, Update.set(nameF, "x"), sorted))).attempt
+        yield (refusal(many), refusal(bulk))
+      }
+    }
+
     "agree on an unordered insertMany carrying on past every duplicate _id" in {
       agree("insert_many_unordered", keyed("c")) { collection =>
         for

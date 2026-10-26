@@ -8,7 +8,7 @@ import org.testcontainers.mongodb.MongoDBContainer
 
 import cats.effect.IO
 import com.mongodb.client.model.Collation
-import org.bson.{BsonDocument, BsonInt32, BsonString}
+import org.bson.{BsonArray, BsonDocument, BsonInt32, BsonString}
 
 import mongo4s.cats.CatsStream
 import mongo4s.operations.*
@@ -146,6 +146,28 @@ final class WriteOptionsItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Bef
         yield (refused.isLeft, allowed)
 
       program.asserting((refused, allowed) => (refused, allowed) shouldBe (true, Some(Note("1", "forbidden"))))
+    }
+
+    "carry let variables to the $expr of every write that takes them" in {
+      def bodyIs(variable: String): Filter[Note] =
+        Filter.expr(BsonDocument("$eq", BsonArray(java.util.List.of(BsonString("$body"), BsonString(s"$$$$$variable")))))
+
+      def vars(value: String): BsonDocument = BsonDocument("target", BsonString(value))
+
+      val program =
+        for
+          notes    <- seeded("let_writes")
+          updated  <- notes.updateOne(bodyIs("target"), Update.set(bodyField, "alpha2"), UpdateOptions.default.withLet(vars("alpha")))
+          replaced <- notes.replaceOne(bodyIs("target"), Note("2", "beta2"), ReplaceOptions.default.withLet(vars("BETA")))
+          found    <- notes.findOneAndUpdate(bodyIs("target"), Update.set(bodyField, "gamma2"), FindOneAndUpdateOptions.default[Note].withLet(vars("gamma")))
+          swapped  <- notes.findOneAndReplace(bodyIs("target"), Note("1", "alpha3"), FindOneAndReplaceOptions.default[Note].withLet(vars("alpha2")))
+          removed  <- notes.findOneAndDelete(bodyIs("target"), FindOneAndDeleteOptions.default[Note].withLet(vars("beta2")))
+          bulk     <- notes.bulkWrite(List(WriteCommand.deleteOne(bodyIs("target"))), BulkWriteOptions.default.withLet(vars("gamma2")))
+          deleted  <- notes.deleteMany(bodyIs("target"), DeleteOptions.default.withLet(vars("alpha3")))
+          left     <- notes.count(Filter.all, CountOptions.default.withComment("it-spec"))
+        yield (updated.modifiedCount, replaced.modifiedCount, found.map(_.body), swapped.map(_.body), removed.map(_.body), bulk.deletedCount, deleted.deletedCount, left)
+
+      program.asserting(_ shouldBe (1L, 1L, Some("gamma2"), Some("alpha3"), Some("beta2"), 1L, 1L, 0L))
     }
 
     "carry bypassDocumentValidation and a comment on inserts, one and many" in {

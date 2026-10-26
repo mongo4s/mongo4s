@@ -11,6 +11,8 @@ final class UpdateOptions private (
     val hint: Option[BsonDocument],
     val comment: Option[String],
     val bypassDocumentValidation: Option[Boolean],
+    val sort: Option[Sort[?]],
+    val let: Option[BsonDocument],
 ):
   def withUpsert: UpdateOptions = copy(upsert = true)
 
@@ -24,6 +26,10 @@ final class UpdateOptions private (
 
   def withBypassDocumentValidation(value: Boolean): UpdateOptions = copy(bypassDocumentValidation = Some(value))
 
+  def withSort(value: Sort[?]): UpdateOptions = copy(sort = Some(value))
+
+  def withLet(variables: BsonDocument): UpdateOptions = copy(let = Some(variables))
+
   private def copy(
       upsert: Boolean = upsert,
       arrayFilters: Seq[Filter[?]] = arrayFilters,
@@ -31,6 +37,8 @@ final class UpdateOptions private (
       hint: Option[BsonDocument] = hint,
       comment: Option[String] = comment,
       bypassDocumentValidation: Option[Boolean] = bypassDocumentValidation,
+      sort: Option[Sort[?]] = sort,
+      let: Option[BsonDocument] = let,
   ): UpdateOptions =
     new UpdateOptions(
       upsert = upsert,
@@ -39,6 +47,8 @@ final class UpdateOptions private (
       hint = hint,
       comment = comment,
       bypassDocumentValidation = bypassDocumentValidation,
+      sort = sort,
+      let = let,
     )
 
 object UpdateOptions:
@@ -50,6 +60,8 @@ object UpdateOptions:
       hint = None,
       comment = None,
       bypassDocumentValidation = None,
+      sort = None,
+      let = None,
     )
 
   val upsert: UpdateOptions = default.withUpsert
