@@ -4,7 +4,7 @@ import scala.concurrent.duration.FiniteDuration
 
 import org.bson.BsonDocument
 import org.reactivestreams.Publisher
-import com.mongodb.ExplainVerbosity
+import com.mongodb.{CursorType, ExplainVerbosity}
 import com.mongodb.client.model.Collation
 import com.mongodb.reactivestreams.client.{ClientSession, FindPublisher, MongoCollection as RSMongoCollection}
 
@@ -39,19 +39,30 @@ private[mongo4s] final class FindQueryImpl[F[*], S[*], A](
   def batchSize(n: Int): FindQuery[F, S, A]                 = copy(options = options.withBatchSize(n))
   def comment(value: String): FindQuery[F, S, A]            = copy(options = options.withComment(value))
 
+  def let(variables: BsonDocument): FindQuery[F, S, A]           = copy(options = options.withLet(variables))
+  def allowDiskUse(allow: Boolean): FindQuery[F, S, A]           = copy(options = options.withAllowDiskUse(allow))
+  def cursorType(value: CursorType): FindQuery[F, S, A]          = copy(options = options.withCursorType(value))
+  def maxAwaitTime(duration: FiniteDuration): FindQuery[F, S, A] = copy(options = options.withMaxAwaitTime(duration))
+  def noCursorTimeout: FindQuery[F, S, A]                        = copy(options = options.withNoCursorTimeout)
+
   def explain(verbosity: ExplainVerbosity): F[BsonDocument] =
     rs.one(documents(limit).explain(classOf[BsonDocument], verbosity))
 
   def first: F[Option[A]]                  = rs.option(publisher(Some(1)))
   def all: F[List[A]]                      = rs.list(publisher(limit))
-  def stream(using Streamable[S, A]): S[A] = rs.stream(publisher(limit))
+  def stream(using Streamable[S, A]): S[A] = streamed(publisher(limit))
 
   def selecting[B](selected: Projection[A], decoder: FieldNaming => BsonDocumentDecoder[B]): SelectQuery[F, S, B] =
-    SelectQueryImpl(documents(_, selected), limit, decoder(naming))
+    SelectQueryImpl(documents(_, selected), limit, decoder(naming), options.tailable)
+
+  private def streamed[B](publisher: => Publisher[B])(using Streamable[S, B]): S[B] =
+    if options.tailable
+    then rs.liveStream(publisher)
+    else rs.stream(publisher)
 
   def attempting: DecodeAttempts[F, S, A] = new DecodeAttempts[F, S, A]:
     def all: F[List[DecodeResult[A]]]                                    = rs.list(attemptingPublisher(limit))
-    def stream(using Streamable[S, DecodeResult[A]]): S[DecodeResult[A]] = rs.stream(attemptingPublisher(limit))
+    def stream(using Streamable[S, DecodeResult[A]]): S[DecodeResult[A]] = streamed(attemptingPublisher(limit))
   end attempting
 
   private def documents(effectiveLimit: Option[Int], selected: Projection[A] = projection): FindPublisher[BsonDocument] =
@@ -73,6 +84,11 @@ private[mongo4s] final class FindQueryImpl[F[*], S[*], A](
     options.maxTimeMillis.foreach(millis => find = find.maxTime(millis, QueryOptions.MillisUnit))
     options.batchSize.foreach(n => find = find.batchSize(n))
     options.comment.foreach(value => find = find.comment(value))
+    options.let.foreach(value => find = find.let(value))
+    options.allowDiskUse.foreach(allow => find = find.allowDiskUse(allow))
+    options.cursorType.foreach(value => find = find.cursorType(value))
+    options.maxAwaitTimeMillis.foreach(millis => find = find.maxAwaitTime(millis, QueryOptions.MillisUnit))
+    if options.noCursorTimeout then find = find.noCursorTimeout(true)
 
     find
   end documents

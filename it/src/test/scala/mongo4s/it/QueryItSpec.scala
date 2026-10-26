@@ -7,7 +7,7 @@ import cats.effect.testing.scalatest.AsyncIOSpec
 import org.testcontainers.mongodb.MongoDBContainer
 
 import cats.effect.IO
-import org.bson.{BsonDocument, BsonInt32, BsonString}
+import org.bson.{BsonArray, BsonDocument, BsonInt32, BsonString}
 
 import mongo4s.bson.*
 import mongo4s.cats.CatsStream
@@ -303,5 +303,70 @@ final class QueryItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndA
         yield found
 
       program.asserting(_.map(_.age) shouldBe List(30))
+    }
+
+    "carry let variables into a find and an aggregate, and the cursor knobs that change nothing in the result" in {
+      val olderThan = Filter.expr[Person](BsonDocument("$gt", BsonArray(java.util.List.of(BsonString("$age"), BsonString("$$min")))))
+      val variables = BsonDocument("min", BsonInt32(26))
+
+      val program =
+        for
+          collection <- seeded("let_queries")
+          found      <- collection.find(olderThan).let(variables).allowDiskUse(true).noCursorTimeout.sort(Sort.asc(nameField)).all
+          aggregated <- collection.aggregate[Person](Seq(Stage.matching(olderThan), Stage.sortBy(Sort.asc(nameField)))).let(variables).all
+          distinct   <- collection.distinct(nameField, Filter.all).comment("it-spec").hint(BsonDocument("_id", BsonInt32(1))).all
+          estimated  <- collection.estimatedCount(EstimatedCountOptions.default.withMaxTime(5.seconds).withComment("it-spec"))
+        yield (found.map(_.name), aggregated.map(_.name), distinct.size, estimated)
+
+      program.asserting(_ shouldBe (List("bob", "carol"), List("bob", "carol"), 4, 4L))
+    }
+
+    "pass a hint to distinct, failing on an index that does not exist" in {
+      val program =
+        for
+          collection <- seeded("distinct_hint")
+          failed     <- collection.distinct(nameField, Filter.all).hint(BsonDocument("missing", BsonInt32(1))).all.attempt
+        yield failed.isLeft
+
+      program.asserting(_ shouldBe true)
+    }
+
+    "keep a tailable cursor open on a capped collection, delivering a write it was waiting for" in {
+      val program =
+        for
+          client   <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database <- client.getDatabase("query_it")
+          _        <- database.createCollection("tailed", CreateCollectionOptions.default.withCapped(1024 * 1024))
+          people   <- database.getCollection[Person]("tailed")
+          _        <- people.insertMany(List(Person("first", 1), Person("second", 2)))
+          seen     <- people
+                        .find()
+                        .cursorType(com.mongodb.CursorType.TailableAwait)
+                        .maxAwaitTime(200.millis)
+                        .stream
+                        .zipWithIndex
+                        .evalTap((_, i) => if i == 1 then people.insertOne(Person("third", 3)).void else IO.unit)
+                        .map(_._1)
+                        .take(3)
+                        .compile
+                        .toList
+        yield seen.map(_.name)
+
+      program.timeout(30.seconds).asserting(_ shouldBe List("first", "second", "third"))
+    }
+
+    "let an aggregate past the validator of the collection it writes with $out, when told to" in {
+      val program =
+        for
+          client   <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database <- client.getDatabase("query_it")
+          _        <- database.createCollection("validated_out", CreateCollectionOptions.default.withValidator(BsonDocument("age", BsonDocument("$gt", BsonInt32(100)))))
+          source   <- seeded("out_source")
+          refused  <- source.aggregate[Person](Seq(Stage.out("validated_out"))).all.attempt
+          _        <- source.aggregate[Person](Seq(Stage.out("validated_out"))).bypassDocumentValidation(true).all
+          written  <- database.getCollection[Person]("validated_out").flatMap(_.count())
+        yield (refused.isLeft, written)
+
+      program.asserting(_ shouldBe (true, 4L))
     }
   }

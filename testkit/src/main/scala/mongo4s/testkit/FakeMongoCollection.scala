@@ -260,7 +260,7 @@ final class FakeMongoCollection[F[*], S[*], E](
       options.limit.fold(skipped)(limit => math.min(skipped, limit.toLong))
     }
 
-  def estimatedCount: F[Long] = atomically(storage.size.toLong)
+  def estimatedCount(options: EstimatedCountOptions): F[Long] = atomically(storage.size.toLong)
 
   def bulkWrite(commands: Seq[WriteCommand[E]], options: BulkWriteOptions)(using session: Option[ClientSession]): F[BulkWriteResult] =
     atomically {
@@ -1017,6 +1017,8 @@ final class FakeMongoCollection[F[*], S[*], E](
     def collation(value: com.mongodb.client.model.Collation): DistinctQuery[F, S, B]        = refuseCollation
     def maxTime(duration: scala.concurrent.duration.FiniteDuration): DistinctQuery[F, S, B] = this
     def batchSize(n: Int): DistinctQuery[F, S, B]                                           = this
+    def hint(keys: BsonDocument): DistinctQuery[F, S, B]                                    = this
+    def comment(value: String): DistinctQuery[F, S, B]                                      = this
 
     def first: F[Option[B]] = atomically(decoded.headOption)
     def all: F[List[B]]     = atomically(decoded)
@@ -1036,11 +1038,14 @@ final class FakeMongoCollection[F[*], S[*], E](
   private final class FakeAggregateQuery[B](stages: List[Stage[E]], decoderB: BsonDocumentDecoder[B]) extends AggregateQuery[F, S, B]:
     def allowDiskUse(allow: Boolean): AggregateQuery[F, S, B] = this
 
-    def hint(keys: BsonDocument): AggregateQuery[F, S, B]                                    = this
-    def collation(value: com.mongodb.client.model.Collation): AggregateQuery[F, S, B]        = refuseCollation
-    def maxTime(duration: scala.concurrent.duration.FiniteDuration): AggregateQuery[F, S, B] = this
-    def batchSize(n: Int): AggregateQuery[F, S, B]                                           = this
-    def comment(value: String): AggregateQuery[F, S, B]                                      = this
+    def hint(keys: BsonDocument): AggregateQuery[F, S, B]                                         = this
+    def collation(value: com.mongodb.client.model.Collation): AggregateQuery[F, S, B]             = refuseCollation
+    def maxTime(duration: scala.concurrent.duration.FiniteDuration): AggregateQuery[F, S, B]      = this
+    def batchSize(n: Int): AggregateQuery[F, S, B]                                                = this
+    def comment(value: String): AggregateQuery[F, S, B]                                           = this
+    def let(variables: BsonDocument): AggregateQuery[F, S, B]                                     = this
+    def maxAwaitTime(duration: scala.concurrent.duration.FiniteDuration): AggregateQuery[F, S, B] = this
+    def bypassDocumentValidation(value: Boolean): AggregateQuery[F, S, B]                         = this
 
     def explain(verbosity: ExplainVerbosity): F[BsonDocument] =
       throw UnsupportedOperationException("FakeMongoCollection: explain needs a real query planner, so it is not simulated")
@@ -1074,11 +1079,20 @@ final class FakeMongoCollection[F[*], S[*], E](
     def skip(n: Int): FindQuery[F, S, E]                 = FakeFindQuery(filter, projection, ordering, Some(Bounds.notNegative(n, "skip")), limited)
     def limit(n: Int): FindQuery[F, S, E]                = FakeFindQuery(filter, projection, ordering, skipped, Some(Bounds.atLeastOne(n, "limit", Bounds.NoLimit)))
 
-    def hint(keys: BsonDocument): FindQuery[F, S, E]                                    = this
-    def collation(value: com.mongodb.client.model.Collation): FindQuery[F, S, E]        = refuseCollation
-    def maxTime(duration: scala.concurrent.duration.FiniteDuration): FindQuery[F, S, E] = this
-    def batchSize(n: Int): FindQuery[F, S, E]                                           = this
-    def comment(value: String): FindQuery[F, S, E]                                      = this
+    def hint(keys: BsonDocument): FindQuery[F, S, E]                                         = this
+    def collation(value: com.mongodb.client.model.Collation): FindQuery[F, S, E]             = refuseCollation
+    def maxTime(duration: scala.concurrent.duration.FiniteDuration): FindQuery[F, S, E]      = this
+    def batchSize(n: Int): FindQuery[F, S, E]                                                = this
+    def comment(value: String): FindQuery[F, S, E]                                           = this
+    def let(variables: BsonDocument): FindQuery[F, S, E]                                     = this
+    def allowDiskUse(allow: Boolean): FindQuery[F, S, E]                                     = this
+    def maxAwaitTime(duration: scala.concurrent.duration.FiniteDuration): FindQuery[F, S, E] = this
+    def noCursorTimeout: FindQuery[F, S, E]                                                  = this
+
+    def cursorType(value: com.mongodb.CursorType): FindQuery[F, S, E] =
+      if value == com.mongodb.CursorType.NonTailable
+      then this
+      else throw UnsupportedOperationException("FakeMongoCollection: a tailable cursor waits for writes, and the fake's cursor ends, so it is not simulated")
 
     def explain(verbosity: ExplainVerbosity): F[BsonDocument] =
       throw UnsupportedOperationException("FakeMongoCollection: explain needs a real query planner, so it is not simulated")

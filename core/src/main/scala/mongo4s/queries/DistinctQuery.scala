@@ -8,6 +8,8 @@ trait DistinctQuery[F[*], S[*], A]:
   def collation(collation: com.mongodb.client.model.Collation): DistinctQuery[F, S, A]
   def maxTime(duration: FiniteDuration): DistinctQuery[F, S, A]
   def batchSize(n: Int): DistinctQuery[F, S, A]
+  def hint(keys: org.bson.BsonDocument): DistinctQuery[F, S, A]
+  def comment(value: String): DistinctQuery[F, S, A]
 
   def first: F[Option[A]]
   def all: F[List[A]]

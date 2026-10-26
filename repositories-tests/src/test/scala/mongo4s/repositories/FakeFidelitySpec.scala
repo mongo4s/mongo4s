@@ -362,6 +362,17 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "a tailable cursor" should {
+    "be refused by name, since it waits for writes the fake's cursor never sees, while a plain one reads as usual" in {
+      val c = fake(keyed("a"))
+
+      val refused = intercept[UnsupportedOperationException](c.find().cursorType(com.mongodb.CursorType.TailableAwait))
+      refused.getMessage should include("tailable")
+
+      c.find().cursorType(com.mongodb.CursorType.NonTailable).all.unsafeRunSync().size shouldBe 1
+    }
+  }
+
   "a unique index" should {
     val emailF = Field.stored[BsonDocument, String]("email")
 

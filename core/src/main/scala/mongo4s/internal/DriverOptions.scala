@@ -4,6 +4,7 @@ import java.util.concurrent.TimeUnit
 
 import com.mongodb.client.model.{IndexModel, IndexOptions, ReturnDocument}
 import com.mongodb.client.model.BulkWriteOptions as DriverBulkWriteOptions
+import com.mongodb.client.model.EstimatedDocumentCountOptions as DriverEstimatedCountOptions
 import com.mongodb.client.model.{CountOptions as DriverCountOptions, DeleteOptions as DriverDeleteOptions}
 import com.mongodb.client.model.{ReplaceOptions as DriverReplaceOptions, UpdateOptions as DriverUpdateOptions}
 import com.mongodb.client.model.{InsertManyOptions as DriverInsertManyOptions, InsertOneOptions as DriverInsertOneOptions}
@@ -90,6 +91,15 @@ private[mongo4s] object DriverOptions:
 
     driverOptions
   end bulkWrite
+
+  def estimatedCount(options: EstimatedCountOptions): DriverEstimatedCountOptions =
+    val driverOptions = DriverEstimatedCountOptions()
+
+    options.maxTime.foreach(value => driverOptions.maxTime(value.toMillis, TimeUnit.MILLISECONDS))
+    options.comment.foreach(value => driverOptions.comment(value))
+
+    driverOptions
+  end estimatedCount
 
   def count(options: CountOptions): DriverCountOptions =
     val driverOptions = DriverCountOptions()

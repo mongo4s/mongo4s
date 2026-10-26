@@ -5,7 +5,7 @@ import scala.NamedTuple.AnyNamedTuple
 import scala.concurrent.duration.FiniteDuration
 
 import org.bson.BsonDocument
-import com.mongodb.ExplainVerbosity
+import com.mongodb.{CursorType, ExplainVerbosity}
 
 import mongo4s.{SelectMacro, Streamable}
 import mongo4s.operations.{Filter, Projection, Sort}
@@ -22,6 +22,11 @@ trait FindQuery[F[*], S[*], A]:
   def maxTime(duration: FiniteDuration): FindQuery[F, S, A]
   def batchSize(n: Int): FindQuery[F, S, A]
   def comment(value: String): FindQuery[F, S, A]
+  def let(variables: BsonDocument): FindQuery[F, S, A]
+  def allowDiskUse(allow: Boolean): FindQuery[F, S, A]
+  def cursorType(value: CursorType): FindQuery[F, S, A]
+  def maxAwaitTime(duration: FiniteDuration): FindQuery[F, S, A]
+  def noCursorTimeout: FindQuery[F, S, A]
 
   def explain(verbosity: ExplainVerbosity = ExplainVerbosity.QUERY_PLANNER): F[BsonDocument]
 

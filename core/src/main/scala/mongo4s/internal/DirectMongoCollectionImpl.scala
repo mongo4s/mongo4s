@@ -184,7 +184,8 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
       F.map(rs.one(publisher))(_.longValue)
     }
 
-  def estimatedCount: F[Long] = F.map(rs.one(underlying.estimatedDocumentCount()))(_.longValue)
+  def estimatedCount(options: EstimatedCountOptions): F[Long] =
+    F.map(rs.one(underlying.estimatedDocumentCount(DriverOptions.estimatedCount(options))))(_.longValue)
 
   def bulkWrite(commands: Seq[WriteCommand[A]], options: BulkWriteOptions)(using
       session: Option[ClientSession],

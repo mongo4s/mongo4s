@@ -25,6 +25,8 @@ private[mongo4s] final class DistinctQueryImpl[F[*], S[*], A](
   def collation(value: Collation): DistinctQuery[F, S, A]       = copy(options = options.withCollation(value))
   def maxTime(duration: FiniteDuration): DistinctQuery[F, S, A] = copy(options = options.withMaxTime(duration))
   def batchSize(n: Int): DistinctQuery[F, S, A]                 = copy(options = options.withBatchSize(n))
+  def hint(keys: BsonDocument): DistinctQuery[F, S, A]          = copy(options = options.withHint(keys))
+  def comment(value: String): DistinctQuery[F, S, A]            = copy(options = options.withComment(value))
 
   def first: F[Option[A]]                  = rs.option(publisher)
   def all: F[List[A]]                      = rs.list(publisher)
@@ -47,6 +49,8 @@ private[mongo4s] final class DistinctQueryImpl[F[*], S[*], A](
     options.collation.foreach(value => distinct = distinct.collation(value))
     options.maxTimeMillis.foreach(millis => distinct = distinct.maxTime(millis, QueryOptions.MillisUnit))
     options.batchSize.foreach(n => distinct = distinct.batchSize(n))
+    options.hint.foreach(keys => distinct = distinct.hint(keys))
+    options.comment.foreach(value => distinct = distinct.comment(value))
 
     distinct
   end values

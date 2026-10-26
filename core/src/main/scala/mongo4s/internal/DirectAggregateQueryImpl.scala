@@ -34,6 +34,10 @@ private[mongo4s] final class DirectAggregateQueryImpl[F[*], S[*], A](
   def batchSize(n: Int): AggregateQuery[F, S, A]                 = copy(options = options.withBatchSize(n))
   def comment(value: String): AggregateQuery[F, S, A]            = copy(options = options.withComment(value))
 
+  def let(variables: BsonDocument): AggregateQuery[F, S, A]             = copy(options = options.withLet(variables))
+  def maxAwaitTime(duration: FiniteDuration): AggregateQuery[F, S, A]   = copy(options = options.withMaxAwaitTime(duration))
+  def bypassDocumentValidation(value: Boolean): AggregateQuery[F, S, A] = copy(options = options.withBypassDocumentValidation(value))
+
   def explain(verbosity: ExplainVerbosity): F[BsonDocument] =
     rs.one(documents(limited = false).explain(classOf[BsonDocument], verbosity))
 
@@ -88,6 +92,9 @@ private[mongo4s] final class DirectAggregateQueryImpl[F[*], S[*], A](
     options.maxTimeMillis.foreach(millis => aggregate = aggregate.maxTime(millis, QueryOptions.MillisUnit))
     options.batchSize.foreach(n => aggregate = aggregate.batchSize(n))
     options.comment.foreach(value => aggregate = aggregate.comment(value))
+    options.let.foreach(value => aggregate = aggregate.let(value))
+    options.maxAwaitTimeMillis.foreach(millis => aggregate = aggregate.maxAwaitTime(millis, QueryOptions.MillisUnit))
+    options.bypassDocumentValidation.foreach(value => aggregate = aggregate.bypassDocumentValidation(value))
     aggregate
   end configure
 

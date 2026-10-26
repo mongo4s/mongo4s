@@ -32,7 +32,11 @@ private[mongo4s] final class AggregateQueryImpl[F[*], S[*], A](
   def maxTime(duration: FiniteDuration): AggregateQuery[F, S, A] = copy(options = options.withMaxTime(duration))
   def batchSize(n: Int): AggregateQuery[F, S, A]                 = copy(options = options.withBatchSize(n))
   def comment(value: String): AggregateQuery[F, S, A]            = copy(options = options.withComment(value))
-  def explain(verbosity: ExplainVerbosity): F[BsonDocument]      =
+
+  def let(variables: BsonDocument): AggregateQuery[F, S, A]             = copy(options = options.withLet(variables))
+  def maxAwaitTime(duration: FiniteDuration): AggregateQuery[F, S, A]   = copy(options = options.withMaxAwaitTime(duration))
+  def bypassDocumentValidation(value: Boolean): AggregateQuery[F, S, A] = copy(options = options.withBypassDocumentValidation(value))
+  def explain(verbosity: ExplainVerbosity): F[BsonDocument]             =
     rs.one(documents(limited = false).explain(classOf[BsonDocument], verbosity))
 
   def first: F[Option[A]]                  = rs.option(publisher(limited = true))
@@ -71,6 +75,9 @@ private[mongo4s] final class AggregateQueryImpl[F[*], S[*], A](
     options.maxTimeMillis.foreach(millis => aggregate = aggregate.maxTime(millis, QueryOptions.MillisUnit))
     options.batchSize.foreach(n => aggregate = aggregate.batchSize(n))
     options.comment.foreach(value => aggregate = aggregate.comment(value))
+    options.let.foreach(value => aggregate = aggregate.let(value))
+    options.maxAwaitTimeMillis.foreach(millis => aggregate = aggregate.maxAwaitTime(millis, QueryOptions.MillisUnit))
+    options.bypassDocumentValidation.foreach(value => aggregate = aggregate.bypassDocumentValidation(value))
 
     aggregate
   end documents

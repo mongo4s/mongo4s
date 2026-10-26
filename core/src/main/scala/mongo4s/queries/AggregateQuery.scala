@@ -15,6 +15,9 @@ trait AggregateQuery[F[*], S[*], A]:
   def maxTime(duration: FiniteDuration): AggregateQuery[F, S, A]
   def batchSize(n: Int): AggregateQuery[F, S, A]
   def comment(value: String): AggregateQuery[F, S, A]
+  def let(variables: BsonDocument): AggregateQuery[F, S, A]
+  def maxAwaitTime(duration: FiniteDuration): AggregateQuery[F, S, A]
+  def bypassDocumentValidation(value: Boolean): AggregateQuery[F, S, A]
 
   def explain(verbosity: ExplainVerbosity = ExplainVerbosity.QUERY_PLANNER): F[BsonDocument]
 

@@ -76,7 +76,8 @@ trait MongoCollection[F[*], S[*], A]:
       filter: Filter[A] = Filter.all,
       options: CountOptions = CountOptions.default,
   )(using session: Option[ClientSession] = None): F[Long]
-  def estimatedCount: F[Long]
+  def estimatedCount: F[Long] = estimatedCount(EstimatedCountOptions.default)
+  def estimatedCount(options: EstimatedCountOptions): F[Long]
 
   def bulkWrite(commands: Seq[WriteCommand[A]], options: BulkWriteOptions = BulkWriteOptions.default)(using
       session: Option[ClientSession] = None,
