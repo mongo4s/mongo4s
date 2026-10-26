@@ -148,6 +148,25 @@ final class WriteOptionsItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Bef
       program.asserting((refused, allowed) => (refused, allowed) shouldBe (true, Some(Note("1", "forbidden"))))
     }
 
+    "carry bypassDocumentValidation and a comment on inserts, one and many" in {
+      val program =
+        for
+          client   <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database <- client.getDatabase("write_options_it")
+          _        <- database.createCollection(
+                        "validated_inserts",
+                        CreateCollectionOptions.default.withValidator(BsonDocument("body", BsonDocument("$ne", BsonString("forbidden"))))
+                      )
+          notes    <- database.getDirectCollection[Note]("validated_inserts")
+          refused  <- notes.insertOne(Note("1", "forbidden")).attempt
+          _        <- notes.insertOne(Note("2", "forbidden"), InsertOneOptions.default.withBypassDocumentValidation(true).withComment("it-spec"))
+          _        <- notes.insertMany(List(Note("3", "forbidden"), Note("4", "forbidden")), InsertManyOptions.default.withBypassDocumentValidation(true))
+          kept     <- notes.count()
+        yield (refused.isLeft, kept)
+
+      program.asserting((refused, kept) => (refused, kept) shouldBe (true, 3L))
+    }
+
     "carry a maxTime and a comment without changing the result" in {
       val program =
         for

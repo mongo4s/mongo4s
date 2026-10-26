@@ -93,27 +93,29 @@ final class FakeMongoCollection[F[*], S[*], E](
       case _                                      => replacement
   end replacing
 
-  def insertOne(document: E)(using session: Option[ClientSession]): F[InsertOneResult] =
+  def insertOne(document: E, options: InsertOneOptions)(using session: Option[ClientSession]): F[InsertOneResult] =
     atomically {
       val encoded = identified(codec.encodeDocument(document))
       storage += encoded
       InsertOneResult(Option(encoded.get(BsonField.Id)))
     }
 
-  def insertMany(documents: Seq[E])(using session: Option[ClientSession]): F[InsertManyResult] =
+  def insertMany(documents: Seq[E], options: InsertManyOptions)(using session: Option[ClientSession]): F[InsertManyResult] =
     atomically {
-      val ids = mutable.ListBuffer.empty[BsonValue]
+      val ids      = mutable.ListBuffer.empty[BsonValue]
+      val failures = mutable.ListBuffer.empty[BulkWriteError]
 
-      documents.zipWithIndex.foreach { (document, i) =>
-        val encoded =
-          try identified(codec.encodeDocument(document))
-          catch case duplicate: MongoError.DuplicateKey => throw bulkFailure(BulkWriteResult.none.copy(insertedCount = i.toLong), List(failureAt(i, duplicate)))
-
-        storage += encoded
-        ids ++= Option(encoded.get(BsonField.Id))
+      documents.zipWithIndex.iterator.takeWhile(_ => !options.ordered || failures.isEmpty).foreach { (document, i) =>
+        try
+          val encoded = identified(codec.encodeDocument(document))
+          storage += encoded
+          ids ++= Option(encoded.get(BsonField.Id))
+        catch case duplicate: MongoError.DuplicateKey => failures.addOne(failureAt(i, duplicate)): Unit
       }
 
-      InsertManyResult(ids.toList)
+      if failures.isEmpty
+      then InsertManyResult(ids.toList)
+      else throw bulkFailure(BulkWriteResult.none.copy(insertedCount = ids.size.toLong), failures.toList)
     }
 
   private def failureAt(index: Int, error: MongoError): BulkWriteError =
@@ -259,7 +261,7 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   def estimatedCount: F[Long] = atomically(storage.size.toLong)
 
-  def bulkWrite(commands: Seq[WriteCommand[E]], ordered: Boolean)(using session: Option[ClientSession]): F[BulkWriteResult] =
+  def bulkWrite(commands: Seq[WriteCommand[E]], options: BulkWriteOptions)(using session: Option[ClientSession]): F[BulkWriteResult] =
     atomically {
       var inserted = 0L
       var matched  = 0L
@@ -312,7 +314,7 @@ final class FakeMongoCollection[F[*], S[*], E](
           deleted += matches.size
       }
 
-      commands.zipWithIndex.iterator.takeWhile(_ => !ordered || failures.isEmpty).foreach { (command, index) =>
+      commands.zipWithIndex.iterator.takeWhile(_ => !options.ordered || failures.isEmpty).foreach { (command, index) =>
         try perform((command, index))
         catch case duplicate: MongoError.DuplicateKey => failures.addOne(failureAt(index, duplicate)): Unit
       }

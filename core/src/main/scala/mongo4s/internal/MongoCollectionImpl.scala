@@ -6,7 +6,7 @@ import org.bson.BsonDocument
 import com.mongodb.{MongoNamespace, ReadConcern, ReadPreference, WriteConcern}
 import com.mongodb.client.model.{RenameCollectionOptions, ReplaceOneModel, WriteModel}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
-import com.mongodb.client.model.{BulkWriteOptions, DeleteManyModel, DeleteOneModel, InsertOneModel}
+import com.mongodb.client.model.{DeleteManyModel, DeleteOneModel, InsertOneModel}
 
 import mongo4s.results.*
 import mongo4s.operations.*
@@ -35,20 +35,20 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
   def withReadPreference(preference: ReadPreference): MongoCollection[F, S, A] =
     MongoCollectionImpl(underlying.withReadPreference(preference), naming, codec)
 
-  def insertOne(document: A)(using session: Option[ClientSession]): F[InsertOneResult] =
+  def insertOne(document: A, options: InsertOneOptions)(using session: Option[ClientSession]): F[InsertOneResult] =
     F.suspend {
       val encoded = codec.encodeDocument(document)
 
       val publisher = session match
-        case Some(s) => underlying.insertOne(s, encoded)
-        case None    => underlying.insertOne(encoded)
+        case Some(s) => underlying.insertOne(s, encoded, DriverOptions.insertOne(options))
+        case None    => underlying.insertOne(encoded, DriverOptions.insertOne(options))
 
       F.map(rs.one(publisher)) { result =>
         InsertOneResult.fromDriver(result)
       }
     }
 
-  def insertMany(documents: Seq[A])(using session: Option[ClientSession]): F[InsertManyResult] =
+  def insertMany(documents: Seq[A], options: InsertManyOptions)(using session: Option[ClientSession]): F[InsertManyResult] =
     if documents.isEmpty
     then F.pure(InsertManyResult(Nil))
     else
@@ -56,8 +56,8 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
         val encoded = documents.iterator.map(codec.encodeDocument).toList.asJava
 
         val publisher = session match
-          case Some(s) => underlying.insertMany(s, encoded)
-          case None    => underlying.insertMany(encoded)
+          case Some(s) => underlying.insertMany(s, encoded, DriverOptions.insertMany(options))
+          case None    => underlying.insertMany(encoded, DriverOptions.insertMany(options))
 
         F.map(rs.one(publisher)) { result =>
           InsertManyResult.fromDriver(result)
@@ -197,19 +197,19 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
 
   def estimatedCount: F[Long] = F.map(rs.one(underlying.estimatedDocumentCount()))(_.longValue)
 
-  def bulkWrite(commands: Seq[WriteCommand[A]], ordered: Boolean)(using
+  def bulkWrite(commands: Seq[WriteCommand[A]], options: BulkWriteOptions)(using
       session: Option[ClientSession],
   ): F[BulkWriteResult] =
     if commands.isEmpty
     then F.pure(BulkWriteResult.none)
     else
       F.suspend {
-        val models  = commands.iterator.map(toModel).toList.asJava
-        val options = BulkWriteOptions().ordered(ordered)
+        val models        = commands.iterator.map(toModel).toList.asJava
+        val driverOptions = DriverOptions.bulkWrite(options)
 
         val publisher = session match
-          case Some(s) => underlying.bulkWrite(s, models, options)
-          case None    => underlying.bulkWrite(models, options)
+          case Some(s) => underlying.bulkWrite(s, models, driverOptions)
+          case None    => underlying.bulkWrite(models, driverOptions)
 
         F.map(rs.one(publisher))(BulkWriteResult.fromDriver)
       }

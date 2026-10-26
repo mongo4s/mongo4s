@@ -334,6 +334,15 @@ final class FakeFidelityParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matcher
       }
     }
 
+    "agree on an unordered insertMany carrying on past every duplicate _id" in {
+      agree("insert_many_unordered", keyed("c")) { collection =>
+        for
+          failed <- collection.insertMany(keyed("a", "a", "b", "c", "d"), InsertManyOptions.unordered).attempt
+          stored <- collection.count()
+        yield (bulkOutcome(failed), stored)
+      }
+    }
+
     "agree on an ordered bulk write stopping at a duplicate _id" in {
       agree("bulk_ordered_duplicate", keyed("a")) { collection =>
         for
@@ -346,7 +355,7 @@ final class FakeFidelityParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matcher
     "agree on an unordered bulk write carrying on past a duplicate _id" in {
       agree("bulk_unordered_duplicate", keyed("a")) { collection =>
         for
-          failed <- collection.bulkWrite(keyed("a", "b", "a").map(WriteCommand.InsertOne(_)), ordered = false).attempt
+          failed <- collection.bulkWrite(keyed("a", "b", "a").map(WriteCommand.InsertOne(_)), BulkWriteOptions.unordered).attempt
           stored <- collection.count()
         yield (bulkOutcome(failed), stored)
       }

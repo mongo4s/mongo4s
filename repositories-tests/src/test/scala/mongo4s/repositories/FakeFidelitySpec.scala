@@ -421,7 +421,8 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
     "carry on past it when unordered, and report every failure" in {
       val c      = fake(keyed("a"))
       val failed = intercept[mongo4s.MongoError.BulkWriteFailed] {
-        c.bulkWrite(Seq(WriteCommand.InsertOne(keyed("a")), WriteCommand.InsertOne(keyed("b")), WriteCommand.InsertOne(keyed("a"))), ordered = false).unsafeRunSync()
+        c.bulkWrite(Seq(WriteCommand.InsertOne(keyed("a")), WriteCommand.InsertOne(keyed("b")), WriteCommand.InsertOne(keyed("a"))), BulkWriteOptions.unordered)
+          .unsafeRunSync()
       }
 
       failed.failures.map(_.index) shouldBe List(0, 2)

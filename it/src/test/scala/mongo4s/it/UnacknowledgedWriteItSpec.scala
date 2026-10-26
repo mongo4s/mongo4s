@@ -9,8 +9,8 @@ import org.testcontainers.mongodb.MongoDBContainer
 import cats.effect.IO
 
 import mongo4s.cats.CatsStream
-import mongo4s.operations.{Update, WriteCommand}
 import mongo4s.{Field, MongoClient, MongoCollection}
+import mongo4s.operations.{BulkWriteOptions, Update, WriteCommand}
 
 import mongo4s.cats.CatsInstances.given
 import mongo4s.bson.BsonInstances.given
@@ -61,7 +61,7 @@ final class UnacknowledgedWriteItSpec extends AsyncWordSpec, AsyncIOSpec, Matche
 
     "report an empty BulkWriteResult instead of failing" in {
       collection("bulk")
-        .flatMap(_.bulkWrite(Seq(WriteCommand.InsertOne(Person("bob", 30))), ordered = true))
+        .flatMap(_.bulkWrite(Seq(WriteCommand.InsertOne(Person("bob", 30))), BulkWriteOptions.default))
         .asserting(_.insertedCount shouldBe 0L)
     }
   }

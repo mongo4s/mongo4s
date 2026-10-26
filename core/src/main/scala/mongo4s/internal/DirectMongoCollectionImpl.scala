@@ -8,7 +8,7 @@ import org.bson.codecs.configuration.CodecRegistries
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 import com.mongodb.{MongoNamespace, ReadConcern, ReadPreference, WriteConcern}
 import com.mongodb.client.model.{RenameCollectionOptions, ReplaceOneModel, WriteModel}
-import com.mongodb.client.model.{BulkWriteOptions, DeleteManyModel, DeleteOneModel, InsertOneModel}
+import com.mongodb.client.model.{DeleteManyModel, DeleteOneModel, InsertOneModel}
 
 import mongo4s.results.*
 import mongo4s.operations.*
@@ -49,18 +49,18 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
   def withReadPreference(preference: ReadPreference): MongoCollection[F, S, A] =
     DirectMongoCollectionImpl(underlying.withReadPreference(preference), naming)
 
-  def insertOne(document: A)(using session: Option[ClientSession]): F[InsertOneResult] =
+  def insertOne(document: A, options: InsertOneOptions)(using session: Option[ClientSession]): F[InsertOneResult] =
     F.suspend {
       val publisher = session match
-        case Some(s) => typedCollection.insertOne(s, document)
-        case None    => typedCollection.insertOne(document)
+        case Some(s) => typedCollection.insertOne(s, document, DriverOptions.insertOne(options))
+        case None    => typedCollection.insertOne(document, DriverOptions.insertOne(options))
 
       F.map(rs.one(publisher)) { result =>
         InsertOneResult.fromDriver(result)
       }
     }
 
-  def insertMany(documents: Seq[A])(using session: Option[ClientSession]): F[InsertManyResult] =
+  def insertMany(documents: Seq[A], options: InsertManyOptions)(using session: Option[ClientSession]): F[InsertManyResult] =
     if documents.isEmpty
     then F.pure(InsertManyResult(Nil))
     else
@@ -68,8 +68,8 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
         val documentsList = documents.asJava
 
         val publisher = session match
-          case Some(s) => typedCollection.insertMany(s, documentsList)
-          case None    => typedCollection.insertMany(documentsList)
+          case Some(s) => typedCollection.insertMany(s, documentsList, DriverOptions.insertMany(options))
+          case None    => typedCollection.insertMany(documentsList, DriverOptions.insertMany(options))
 
         F.map(rs.one(publisher)) { result =>
           InsertManyResult.fromDriver(result)
@@ -186,19 +186,19 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
 
   def estimatedCount: F[Long] = F.map(rs.one(underlying.estimatedDocumentCount()))(_.longValue)
 
-  def bulkWrite(commands: Seq[WriteCommand[A]], ordered: Boolean)(using
+  def bulkWrite(commands: Seq[WriteCommand[A]], options: BulkWriteOptions)(using
       session: Option[ClientSession],
   ): F[BulkWriteResult] =
     if commands.isEmpty
     then F.pure(BulkWriteResult.none)
     else
       F.suspend {
-        val models  = commands.iterator.map(toModel).toList.asJava
-        val options = BulkWriteOptions().ordered(ordered)
+        val models        = commands.iterator.map(toModel).toList.asJava
+        val driverOptions = DriverOptions.bulkWrite(options)
 
         val publisher = session match
-          case Some(s) => typedCollection.bulkWrite(s, models, options)
-          case None    => typedCollection.bulkWrite(models, options)
+          case Some(s) => typedCollection.bulkWrite(s, models, driverOptions)
+          case None    => typedCollection.bulkWrite(models, driverOptions)
 
         F.map(rs.one(publisher))(BulkWriteResult.fromDriver)
       }

@@ -57,8 +57,11 @@ trait Repository[F[*], S[*], E, K]:
       Streamable[S, E],
   ): S[E]
 
-  def insertOne(entity: E)(using session: Option[ClientSession] = None): F[K]
-  def insertMany(entities: List[E])(using session: Option[ClientSession] = None): F[List[K]]
+  def insertOne(entity: E, options: InsertOneOptions = InsertOneOptions.default)(using session: Option[ClientSession] = None): F[K]
+
+  def insertMany(entities: List[E], options: InsertManyOptions = InsertManyOptions.default)(using
+      session: Option[ClientSession] = None,
+  ): F[List[K]]
 
   def upsert(entity: E)(using session: Option[ClientSession] = None): F[UpdateResult]
   def upsertMany(entities: List[E])(using session: Option[ClientSession] = None): F[BulkWriteResult]
@@ -95,7 +98,7 @@ trait Repository[F[*], S[*], E, K]:
       options: FindOneAndUpdateOptions[E] = FindOneAndUpdateOptions.default[E],
   )(using session: Option[ClientSession] = None): F[Option[E]]
 
-  def bulkWrite(commands: Seq[WriteCommand[E]], ordered: Boolean = true)(using
+  def bulkWrite(commands: Seq[WriteCommand[E]], options: BulkWriteOptions = BulkWriteOptions.default)(using
       session: Option[ClientSession] = None,
   ): F[BulkWriteResult]
 

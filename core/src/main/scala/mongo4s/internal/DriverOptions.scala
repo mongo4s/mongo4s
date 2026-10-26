@@ -3,8 +3,10 @@ package mongo4s.internal
 import java.util.concurrent.TimeUnit
 
 import com.mongodb.client.model.{IndexModel, IndexOptions, ReturnDocument}
+import com.mongodb.client.model.BulkWriteOptions as DriverBulkWriteOptions
 import com.mongodb.client.model.{CountOptions as DriverCountOptions, DeleteOptions as DriverDeleteOptions}
 import com.mongodb.client.model.{ReplaceOptions as DriverReplaceOptions, UpdateOptions as DriverUpdateOptions}
+import com.mongodb.client.model.{InsertManyOptions as DriverInsertManyOptions, InsertOneOptions as DriverInsertOneOptions}
 import com.mongodb.client.model.{FindOneAndDeleteOptions as DriverFindOneAndDeleteOptions, FindOneAndReplaceOptions as DriverFindOneAndReplaceOptions}
 import com.mongodb.client.model.FindOneAndUpdateOptions as DriverFindOneAndUpdateOptions
 
@@ -49,6 +51,34 @@ private[mongo4s] object DriverOptions:
 
     driverOptions
   end delete
+
+  def insertOne(options: InsertOneOptions): DriverInsertOneOptions =
+    val driverOptions = DriverInsertOneOptions()
+
+    options.comment.foreach(value => driverOptions.comment(value))
+    options.bypassDocumentValidation.foreach(value => driverOptions.bypassDocumentValidation(value))
+
+    driverOptions
+  end insertOne
+
+  def insertMany(options: InsertManyOptions): DriverInsertManyOptions =
+    val driverOptions = DriverInsertManyOptions().ordered(options.ordered)
+
+    options.comment.foreach(value => driverOptions.comment(value))
+    options.bypassDocumentValidation.foreach(value => driverOptions.bypassDocumentValidation(value))
+
+    driverOptions
+  end insertMany
+
+  def bulkWrite(options: BulkWriteOptions): DriverBulkWriteOptions =
+    val driverOptions = DriverBulkWriteOptions().ordered(options.ordered)
+
+    options.comment.foreach(value => driverOptions.comment(value))
+    options.bypassDocumentValidation.foreach(value => driverOptions.bypassDocumentValidation(value))
+    options.let.foreach(value => driverOptions.let(value))
+
+    driverOptions
+  end bulkWrite
 
   def count(options: CountOptions): DriverCountOptions =
     val driverOptions = DriverCountOptions()

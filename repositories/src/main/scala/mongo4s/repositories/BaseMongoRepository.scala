@@ -81,13 +81,17 @@ open class BaseMongoRepository[F[*], S[*], E, K](
   def getByFilter(filter: Filter[E], page: Page[E])(using session: Option[ClientSession])(using Streamable[S, E]): S[E] =
     paged(collection.find(filter)(using session).projection(defaultProjection), page).stream
 
-  def insertOne(entity: E)(using session: Option[ClientSession]): F[K] =
-    F.map(collection.insertOne(entity)(using session))(_ => pk.key(entity))
+  def insertOne(entity: E, options: InsertOneOptions)(using session: Option[ClientSession]): F[K] =
+    F.map(collection.insertOne(entity, options)(using session))(_ => pk.key(entity))
 
-  def insertMany(entities: List[E])(using session: Option[ClientSession]): F[List[K]] =
-    val inserted = batchedResults(entities) { chunk =>
-      F.map(collection.insertMany(chunk)(using session))(_ => BulkWriteResult.none.copy(insertedCount = chunk.size.toLong))
-    }
+  def insertMany(entities: List[E], options: InsertManyOptions)(using session: Option[ClientSession]): F[List[K]] =
+    val inserted =
+      if options.ordered
+      then
+        F.void(batchedResults(entities) { chunk =>
+          F.map(collection.insertMany(chunk, options)(using session))(_ => BulkWriteResult.none.copy(insertedCount = chunk.size.toLong))
+        })
+      else F.void(collection.insertMany(entities, options)(using session))
 
     F.map(inserted)(_ => entities.map(pk.key))
   end insertMany
@@ -133,10 +137,10 @@ open class BaseMongoRepository[F[*], S[*], E, K](
     collection.findOneAndUpdate(pk.eqFilter(key), update, projected)(using session)
   end findOneAndUpdate
 
-  def bulkWrite(commands: Seq[WriteCommand[E]], ordered: Boolean)(using session: Option[ClientSession]): F[BulkWriteResult] =
-    if ordered
-    then batchedResults(commands.toList)(chunk => collection.bulkWrite(chunk)(using session))
-    else collection.bulkWrite(commands, ordered = false)(using session)
+  def bulkWrite(commands: Seq[WriteCommand[E]], options: BulkWriteOptions)(using session: Option[ClientSession]): F[BulkWriteResult] =
+    if options.ordered
+    then batchedResults(commands.toList)(chunk => collection.bulkWrite(chunk, options)(using session))
+    else collection.bulkWrite(commands, options)(using session)
 
   def deleteOne(key: K)(using session: Option[ClientSession]): F[DeleteResult] =
     collection.deleteOne(pk.eqFilter(key))(using session)

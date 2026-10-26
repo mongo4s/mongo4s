@@ -19,8 +19,13 @@ trait MongoCollection[F[*], S[*], A]:
   def naming: FieldNaming
   def codec: BsonDocumentCodec[A]
 
-  def insertOne(document: A)(using session: Option[ClientSession] = None): F[InsertOneResult]
-  def insertMany(documents: Seq[A])(using session: Option[ClientSession] = None): F[InsertManyResult]
+  def insertOne(document: A, options: InsertOneOptions = InsertOneOptions.default)(using
+      session: Option[ClientSession] = None,
+  ): F[InsertOneResult]
+
+  def insertMany(documents: Seq[A], options: InsertManyOptions = InsertManyOptions.default)(using
+      session: Option[ClientSession] = None,
+  ): F[InsertManyResult]
 
   def find(filter: Filter[A] = Filter.all)(using session: Option[ClientSession] = None): FindQuery[F, S, A]
 
@@ -73,7 +78,7 @@ trait MongoCollection[F[*], S[*], A]:
   )(using session: Option[ClientSession] = None): F[Long]
   def estimatedCount: F[Long]
 
-  def bulkWrite(commands: Seq[WriteCommand[A]], ordered: Boolean = true)(using
+  def bulkWrite(commands: Seq[WriteCommand[A]], options: BulkWriteOptions = BulkWriteOptions.default)(using
       session: Option[ClientSession] = None,
   ): F[BulkWriteResult]
 

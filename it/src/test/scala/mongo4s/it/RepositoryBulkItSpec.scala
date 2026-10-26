@@ -10,9 +10,9 @@ import cats.effect.IO
 
 import mongo4s.bson.direct.WireCodec
 import mongo4s.cats.CatsStream
-import mongo4s.operations.{Index, WriteCommand}
 import mongo4s.repositories.BaseMongoRepository
 import mongo4s.{Field, MongoClient, MongoError, PrimaryKey}
+import mongo4s.operations.{BulkWriteOptions, Index, InsertManyOptions, WriteCommand}
 
 import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
@@ -59,7 +59,7 @@ final class RepositoryBulkItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, B
           failed  <- repo
                        .bulkWrite(
                          Seq(WriteCommand.InsertOne(Person("a", "clash@x"))) ++ inserts("b", "c", "d"),
-                         ordered = false,
+                         BulkWriteOptions.unordered,
                        )
                        .attempt
           present <- repo.count()
@@ -70,6 +70,23 @@ final class RepositoryBulkItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, B
         failed shouldBe true
         present shouldBe 4L
       }
+    }
+  }
+
+  "an unordered insertMany" should {
+
+    "insert every entity the server could, past a failing batch" in {
+      val program =
+        for
+          repo    <- repository("unordered_inserts")
+          _       <- repo.insertOne(Person("dup", "clash@x"))
+          failed  <- repo
+                       .insertMany(List(Person("a", "clash@x"), Person("b", "b@x"), Person("c", "c@x"), Person("d", "d@x")), InsertManyOptions.unordered)
+                       .attempt
+          present <- repo.count()
+        yield (failed.isLeft, present)
+
+      program.timeout(30.seconds).asserting(_ shouldBe (true, 4L))
     }
   }
 
