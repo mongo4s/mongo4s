@@ -6,6 +6,7 @@ import org.scalatest.matchers.should.Matchers
 import org.bson.BsonDocument
 import com.mongodb.bulk.{BulkWriteError, BulkWriteResult}
 import com.mongodb.{
+  ClientBulkWriteException,
   MongoBulkWriteException,
   MongoException,
   MongoExecutionTimeoutException,
@@ -77,6 +78,23 @@ final class MongoErrorSpec extends AnyWordSpec, Matchers:
           failed.failures.map(_.index) shouldBe List(0, 2)
           failed.duplicateKeys.map(_.index) shouldBe List(0)
         case other                              => fail(s"expected a BulkWriteFailed, got $other")
+    }
+
+    "list a client bulk write's failures by position, in order, with no partial result when the driver kept none" in {
+      val client = ClientBulkWriteException(
+        MongoException("client bulk write failed"),
+        java.util.List.of(),
+        Map(Integer.valueOf(3) -> WriteError(121, "validation", BsonDocument()), Integer.valueOf(1) -> WriteError(11000, "dup", BsonDocument())).asJava,
+        null,
+        address,
+      )
+
+      MongoError.translate(client) match
+        case failed: MongoError.ClientBulkWriteFailed =>
+          failed.failures.map(_.index) shouldBe List(1, 3)
+          failed.duplicateKeys.map(_.index) shouldBe List(1)
+          failed.partialResult shouldBe None
+        case other                                    => fail(s"expected a ClientBulkWriteFailed, got $other")
     }
 
     "keep the driver's exception as the cause, and its labels" in {

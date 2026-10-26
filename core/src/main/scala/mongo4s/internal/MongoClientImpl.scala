@@ -3,7 +3,9 @@ package mongo4s.internal
 import org.bson.BsonDocument
 import com.mongodb.reactivestreams.client.{ChangeStreamPublisher, ClientSession, MongoClient as RSMongoClient}
 
+import mongo4s.results.ClientBulkWriteResult
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
+import mongo4s.operations.{BulkWriteOptions, ClientWrite}
 import mongo4s.bson.{BsonDocumentDecoder, DecodeResult, FieldNaming}
 import mongo4s.{Effect, MongoClient, MongoDatabase, RsBridge, Streamable}
 
@@ -37,6 +39,21 @@ private[mongo4s] final class MongoClientImpl[F[*], S[*]](
 
     rs.stream(publisher)
   end listDatabases
+
+  def bulkWrite(writes: Seq[ClientWrite], options: BulkWriteOptions)(using session: Option[ClientSession]): F[ClientBulkWriteResult] =
+    if writes.isEmpty
+    then F.pure(ClientBulkWriteResult.none)
+    else
+      F.suspend {
+        val models        = writes.iterator.map(_.model()).toList.asJava
+        val driverOptions = ClientWrites.options(options)
+
+        val publisher = session match
+          case Some(s) => underlying.bulkWrite(s, models, driverOptions)
+          case None    => underlying.bulkWrite(models, driverOptions)
+
+        F.map(rs.one(publisher))(ClientBulkWriteResult.fromDriver)
+      }
 
   def watch(options: WatchOptions[BsonDocument])(using
       session: Option[ClientSession]

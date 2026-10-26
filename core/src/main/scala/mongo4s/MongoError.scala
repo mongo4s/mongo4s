@@ -1,10 +1,12 @@
 package mongo4s
 
+import scala.jdk.OptionConverters.*
 import scala.util.control.NoStackTrace
 import scala.jdk.CollectionConverters.given
 
 import com.mongodb.bulk.BulkWriteError
 import com.mongodb.{
+  ClientBulkWriteException,
   ErrorCategory,
   MongoBulkWriteException,
   MongoException,
@@ -14,7 +16,7 @@ import com.mongodb.{
   MongoWriteException,
 }
 
-import mongo4s.results.BulkWriteResult
+import mongo4s.results.{BulkWriteResult, ClientBulkWriteResult}
 
 sealed abstract class MongoError(val cause: MongoException) extends RuntimeException(cause.getMessage, cause), NoStackTrace:
   def code: Int = cause.getCode
@@ -48,13 +50,20 @@ object MongoError:
       bulkWriteFailed(MongoBulkWriteException(written.toDriver, errors.asJava, cause.getWriteConcernError, cause.getServerAddress, cause.getErrorLabels))
     end after
 
+  final case class ClientBulkWriteFailed(failures: List[BulkFailure], override val cause: ClientBulkWriteException) extends MongoError(cause):
+    def duplicateKeys: List[BulkFailure] = failures.filter(_.isDuplicateKey)
+
+    def partialResult: Option[ClientBulkWriteResult] = cause.getPartialResult.toScala.map(ClientBulkWriteResult.fromDriver)
+
   final case class BulkFailure(index: Int, code: Int, message: String):
     def isDuplicateKey: Boolean = ErrorCategory.fromErrorCode(code) == ErrorCategory.DUPLICATE_KEY
 
   private[mongo4s] def translate(error: Throwable): Throwable = error match
     case already: MongoError => already
 
-    case bulk: MongoBulkWriteException => bulkWriteFailed(bulk)
+    case bulk: MongoBulkWriteException    => bulkWriteFailed(bulk)
+    case client: ClientBulkWriteException =>
+      ClientBulkWriteFailed(client.getWriteErrors.asScala.toList.sortBy(_._1).map((index, e) => BulkFailure(index.intValue, e.getCode, e.getMessage)), client)
 
     case write: MongoWriteException              => byCategory(write.getError.getCategory, write)
     case timeout: MongoExecutionTimeoutException => ExecutionTimeout(timeout)

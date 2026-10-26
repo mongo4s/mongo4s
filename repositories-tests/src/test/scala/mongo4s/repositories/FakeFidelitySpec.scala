@@ -389,6 +389,12 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "a write for a client bulk write" should {
+    "be refused, since a fake has no namespace the client could address" in {
+      intercept[UnsupportedOperationException](fake(keyed("a")).write(WriteCommand.InsertOne(keyed("b"))))
+    }
+  }
+
   "a tailable cursor" should {
     "be refused by name, since it waits for writes the fake's cursor never sees, while a plain one reads as usual" in {
       val c = fake(keyed("a"))

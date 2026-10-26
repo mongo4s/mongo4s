@@ -134,3 +134,7 @@ trait MongoCollection[F[*], S[*], A]:
   def withReadPreference(preference: ReadPreference): MongoCollection[F, S, A]
 
   def underlying: RSMongoCollection[BsonDocument]
+
+  def write(command: WriteCommand[A]): ClientWrite =
+    val namespace = underlying.getNamespace
+    ClientWrite(namespace, () => mongo4s.internal.ClientWrites.model(namespace, command, codec, naming))

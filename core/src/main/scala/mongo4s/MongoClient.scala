@@ -7,13 +7,18 @@ import com.mongodb.reactivestreams.client.{ClientSession, MongoClient as RSMongo
 import mongo4s.internal.MongoClientImpl
 import mongo4s.bson.{BsonDocumentDecoder, DecodeResult}
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
-import mongo4s.operations.{SessionOptions, TransactionOptions}
+import mongo4s.results.ClientBulkWriteResult
+import mongo4s.operations.{BulkWriteOptions, ClientWrite, SessionOptions, TransactionOptions}
 
 trait MongoClient[F[*], S[*]]:
   def getDatabase(name: String): F[MongoDatabase[F, S]]
   def startSession: F[ClientSession]
   def listDatabaseNames(using session: Option[ClientSession] = None)(using Streamable[S, String]): S[String]
   def listDatabases(using session: Option[ClientSession] = None)(using Streamable[S, BsonDocument]): S[BsonDocument]
+
+  def bulkWrite(writes: Seq[ClientWrite], options: BulkWriteOptions = BulkWriteOptions.default)(using
+      session: Option[ClientSession] = None,
+  ): F[ClientBulkWriteResult]
 
   def watch(options: WatchOptions[BsonDocument] = WatchOptions.default[BsonDocument])(using
       session: Option[ClientSession] = None
