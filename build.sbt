@@ -1,7 +1,7 @@
 import Dependencies.Versions
 import com.typesafe.tools.mima.plugin.MimaKeys.mimaPreviousArtifacts
 
-lazy val binaryCompatibleWith = Set("4.1.0")
+lazy val binaryCompatibleWith = Set.empty[String]
 
 lazy val requiredJdk = 25
 
@@ -32,7 +32,7 @@ lazy val commonSettings = Seq(
   organizationName       := "Mongo4s",
   homepage               := Some(uri("https://mongo4s.org/")),
   description            := "Mongo client, bson-codecs and repositories for Scala 3",
-  version                := "4.2.0",
+  version                := "5.0.0",
   versionScheme          := Some("semver-spec"),
   scalaVersion           := Versions.scala3,
   parallelExecution      := true,
