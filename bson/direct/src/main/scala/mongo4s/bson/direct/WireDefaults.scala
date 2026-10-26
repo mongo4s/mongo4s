@@ -28,7 +28,7 @@ object WireDefaults:
         companion.declaredMethod(s"$$lessinit$$greater$$default$$${index + 1}").headOption.map { getter =>
           val selected = Ref(companion).select(getter)
           val applied  = if getter.paramSymss.headOption.exists(_.exists(_.isType)) then selected.appliedToTypes(typeArgs) else selected
-          '{ ${ Expr(index) } -> (() => ${ applied.asExprOf[Any] }) }
+          '{ (${ Expr(index) }, () => ${ applied.asExprOf[Any] }) }
         }
     }.flatten
 

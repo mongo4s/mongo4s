@@ -46,7 +46,7 @@ object PrimaryKey:
       names,
       key =>
         val encoded = encodeEach.zip(key.toTuple.productIterator.toList).map { case ((name, encoder), value) =>
-          name -> encoder.encode(value)
+          (name, encoder.encode(value))
         }
 
         KeyFields(encoded.head, encoded.tail),
