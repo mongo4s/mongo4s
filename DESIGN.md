@@ -820,6 +820,20 @@ The warnings the build turns on are only a test if something fails on them, so `
 One message is silenced by text: kyo's `Frame` macro expands to `@nowarn` annotations that suppress nothing, in code
 this project does not own.
 
+## The integration tests compile on the next Scala
+
+The library is built on an LTS and used from whatever compiler its users are on, and inline code and macros expand
+in the user's module, against the TASTy the LTS wrote. `5.0.0` shipped an `a -> b` in the defaults macro and in
+`PrimaryKey.compound`. The 3.9-built TASTy names `Predef.ArrowAssoc`, which `3.10` deprecates, so every caller on
+`3.10` with `-Werror` failed to compile. Nothing here could see it: the build is on `3.9`, and even a `3.10` build of
+the library's own sources resolves `->` to the new extension method. Only a module compiled by the newer compiler
+*against the older build* reproduces what a user gets.
+
+`it` is that module. It depends on the library's projects, which compile on `Versions.scala3`, and compiles itself on
+`Versions.scala3Next`; it already derives codecs with defaults and builds compound keys, and with the old code it
+fails exactly as a user did. The unit tests stay on the LTS, so both sides of the jar are compiled on every build.
+Inline and quoted code also writes a tuple rather than `->` from now on.
+
 ## Evolving the API
 
 Three commitments, and the mechanics that make each one keepable:

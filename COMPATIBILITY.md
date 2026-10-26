@@ -13,6 +13,12 @@
   `build.sbt`, so nothing is waived silently. A major release — `3.0.0`, `4.0.0`, `5.0.0` — has no such exceptions: its
   migration guide below is what the major version covers.
 
+## Upgrading from 5.0.0 to 5.0.1
+
+Binary compatible: MiMa checks `5.0.1` against `5.0.0` and finds nothing. Nothing to change in calling code. A module
+compiled by Scala `3.10` with `-Werror` that failed on an `ArrowAssoc` deprecation inside a derived `WireCodec` or a
+`PrimaryKey.compound` compiles once it is on `5.0.1`.
+
 ## Migrating from 4.x to 5.0.0
 
 `5.0.0` keeps `Scala 3.9 LTS`. It is a major release because several methods gained parameters and several AST cases

@@ -36,6 +36,11 @@ version, `3.9 LTS` — set once as `Versions.scala3` in `project/Dependencies.sc
 build was split across two Scala versions, because `kyo`, `rapid` and `bson-calypso` needed a compiler
 newer than the then-current LTS; `3.9` being an LTS is what removed that split.
 
+`it` is the exception, on purpose: it compiles on `Versions.scala3Next` (`3.10`) against the library compiled by
+`3.9`. Inline code and macros expand in their caller, so what a user on a newer compiler sees is only visible from a
+module built by that compiler — the `ArrowAssoc` deprecation `5.0.1` fixed passed every check on `3.9`, and on a
+`3.10` build of the library's own sources too. Keep `scala3Next` on the newest Scala 3 release.
+
 ```bash
 sbt compile                 # compile everything
 sbt "testOnly *"            # run the unit tests of every aggregated module

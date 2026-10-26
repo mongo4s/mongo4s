@@ -551,7 +551,7 @@
         </nav>
 
         <div class="install">
-            <pre><code>libraryDependencies += "org.mongo4s" %% "mongo4s-cats" % "5.0.0"</code></pre>
+            <pre><code>libraryDependencies += "org.mongo4s" %% "mongo4s-cats" % "5.0.1"</code></pre>
             <p class="install-note">On another runtime, swap the module: <code>mongo4s-zio</code>,
                 <code>mongo4s-kyo</code> or <code>mongo4s-rapid</code>. Codecs and repositories are separate
                 modules — see <a href="#start">Quick start</a>.</p>
@@ -591,10 +591,10 @@
     <p>Pick a runtime. The default codec (<code>bson-direct</code>) derives straight from your case class — AST-free, no
         third-party codec library, no extra dependency beyond <code>mongo4s-core</code> itself:</p>
     <pre><code>libraryDependencies ++= Seq(
-    "org.mongo4s" %% "mongo4s-cats"           % "5.0.0", // mongo4s-core + cats-effect integration
-    "org.mongo4s" %% "mongo4s-bson-direct"    % "5.0.0", // ast-free bson codecs
-    "org.mongo4s" %% "mongo4s-bson-cats-data" % "5.0.0", // if you need NonEmptyList etc. codec instances
-    "org.mongo4s" %% "mongo4s-repositories"   % "5.0.0", // if you need auto-generated CRUD repository ops for your model
+    "org.mongo4s" %% "mongo4s-cats"           % "5.0.1", // mongo4s-core + cats-effect integration
+    "org.mongo4s" %% "mongo4s-bson-direct"    % "5.0.1", // ast-free bson codecs
+    "org.mongo4s" %% "mongo4s-bson-cats-data" % "5.0.1", // if you need NonEmptyList etc. codec instances
+    "org.mongo4s" %% "mongo4s-repositories"   % "5.0.1", // if you need auto-generated CRUD repository ops for your model
 )</code></pre>
     <pre><code>import cats.effect.{IO, IOApp}
 
@@ -1882,7 +1882,7 @@ yield number</code></pre>
     </p>
     <p>
         For unit tests, <code>FakeMongoCollection</code> (in <code>mongo4s-testkit</code>, a published module — add it
-        as <code>"org.mongo4s" %% "mongo4s-testkit" % "5.0.0" % Test</code>) implements
+        as <code>"org.mongo4s" %% "mongo4s-testkit" % "5.0.1" % Test</code>) implements
         <code>MongoCollection</code> in memory — the exact
         same <code>Filter</code>/<code>Update</code>/<code>Field</code> AST the real driver interprets is interpreted
         against an in-memory buffer instead, so repository logic is testable without a running MongoDB. Filters,
@@ -2011,7 +2011,7 @@ given RsBridgeConfig = RsBridgeConfig.default
 
     <h2 id="modules">Modules</h2>
     <p>Published for Scala 3 under <code>org.mongo4s</code>:</p>
-    <pre><code>"org.mongo4s" %% "mongo4s-&lt;module&gt;" % "5.0.0"</code></pre>
+    <pre><code>"org.mongo4s" %% "mongo4s-&lt;module&gt;" % "5.0.1"</code></pre>
     <table>
         <tr>
             <th>Kind</th>
@@ -2107,6 +2107,12 @@ given RsBridgeConfig = RsBridgeConfig.default
         nothing, as <code>$all: []</code> does, and a <code>sort</code> on <code>updateMany</code> is refused rather than
         dropped. The migration guide is in
         <a href="https://github.com/mongo4s/mongo4s/blob/main/COMPATIBILITY.md">COMPATIBILITY.md</a>.
+    </p>
+    <p>
+        <strong>5.0.1</strong> is binary compatible with 5.0.0 and fixes code the library inlines into yours: a derived
+        <code>WireCodec</code> with a default parameter, and <code>PrimaryKey.compound</code>, carried Scala 3.10's
+        deprecated <code>ArrowAssoc</code> into the calling code, which a build with <code>-Werror</code> refused. The
+        integration tests now compile on 3.10 against the 3.9-built library &mdash; the side of the jar its users are on.
     </p>
     <p>
         <strong>4.0.0 is a breaking release.</strong> An <code>Update</code> that changes one path twice is refused
@@ -2980,6 +2986,16 @@ findOne     0.129 ms/op → ~7,750 ops/s</code></pre>
         for division and navigation picked the wrong alternative inside <code>"name" := …</code>, and the comparisons
         have named forms because ScalaTest's <code>===</code> wins inside a spec. The fake does not evaluate
         expressions: one that is subtly wrong is worse than one that refuses.
+    </p>
+
+    <h3 id="design-next-scala">The integration tests compile on the next Scala</h3>
+    <p>
+        Inline code and macros expand in the user's module, against the TASTy the LTS build wrote. <code>5.0.0</code>
+        shipped an <code>a -&gt; b</code> in the defaults macro and in <code>PrimaryKey.compound</code>; the 3.9-built
+        TASTy names <code>Predef.ArrowAssoc</code>, which 3.10 deprecates, so callers on 3.10 with <code>-Werror</code>
+        failed to compile &mdash; while the 3.9 build, and even a 3.10 build of the library's own sources, saw nothing.
+        So <code>it</code> compiles on the newest Scala against the library built by the LTS, the side of the jar users
+        are on, and the unit tests stay on the LTS.
     </p>
 
     <h3 id="design-search">Search, the client bulk write, and refusing what would be dropped</h3>

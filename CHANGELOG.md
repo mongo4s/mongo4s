@@ -8,6 +8,21 @@ Notable changes per release. Breaking changes and how to migrate are in
 This file starts at `2.0.0`. `1.0.0` was released without one, and `1.1.0` was never published — its changes are
 part of `2.0.0` below.
 
+## 5.0.1
+
+Binary compatible with `5.0.0`, checked by MiMa.
+
+### Fixed
+
+- **Code inlined into the caller carried Scala 3.10's deprecated `ArrowAssoc`.** A `derives WireCodec` on a case class
+  with a default parameter, and `PrimaryKey.compound`, warned at the user's call site on 3.10, which a build with
+  `-Werror` refused. Both build their pairs as tuples now.
+
+### Changed
+
+- The integration tests compile on Scala `3.10` against the library built by `3.9`, so what the library inlines is
+  checked on the compiler its users are moving to.
+
 ## 5.0.0
 
 A breaking release, mostly in binary shape: most existing calls compile unchanged. The migration notes are in
