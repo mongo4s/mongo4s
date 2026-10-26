@@ -54,9 +54,6 @@ final class FakeMongoCollection[F[*], S[*], E](
     requireNoArrayFilters(options.arrayFilters, operation)
     requireNoCollation(options.collation, operation)
 
-    if options.upsert
-    then throw UnsupportedOperationException(s"FakeMongoCollection: $operation with upsert is not simulated")
-
   private def requireNoArrayFilters(arrayFilters: Seq[Filter[?]], operation: String): Unit =
     if arrayFilters.nonEmpty
     then throw UnsupportedOperationException(s"FakeMongoCollection: $operation with arrayFilters is not simulated")
@@ -99,6 +96,57 @@ final class FakeMongoCollection[F[*], S[*], E](
         )
       case _                                      => replacement
   end replacing
+
+  private def upsertedBy(filter: Filter[E], update: Update[E]): BsonDocument =
+    val inserted = identified(stampedFirst(applyUpdate(seededBy(filter), onInsert(update))))
+    storage += inserted
+    inserted
+
+  private def upsertedAs(filter: Filter[E], replacement: E): BsonDocument =
+    val encoded  = codec.encodeDocument(replacement)
+    val pinnedId = Option.unless(encoded.containsKey(BsonField.Id))(seededBy(filter).get(BsonField.Id)).flatMap(Option(_))
+    val inserted = identified(stampedFirst(pinnedId.fold(encoded)(id => copyOf(encoded).append(BsonField.Id, id))))
+    storage += inserted
+    inserted
+
+  private def onInsert(update: Update[E]): Update[E] = update match
+    case Update.SetOnInsert(path, value) => Update.Set(path, value)
+    case Update.Combine(updates)         => Update.Combine(updates.map(onInsert))
+    case other                           => other
+
+  private def stampedFirst(document: BsonDocument): BsonDocument =
+    if document.containsKey(BsonField.Id)
+    then idFirst(document)
+    else idFirst(copyOf(document).append(BsonField.Id, BsonObjectId(org.bson.types.ObjectId.get())))
+
+  private def idFirst(document: BsonDocument): BsonDocument =
+    Option(document.get(BsonField.Id)).fold(document) { id =>
+      document.entrySet.asScala.foldLeft(BsonDocument(BsonField.Id, id)) { (acc, entry) =>
+        if entry.getKey == BsonField.Id then acc else acc.append(entry.getKey, entry.getValue)
+      }
+    }
+
+  private def seededBy(filter: Filter[E]): BsonDocument =
+    equalities(filter).foldLeft(BsonDocument()) { case (seeded, (path, value)) =>
+      if at(seeded, path).isDefined
+      then
+        throw MongoError.translate(
+          MongoWriteException(
+            WriteError(54, s"cannot infer query fields to set, path '${path.render(naming)}' is matched twice", BsonDocument()),
+            ServerAddress(),
+            java.util.Collections.emptyList(),
+          )
+        )
+      else setAt(seeded, storedSegments(path), value)
+    }
+
+  private def equalities(filter: Filter[E]): List[(FieldPath, BsonValue)] = filter match
+    case Filter.Eq(path, value) if !path.isEmpty                                      => List(path -> value)
+    case Filter.In(path, value :: Nil) if !value.isRegularExpression && !path.isEmpty => List(path -> value)
+    case Filter.All(path, values) if !path.isEmpty                                    => values.map(path -> _)
+    case Filter.And(filters)                                                          => filters.flatMap(equalities)
+    case Filter.Or(single :: Nil)                                                     => equalities(single)
+    case _                                                                            => Nil
 
   def insertOne(document: E, options: InsertOneOptions)(using session: Option[ClientSession]): F[InsertOneResult] =
     atomically {
@@ -159,9 +207,8 @@ final class FakeMongoCollection[F[*], S[*], E](
           storage(storage.indexOf(existing)) = checked(replaced, Some(existing))
           UpdateResult(matchedCount = 1, modifiedCount = 1, upsertedId = None)
         case None if options.upsert =>
-          val encoded = identified(codec.encodeDocument(replacement))
-          storage += encoded
-          UpdateResult(matchedCount = 0, modifiedCount = 0, upsertedId = Option(encoded.get(BsonField.Id)))
+          val inserted = upsertedAs(filter, replacement)
+          UpdateResult(matchedCount = 0, modifiedCount = 0, upsertedId = Option(inserted.get(BsonField.Id)))
         case None                   => UpdateResult.none
     }
 
@@ -177,7 +224,7 @@ final class FakeMongoCollection[F[*], S[*], E](
           storage(storage.indexOf(existing)) = checked(updated, Some(existing))
           UpdateResult(matchedCount = 1, modifiedCount = modifiedBy(existing, updated), upsertedId = None)
         case None if options.upsert =>
-          throw UnsupportedOperationException("FakeMongoCollection: updateOne with upsert is not simulated")
+          UpdateResult(matchedCount = 0, modifiedCount = 0, upsertedId = Option(upsertedBy(filter, update).get(BsonField.Id)))
         case None                   => UpdateResult.none
     }
 
@@ -194,8 +241,9 @@ final class FakeMongoCollection[F[*], S[*], E](
         storage(storage.indexOf(doc)) = checked(updated, Some(doc))
         modifiedBy(doc, updated)
       }
-      if matches.isEmpty && options.upsert then throw UnsupportedOperationException("FakeMongoCollection: updateMany with upsert is not simulated")
-      UpdateResult(matchedCount = matches.size.toLong, modifiedCount = modified.sum, upsertedId = None)
+      if matches.isEmpty && options.upsert
+      then UpdateResult(matchedCount = 0, modifiedCount = 0, upsertedId = Option(upsertedBy(filter, update).get(BsonField.Id)))
+      else UpdateResult(matchedCount = matches.size.toLong, modifiedCount = modified.sum, upsertedId = None)
     }
 
   def findOneAndUpdate(filter: Filter[E], update: Update[E], options: FindOneAndUpdateOptions[E])(using
@@ -207,7 +255,9 @@ final class FakeMongoCollection[F[*], S[*], E](
       requireRenderable(update)
 
       firstMatching(filter, options.sort) match
-        case None if options.upsert => throw UnsupportedOperationException("FakeMongoCollection: findOneAndUpdate with upsert is not simulated")
+        case None if options.upsert =>
+          val inserted = upsertedBy(filter, update)
+          if options.returnUpdated then decodeProjected(inserted, options.projection) else None
         case None                   => None
         case Some(existing)         =>
           val updated = applyUpdate(existing, update)
@@ -222,7 +272,9 @@ final class FakeMongoCollection[F[*], S[*], E](
       requireNoCollation(options.collation, "findOneAndReplace")
 
       firstMatching(filter, options.sort) match
-        case None if options.upsert => throw UnsupportedOperationException("FakeMongoCollection: findOneAndReplace with upsert is not simulated")
+        case None if options.upsert =>
+          val inserted = upsertedAs(filter, replacement)
+          if options.returnUpdated then decodeProjected(inserted, options.projection) else None
         case None                   => None
         case Some(existing)         =>
           val encoded = replacing(existing, codec.encodeDocument(replacement))
@@ -292,29 +344,33 @@ final class FakeMongoCollection[F[*], S[*], E](
               matched += 1
               modified += 1
             case None if options.upsert =>
-              val encoded = identified(codec.encodeDocument(value))
-              storage += encoded
-              Option(encoded.get(BsonField.Id)).foreach(id => upserted.update(i, id))
+              Option(upsertedAs(filter, value).get(BsonField.Id)).foreach(id => upserted.update(i, id))
             case None                   => ()
-        case (WriteCommand.UpdateOne(filter, update, options), _)  =>
+        case (WriteCommand.UpdateOne(filter, update, options), i)  =>
           requireDefaultUpdateOptions(options, "bulkWrite UpdateOne")
           requireRenderable(update)
-          firstMatching(filter, sortedBy(options.sort)).foreach { doc =>
-            val updated = applyUpdate(doc, update)
-            storage(storage.indexOf(doc)) = checked(updated, Some(doc))
-            matched += 1
-            modified += modifiedBy(doc, updated)
-          }
-        case (WriteCommand.UpdateMany(filter, update, options), _) =>
+          firstMatching(filter, sortedBy(options.sort)) match
+            case Some(doc)              =>
+              val updated = applyUpdate(doc, update)
+              storage(storage.indexOf(doc)) = checked(updated, Some(doc))
+              matched += 1
+              modified += modifiedBy(doc, updated)
+            case None if options.upsert =>
+              Option(upsertedBy(filter, update).get(BsonField.Id)).foreach(id => upserted.update(i, id))
+            case None                   => ()
+        case (WriteCommand.UpdateMany(filter, update, options), i) =>
           requireDefaultUpdateOptions(options, "bulkWrite UpdateMany")
           requireRenderable(update)
           requireNoSort(options.sort)
-          matching(filter).foreach { doc =>
+          val matches = matching(filter)
+          matches.foreach { doc =>
             val updated = applyUpdate(doc, update)
             storage(storage.indexOf(doc)) = checked(updated, Some(doc))
             matched += 1
             modified += modifiedBy(doc, updated)
           }
+          if matches.isEmpty && options.upsert
+          then Option(upsertedBy(filter, update).get(BsonField.Id)).foreach(id => upserted.update(i, id))
         case (WriteCommand.DeleteOne(filter, options), _)          =>
           requireNoCollation(options.collation, "bulkWrite DeleteOne")
           matching(filter).headOption.foreach { doc => storage -= doc; deleted += 1 }

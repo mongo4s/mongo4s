@@ -498,9 +498,18 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
 
       intercept[UnsupportedOperationException] {
         c.bulkWrite(
-          Seq(WriteCommand.UpdateOne(nameF.equalTo("a"), Update.set(ageF, 1), UpdateOptions.default.withUpsert))
+          Seq(WriteCommand.UpdateOne(nameF.equalTo("a"), Update.set(ageF, 1), UpdateOptions.default.withArrayFilters(Seq(nameF.equalTo("a")))))
         ).unsafeRunSync()
       }
+    }
+
+    "insert on a miss when asked to upsert, and report where" in {
+      val c = fake(BsonDocument("name", BsonString("a")))
+
+      val result = c.bulkWrite(Seq(WriteCommand.UpdateOne(nameF.equalTo("b"), Update.set(ageF, 1), UpdateOptions.upsert))).unsafeRunSync()
+
+      result.upsertedIds.keySet shouldBe Set(0)
+      c.find(nameF.equalTo("b")).all.unsafeRunSync().map(_.getInt32("age").getValue) shouldBe List(1)
     }
   }
 
