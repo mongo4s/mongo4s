@@ -692,6 +692,84 @@ buffer as it was. It serialises more than MongoDB does, but a serial history is 
 the in-memory operations it serialises take microseconds. `FakeConcurrencySpec` fails against the unlocked buffer —
 five of its six cases on every run, the duplicate `_id` one now and then.
 
+**The fake refuses what it would get wrong, including what it used to write.** A positional path was a path to it, so
+`items.$[].qty` became a field literally named `$[]`. The positional operators are refused by name now, as a tailable
+cursor, an aggregation expression, Atlas Search and a write for the client-level `bulkWrite` are — each something the
+fake cannot answer the way the server would. Where the server refuses outright, the fake refuses with the server's
+code: a `unique` index on `_id` alone (197), a partial filter holding `$ne`, `$nin`, `$regex`, `$exists: false`,
+`$elemMatch`, `$size`, `$mod`, `$bits` or a `$nor` (67). Each is a parity case against MongoDB 8.2.
+
+## Aggregation expressions are a phantom-typed tree
+
+`Expr[-E, +A]` reads a document of `E` and computes an `A`, but the tree underneath is untyped: every node is an
+`Expr[Any, Nothing]`, which conforms to every `Expr[E, A]`, and the types live only on the factories and operators
+that build them. That keeps the renderer one match over ten node shapes instead of a case per operator, and it is
+why `Expr.raw` costs nothing to offer.
+
+The variance does real work. A literal reads no document, so it is an `Expr[Any, A]`, and contravariance in `E` lets
+it stand wherever an `Expr[Order, A]` is expected. The binary operators take `[E2 <: E]` so that `lit + field` and
+`field + lit` both come out as an `Expr[Order, …]` — inference instantiates `E2` to its upper bound because it
+appears contravariantly in the result. Covariance in `A` is what made a first draft wrong: `qty.expr < note.expr`
+compiled, because `A` widened to `Int | String`. Comparisons now take a second type `B` and ask for a
+`Comparison[A, B]`, which exists for one type with itself and for two numbers, since the server compares an `Int` with
+a `Long` correctly.
+
+Arithmetic asks for `Widened[A, B, R]`, which encodes the server's own widening — `Int` with `Long` is `Long`, anything
+with `Double` is `Double`, anything with `BigDecimal` is `BigDecimal` — so `price * qty` needs no cast. An `Option[A]`
+field reads as `A` (`Unwrapped`), because inside an expression a missing value is a `null` the operators propagate,
+and `orElse` is `$ifNull` for the cases where that is not wanted.
+
+Two names were chosen by the compiler rather than by taste. Navigating into an element is `get`, not `/`: with `/`
+overloaded for division and navigation, inference inside `"name" := ...` picked the wrong alternative. And the
+comparisons have named forms — `equalTo`, `lt` — beside the symbolic ones, because ScalaTest's `Matchers` bring a
+`===` by implicit conversion that wins over an extension method inside a spec, which is exactly where users write
+expressions to test them.
+
+The fake does not evaluate expressions. A faithful evaluator means the server's null handling, numeric widening and
+date arithmetic for every operator, and one that is subtly wrong is worse than one that refuses; every stage,
+projection and filter that holds an expression is refused by name, and integration tests cover them against a real
+server instead.
+
+## Search: a typed core, a raw edge
+
+`ROADMAP.md` used to defer `$search` because nothing here could run it. Testcontainers 2 ships
+`MongoDBAtlasLocalContainer`, over the `mongodb-atlas-local` image, and that removed the reason: search indexes,
+`$search`, `$searchMeta` and `$vectorSearch` all run in the integration suite now. What is typed is the core most
+code reaches for — the text operators, equality, ranges, `exists`, `compound`, vector search with its pre-filter, and
+dynamic and vector index definitions — with `SearchOperator.raw` and `SearchIndex.of` for the long tail, which is
+large and moves fast. The text operators compile on text fields and the ranges on fields the server orders, the same
+capability rule the filters follow.
+
+## A write the client sends keeps its collection's codec
+
+The client-level `bulkWrite` addresses writes by namespace, and this library is built on typed collections. The two
+meet at `collection.write(command)`: the collection that knows how to encode its entity and spell its fields turns its
+own `WriteCommand` into an addressed write, and the client only sends the batch. Nothing about the write is untyped,
+and the driver's client-level codec registry — which knows nothing of `mongo4s` codecs — never sees an entity,
+because the document is already a `BsonDocument` when it arrives.
+
+## Refusing what would be dropped
+
+Some options mean nothing in some places, and the driver's answer is to ignore them. A `sort` on `updateMany` is sent
+nowhere; a `comment` on one command of a client-level bulk has no place in the command. Both are refused here, with a
+message saying where the option belongs, because a write that quietly ignores half of what it was told is the kind of
+bug that survives every test. The rule is the same one the fake follows: answer correctly or say no.
+
+## A tailable cursor is a live stream
+
+A tailable cursor never completes, and fs2's `fromPublisher` emits only when its chunk fills or the publisher
+finishes — so a tailing `find` bridged like any other delivered nothing at all. The cursor type decides the bridge:
+a tailable `find` streams through `RsBridge.liveStream`, the chunk-of-one bridge change streams already use, and every
+other `find` keeps its batching. `all` on a tailable cursor still never returns, which is the cursor's nature rather
+than the bridge's.
+
+## The build fails on a warning
+
+The warnings the build turns on are only a test if something fails on them, so `-Werror` is on — except for the
+`-source:future` check, which exists to see what a later compiler will say and would otherwise never get to say it.
+One message is silenced by text: kyo's `Frame` macro expands to `@nowarn` annotations that suppress nothing, in code
+this project does not own.
+
 ## Evolving the API
 
 Three commitments, and the mechanics that make each one keepable:
@@ -701,7 +779,7 @@ compiling across minor releases. `liveStream` and `Effect.monotonic` were both a
 
 **Binary compatibility is checked, not asserted.** MiMa runs in CI against the previous release. Every deliberate
 break is a MiMa exclusion in `build.sbt` and an entry in [COMPATIBILITY.md](COMPATIBILITY.md) — waivers are visible, not
-silent. `3.0.0` needs no filters at all: a major release is allowed to break, so the list there is a migration guide
+silent. A major release such as `5.0.0` needs no filters at all: it is allowed to break, so the list there is a migration guide
 rather than a set of waivers.
 
 **MiMa has a blind spot, and the compiler covers it.** An `inline` method that reaches a non-public member makes the
@@ -760,8 +838,8 @@ expressions, which the fake does not. Each is refused by name. `$fill`, which on
 simulated — including the explicit `null` the server writes where there is nothing to fill from.
 
 **Batching rapid's demand.** rapid's stream asks the cursor for one more document each time it takes one, where
-fs2 asks by the chunk. Measured before changing it: against a real MongoDB, rapid's `findStream` ran at 1,667 ops/s
-against 1,523 for cats-effect and 1,504 for zio, on the same machine in the same sitting. A per-element `request` is
+fs2 asks by the chunk. Measured before changing it: against a real MongoDB, rapid's `findStream` runs at 3,179 ops/s
+against 3,174 for cats-effect and 3,044 for zio, in the same sitting ([BENCHMARKS.md](BENCHMARKS.md)). A per-element `request` is
 lost in the decode and the round trip, so the simpler code stays.
 
 **Copying every `BsonDocument` the API accepts.** `Filter.Raw`, `Stage.Raw`, hints and resume tokens are taken as
@@ -774,7 +852,7 @@ carrying exactly n events it blocks forever. Not fixable from here.
 
 **A circe bridge.** There is no `mongo4s-bson-circe` module, and there is not going to be one. circe is a *JSON*
 codec: routing an entity through it means `case class → circe → some BSON tree → org.bson`, which is the same
-`case class ↔ circe ↔ mongo4cats.Bson ↔ org.Bson` trip [BENCHMARKS.md](BENCHMARKS.md) measures at 1.9–3.4× slower on
+`case class ↔ circe ↔ mongo4cats.Bson ↔ org.Bson` trip [BENCHMARKS.md](BENCHMARKS.md) measures at 1.9–3.5× slower on
 decode. That cost is the reason `mongo4s` exists; shipping a first-class path back to it would be arguing against
 the library's own premise. A model already on circe should get a `BsonDocumentCodec[A]` written against BSON
 directly — `bson-direct` derives one with no third-party dependency at all.

@@ -21,10 +21,11 @@ skipping it.
 
 **JDK 25 (LTS) is required**, and the build checks it before doing anything: on an older JDK it stops with a
 message naming the version it found rather than letting four modules compile and `mongo4s-kyo` fail with
-`UnsupportedClassVersionError: class file version 69.0`. `Scala 3.9` itself would run on JDK 17, but kyo's `Frame`
-macro runs inside the compiler and emits Java 25 class files, so the whole build follows the module with the
-highest floor rather than publishing artifacts built against different JDKs. `cs java --jvm 25` or
-`brew install openjdk@25` gets you one; CI uses the same.
+`UnsupportedClassVersionError: class file version 69.0`. `Scala 3.9` itself would run on JDK 17, but kyo ships
+Java 25 class files and its `Frame` macro loads them inside the compiler, so the whole build follows the module with
+the highest floor rather than publishing artifacts built against different JDKs. What the build publishes targets
+Java 17 regardless; only an application on `mongo4s-kyo` needs JDK 25 at runtime, for kyo's sake.
+`cs java --jvm 25` or `brew install openjdk@25` gets you one; CI uses the same.
 
 Publishing credentials live in `~/.sbt/sonatype_credentials`, outside the repository: one file for every project
 that publishes, out of reach of `git clean -xfd`, and with no ignore rule that has to be right. A checkout without
@@ -36,11 +37,17 @@ build was split across two Scala versions, because `kyo`, `rapid` and `bson-caly
 newer than the then-current LTS; `3.9` being an LTS is what removed that split.
 
 ```bash
-sbt compile          # compile everything
-sbt test             # run unit tests for the aggregated modules (bson, core, runtime, repositories)
-sbt scalafmtCheckAll  # verify formatting
-sbt scalafmtAll        # fix formatting
+sbt compile                 # compile everything
+sbt "testOnly *"            # run the unit tests of every aggregated module
+sbt "it/testOnly *"         # run the integration tests — needs Docker
+sbt "scalafmtCheckAll; scalafmtSbtCheck; it/scalafmtCheck; it/Test/scalafmtCheck"  # verify formatting, as CI does
 ```
+
+sbt 2 takes several tasks as one quoted string separated by `;` — `sbt scalafmtCheckAll test` is parsed as one
+command and rejected. It also caches test runs and replays a cached run's log, so a repeated `test` with unchanged
+inputs runs nothing; `testOnly *` is what CI uses, and varying the filter (`testOnly mongo4s.*`) forces a real run.
+`scalafmtCheckAll` does not cover `it/` — it is not aggregated — nor the `.sbt` files, which is why the format check
+above names them.
 
 To run a single module's tests:
 
@@ -100,7 +107,9 @@ before assuming the default is safe there. If the runtime can't derive a `Tag`-l
   `testkit` depends on `repositories` and a test dependency the other way would be a cycle.
 - `it/` and the `*DirectRepositoryItSpec`/`RepositoryItSpec` families run against a real MongoDB
   started via Testcontainers - you need Docker running locally to execute these
-  (`sbt it/test`).
+  (`sbt "it/testOnly *"`). The Atlas Search specs pull `mongodb/mongodb-atlas-local` (about 700 MB) the first
+  time. On Windows the forks point Testcontainers at `tcp://localhost:2375`, so enable Docker Desktop's "Expose
+  daemon on tcp://localhost:2375 without TLS", or set `DOCKER_HOST` yourself.
 - New runtime backends or codec bridges should be exercised through the shared spec traits
   (`RepositoryBackendSpec` in `repositories-tests`, `DirectRepositoryItSpec` in `it`) rather than
   one-off tests, so they get the same coverage as every existing backend for free.
@@ -118,11 +127,13 @@ find. `examples/` is the exception: its section markers are what tie the code to
 The build turns on more warnings than the compiler does by default, because "the compiler is the test" only holds
 if it is asked. Beyond `-Wunused:all` and `-Wvalue-discard`: `-WunstableInlineAccessors` (the one that guards the
 binary-compatibility promise — see [DESIGN.md](DESIGN.md)), `-Wshadow:all`, `-Winfer-union`,
-`-Wimplausible-patterns` and `-Wrecurse-with-default`. Two are deliberately left off, and `build.sbt` says why.
+`-Wimplausible-patterns` and `-Wrecurse-with-default`. Any warning fails the build (`-Werror`), except under the
+`-source:future` check, whose point is to see what a future compiler will say. One message is silenced: kyo's
+`Frame` macro expands to `@nowarn` annotations that suppress nothing, which is kyo's to fix, not ours.
 
 ## Releasing
 
-Two steps are easy to forget because nothing fails when they are missed:
+Three steps are easy to forget because nothing fails when they are missed:
 
 - **Move the MiMa baseline.** `binaryCompatibleWith` in `build.sbt` names the releases the artifacts are checked
   against. It is `Set.empty` while a major version is being prepared, because there is nothing compatible to compare
@@ -139,5 +150,5 @@ Two steps are easy to forget because nothing fails when they are missed:
 - Keep PRs focused - one runtime backend, one codec bridge, or one bug fix per PR is easier to review
   than a mix.
 - Add or extend tests for anything behavioral you change.
-- `sbt scalafmtCheckAll test` should pass locally before you push (integration tests need Docker and
+- The format check and `sbt "testOnly *"` should pass locally before you push (integration tests need Docker and
   aren't required for most changes, but CI will run them too).

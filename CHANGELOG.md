@@ -8,6 +8,74 @@ Notable changes per release. Breaking changes and how to migrate are in
 This file starts at `2.0.0`. `1.0.0` was released without one, and `1.1.0` was never published — its changes are
 part of `2.0.0` below.
 
+## 5.0.0
+
+A breaking release, mostly in binary shape: most existing calls compile unchanged. The migration notes are in
+[COMPATIBILITY.md](COMPATIBILITY.md#migrating-from-4x-to-500).
+
+### Added
+
+- **Typed aggregation expressions.** `Expr[E, A]` computes a value from a document — `field.expr`, `Expr.lit`, and
+  arithmetic, comparisons, logic, `cond`/`switch`, text, array (`filter`/`map` over a typed element), date and
+  conversion operators, each compiling only where the server would accept it. `$addFields` takes computed fields
+  (`"total" := price.expr * qty.expr`, or a `Field` target spelled through the naming), and so do `$group` keys
+  (`groupByExpr`, `groupByKeys`), accumulators (`Accumulator.sum(expr)` and the rest), `$replaceWith`, `$redact`, an
+  inclusion `Projection` (`compute`, in `find` as well as in `$project`), `Filter.expr` and pipeline updates.
+- **Atlas Search.** `$search` and `$searchMeta` over typed `SearchOperator`s — `text`, `phrase`, `autocomplete`,
+  `wildcard`, `regex`, `equalTo`, ranges, `exists`, `compound` — and `$vectorSearch`, approximate or exact, with a
+  `Filter` pre-filter; `createSearchIndex(es)`, `updateSearchIndex`, `dropSearchIndex` and `listSearchIndexes`, with
+  `SearchIndex.dynamic`, `SearchIndex.of` and typed vector indexes. Score with `Expr.searchScore`. Checked against a
+  `mongodb-atlas-local` container.
+- **The client-level `bulkWrite`** (MongoDB 8.0+): each collection's `write(command)` addresses a `WriteCommand` to
+  its namespace with its own codec, and `client.bulkWrite` sends writes to several collections and databases in one
+  command, failing as `MongoError.ClientBulkWriteFailed`.
+- **Typed positional updates.** `field.each` (`$[]`), `field.matched` (`$`) and `field.where(element)` (`$[id]`),
+  with `Field.element` building both the path and its array filter, and `/` with a `Field` reaching into the element
+  through the naming.
+- **`pullWhere`** removes array elements by a condition, and **`Field.self`** states a condition on a scalar element
+  itself — for `pullWhere` and for a range inside `$elemMatch`.
+- **Insert options**: `InsertOneOptions` and `InsertManyOptions` with `comment` and `bypassDocumentValidation`, and
+  `InsertManyOptions.unordered`, which carries on past a duplicate. The repository's `insertMany` takes them too.
+- **`let` variables** on every write, on `find` and on `aggregate`; **`sort`** on `updateOne`/`replaceOne` (8.0+);
+  `comment` on `count`; options on the bulk delete commands.
+- **Cursor options**: `cursorType` (a tailable cursor streams as a live stream), `maxAwaitTime`, `noCursorTimeout` and
+  `allowDiskUse` on `find`; `maxAwaitTime` and `bypassDocumentValidation` on `aggregate`; `hint` and `comment` on
+  `distinct`; `EstimatedCountOptions`.
+- **`$type` over several types** (`hasAnyType`), **`$currentDate` as a timestamp** (`Update.currentTimestamp`),
+  `$unwind`'s `includeArrayIndex`, `$unionWith` with a pipeline, and a text index's weights, default language and
+  language override.
+- The fake simulates unordered inserts, a `sort` on single-document updates, `pullWhere`, conditions on scalar
+  elements, `$type` over several types and a timestamp `$currentDate`.
+
+### Changed
+
+- **`insertOne`/`insertMany` take options**, and **`bulkWrite` takes `BulkWriteOptions` instead of `ordered`** —
+  `bulkWrite(commands, BulkWriteOptions.unordered)` — on the collection and on the repository.
+- **`Stage.addFields` takes computed fields** — `"name" := expr` — rather than `(String, BsonValue)` pairs.
+- **AST cases changed shape**: `Stage.Group` takes a `GroupKey`, `Filter.Expr` and `Stage.Redact` an `Expr`,
+  `Filter.Type` a list of types, `Update.CurrentDate` whether it writes a timestamp, `Projection.Include` its computed
+  fields, `Stage.Unwind` `includeArrayIndex`, `Stage.UnionWith` a pipeline, and `WriteCommand.DeleteOne`/`DeleteMany`
+  their `DeleteOptions`.
+- `FindQuery`, `AggregateQuery`, `DistinctQuery`, `MongoCollection` and `MongoClient` have new abstract members.
+- **`containsAll(Nil)` matches nothing**, as `$all: []` does on the server — it matched everything before.
+- **A `sort` on `updateMany` is refused**, where the driver drops it without a word.
+- **The build fails on any compiler warning.**
+- `zio` `2.1.27`, Testcontainers `2.0.5`, sbt `2.0.11`, MiMa `1.2.1`.
+
+### Fixed
+
+- **`ensureKeyIndex` failed on any repository keyed on `_id`** — `objectId`, `WithId`, `storedId` — since the server
+  refuses a `unique` flag on the `_id` index. It now builds nothing for such a key and answers `_id_`.
+- **Slicing a field the projection also included dropped the inclusion**, and the server returned every field. The
+  sliced field now keeps the projection in inclusion mode, and the one combination the server cannot express is
+  refused.
+- **A window over `Accumulator.raw` wrote `window` into the document it was given**, so reusing it in a `$group`
+  failed on the server.
+- **A transaction whose commit failed carried a misleading suppressed `IllegalStateException`** from aborting a
+  transaction the commit had already ended.
+- **The fake wrote a positional path as a field called `$[]`**; it refuses positional updates by name now. It also
+  accepted a `unique` index on `_id` and partial indexes the server refuses, and matched documents on `$all: []`.
+
 ## 4.1.0
 
 Binary compatible with `4.0.0`, checked by MiMa.

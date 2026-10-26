@@ -12,7 +12,7 @@ lazy val checkedJdk: Int = {
   if (major < requiredJdk) {
     sys.error(
       s"mongo4s requires JDK $requiredJdk or newer; this build is running on JDK $running. " +
-        "mongo4s-kyo's class files target Java 25 and cannot be compiled by an older JDK. " +
+        "kyo ships Java 25 class files, so mongo4s-kyo cannot be compiled by an older JDK. " +
         "Point JAVA_HOME at a JDK 25 install (`cs java --jvm 25`, or `brew install openjdk@25`) and retry."
     )
   }

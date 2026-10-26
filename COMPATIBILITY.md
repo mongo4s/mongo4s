@@ -10,8 +10,85 @@
   yourself keeps working across minor releases.
 * Deprecations get at least one minor release before removal.
 * Every deliberate break inside a major version is listed here and carries a matching MiMa exclusion in
-  `build.sbt`, so nothing is waived silently. A major release — `3.0.0`, `4.0.0` — has no such exceptions: its
+  `build.sbt`, so nothing is waived silently. A major release — `3.0.0`, `4.0.0`, `5.0.0` — has no such exceptions: its
   migration guide below is what the major version covers.
+
+## Migrating from 4.x to 5.0.0
+
+`5.0.0` keeps `Scala 3.9 LTS`. It is a major release because several methods gained parameters and several AST cases
+changed shape, which is a binary break even where the source still compiles; each is a section below. The ones
+ordinary calling code is likely to meet are `bulkWrite`'s `ordered` flag becoming `BulkWriteOptions`, `$addFields`
+taking computed fields, and `containsAll(Nil)` now matching nothing. Anything compiled against `4.x` — a library that
+depends on `mongo4s` — has to be recompiled.
+
+### `bulkWrite` takes `BulkWriteOptions`
+
+`bulkWrite(commands, ordered = false)` is `bulkWrite(commands, BulkWriteOptions.unordered)`, on `MongoCollection` and
+on `Repository`. `bulkWrite(commands)` is unchanged and still ordered. `BulkWriteOptions` also carries `comment`,
+`bypassDocumentValidation` and `let`.
+
+### Inserts take options
+
+`insertOne(document, options = InsertOneOptions.default)` and `insertMany(documents, options =
+InsertManyOptions.default)`, on the collection and on the repository. Calls without options compile unchanged; the
+binary signature is new. `InsertManyOptions.unordered` is the new way to insert past a duplicate.
+
+### `$addFields` takes computed fields
+
+`Stage.addFields("name" -> bsonValue)` is `Stage.addFields("name" := expression)`. The typed form is usually the
+better rewrite — `"total" := priceField.expr * qtyField.expr` — and `Expr.raw(bsonValue)` carries a value exactly as
+before. A `Field` works as the target too, spelled through the collection's naming: `totalField := ...`.
+
+### AST cases changed shape
+
+A match over one of these, or a direct construction of one, needs the new shape; the factories are unchanged unless
+noted:
+
+* `Stage.Group(by, accumulators)` — `by` is a `GroupKey` (`All`, `Path`, `Evaluated`, `Compound`) instead of an
+  `Option[FieldPath]`.
+* `Stage.AddFields(fields)` holds `Computed` values; `Stage.Redact(expression)` an `Expr`; `Stage.Unwind` gained
+  `includeArrayIndex` and `Stage.UnionWith` a `pipeline`.
+* `Filter.Expr(expression)` holds an `Expr[T, Boolean]`. `Filter.expr(bsonDocument)` still works, and wraps the
+  document in `Expr.raw`.
+* `Filter.Type(path, bsonTypes)` holds a list, so it can match several types.
+* `Update.CurrentDate(path, asTimestamp)` says whether it writes a date or a timestamp.
+* `Projection.Include` gained the computed fields it carries.
+* `WriteCommand.DeleteOne(filter, options)` and `DeleteMany(filter, options)` carry `DeleteOptions`, defaulting to none,
+  so `WriteCommand.DeleteOne(filter)` still compiles; a pattern on the old arity does not.
+* `Accumulator.Expression` and `Stage` have new cases — `Evaluated`, `ReplaceWith`, `Search`, `SearchMeta`,
+  `VectorSearch` — which an exhaustive match has to handle.
+
+### Traits grew
+
+`FindQuery` has `let`, `allowDiskUse`, `cursorType`, `maxAwaitTime` and `noCursorTimeout`; `AggregateQuery` has `let`,
+`maxAwaitTime` and `bypassDocumentValidation`; `DistinctQuery` has `hint` and `comment`; `MongoCollection` has
+`estimatedCount(options)` and the five search-index methods; `MongoClient` has `bulkWrite`. A class of your own that
+implements one of them has these to write; code that only calls them is unaffected.
+
+### Positional paths are typed
+
+`field / "$[]" / "qty"` still renders the same path, but its segments are stored names, outside the collection's
+naming. `field.each / qtyField`, `field.matched / qtyField` and `field.where(element) / qtyField` are the typed forms,
+and an array filter built on the same `Field.element` replaces a hand-spelled `Field.stored("low.qty")`.
+
+### Behaviour that changed under the same signatures
+
+* **`containsAll(Nil)` matches nothing**, the way `$all: []` does on the server. It matched everything before. If an
+  empty list meant "no constraint" in your code, test for it before building the filter.
+* **A `sort` on `updateMany`** — or on a bulk `UpdateMany` — **is refused** with an `IllegalArgumentException`. The
+  driver would have dropped it, since a multi-document update has no one document to pick.
+* **`ensureKeyIndex` on a key stored as `_id`** builds nothing and answers `_id_`, where it used to fail on the server.
+* **A projection that includes a field and slices it** keeps it once, sliced, instead of returning every field; the
+  combination of only sliced fields and no `_id` is refused.
+* **The fake refuses more**: positional updates, tailable cursors, aggregation expressions, Atlas Search, a write for
+  the client-level `bulkWrite`, a `unique` index on `_id` alone, and partial indexes the server refuses. Each of them
+  answered wrong, or not at all, before.
+
+### Java and the server
+
+Nothing changed in what runs where, but it is stated now: the class files target Java 17, `mongo4s-kyo` needs JDK 25
+at runtime because kyo's own class files do, and features from newer servers say which server they need — see
+[Modules](README.md#modules).
 
 ## Upgrading from 4.0.x to 4.1.0
 
@@ -559,8 +636,9 @@ not read forward.
 `mongo4s-kyo` depends on a kyo release candidate. Until kyo reaches 1.0.0 final, that module sits outside the binary
 compatibility promise the other artifacts make.
 
-Compiling any module that touches kyo requires `JDK 25` — the `kyo.Frame` macro runs inside the compiler and its
-class files target `Java 25`, so this is a compile-time requirement, not just a runtime one. Since `3.0.0` the build
+kyo ships Java 25 class files, so `mongo4s-kyo` needs `JDK 25` twice over: to compile, since the `kyo.Frame` macro
+runs inside the compiler and loads kyo's classes there, and to run, since an application on it loads them too. The
+other modules' published class files target `Java 17` and run on any JDK from 17 up. Since `3.0.0` the build
 enforces it for **every** module: it refuses to load on an older JDK, naming the version it found. One JDK across
 the build is deliberate — the alternative is publishing artifacts compiled against different JDKs, and a failure
 that only appears once the fifth module is reached.

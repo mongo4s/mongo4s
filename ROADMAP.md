@@ -14,15 +14,15 @@ full API applies.
 | | Why it is not here yet | Workaround today |
 | --- | --- | --- |
 | **GridFS** | A module of its own, with its own streaming story on four runtimes. Nobody has asked for it. | The driver's `GridFSBuckets` over `client.underlying`. |
-| **Atlas `$search`** | A large, fast-moving surface that only runs on Atlas, so nothing here could exercise it. Typing it from the outside would be guesswork with no way to check the guess. | `Stage.raw`. |
-| **Client-level `bulkWrite`** | MongoDB 8.0 can write across collections and databases in one command, but the write is addressed by namespace, and this library is built on typed collections and repositories — there is no obvious shape that keeps both. It is also not a transaction, so it buys a round trip rather than atomicity. Waiting for a real feature request to say what the shape should be. | Per-collection `bulkWrite`, or a transaction where the writes must land together. |
 | **Streaming bulk inputs** | `insertMany` and `bulkWrite` take a `Seq`; taking an `S` would need `RsBridge` to fold a stream into `F`, which the four runtimes share no shape for. | Chunk the stream with your runtime and `insertMany` each chunk. |
+| **The rest of Atlas Search** | `$search` has more operators than the typed core — `near`, `geoWithin`, `moreLikeThis`, `queryString`, `embeddedDocument`, highlighting, facets in `$searchMeta` — and index mappings beyond dynamic and vector ones. The core is what most search code reaches for; the rest waits for someone who needs it. | `SearchOperator.raw`, `SearchIndex.of` with a mapping written by hand. |
+| **The fake evaluating expressions** | Faithful evaluation means copying the server's rules for every operator — numeric widening, null handling, date arithmetic — and a fake that gets one subtly wrong is worse than one that refuses. | An integration test against a container. |
 
 ## How these land
 
 Most of the list is **additive** — new methods, new options on the existing options values, new `Stage` cases, a new
-codec-bridge module. `4.0.0` moved what it needed to move (see [COMPATIBILITY.md](COMPATIBILITY.md)); from here the
-shape of every operation signature is frozen again, so those additions can ship in a `4.x` minor release without
+codec-bridge module. `5.0.0` moved what it needed to move (see [COMPATIBILITY.md](COMPATIBILITY.md)); from here the
+shape of every operation signature is frozen again, so those additions can ship in a `5.x` minor release without
 breaking anybody, and will as demand appears.
 
 Several of them are less additive than they look, though — a new `Stage` or `Filter` case breaks an exhaustive
