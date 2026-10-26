@@ -2,7 +2,7 @@ package mongo4s.operations
 
 import java.time.Instant
 
-import org.bson.{BsonArray, BsonBoolean, BsonDocument, BsonInt32, BsonString, BsonValue}
+import org.bson.{BsonArray, BsonBoolean, BsonDocument, BsonInt32, BsonString, BsonTimestamp, BsonValue}
 
 import mongo4s.bson.{BsonEncoder, FieldNaming}
 import mongo4s.{BitwiseOf, ComparableOf, ElementOf, Field, FieldPath, NumericOf}
@@ -16,10 +16,11 @@ enum Update[E](val key: String):
   case Mul[T](path: FieldPath, factor: BsonValue)                  extends Update[T]("$mul")
   case Min[T](path: FieldPath, value: BsonValue)                   extends Update[T]("$min")
   case Max[T](path: FieldPath, value: BsonValue)                   extends Update[T]("$max")
-  case CurrentDate[T](path: FieldPath)                             extends Update[T]("$currentDate")
+  case CurrentDate[T](path: FieldPath, asTimestamp: Boolean)       extends Update[T]("$currentDate")
   case Push[T](path: FieldPath, value: BsonValue)                  extends Update[T]("$push")
   case Pull[T](path: FieldPath, value: BsonValue)                  extends Update[T]("$pull")
   case PullAll[T](path: FieldPath, values: BsonArray)              extends Update[T]("$pullAll")
+  case PullWhere[T, U](path: FieldPath, condition: Filter[U])      extends Update[T]("$pull")
   case Pop[T](path: FieldPath, first: Boolean)                     extends Update[T]("$pop")
   case AddToSet[T](path: FieldPath, value: BsonValue)              extends Update[T]("$addToSet")
   case AddToSetEach[T](path: FieldPath, values: BsonArray)         extends Update[T]("$addToSet")
@@ -95,7 +96,8 @@ object Update:
   ): Update[E] =
     Max(field.path, comparable.encode(value))
 
-  def currentDate[E](field: Field[E, Instant]): Update[E] = CurrentDate(field.path)
+  def currentDate[E](field: Field[E, Instant]): Update[E]            = CurrentDate(field.path, asTimestamp = false)
+  def currentTimestamp[E](field: Field[E, BsonTimestamp]): Update[E] = CurrentDate(field.path, asTimestamp = true)
 
   def push[E, C, A](field: Field[E, C], value: A)(using
       ElementOf[C, A],
@@ -121,6 +123,9 @@ object Update:
 
   def pullAll[E, C, A](field: Field[E, C], values: Seq[A])(using ElementOf[C, A], BsonEncoder[A]): Update[E] =
     PullAll(field.path, bsonArray(values))
+
+  def pullWhere[E, C, A](field: Field[E, C], condition: Filter[A])(using ElementOf[C, A]): Update[E] =
+    PullWhere(field.path, condition)
 
   def addToSet[E, C, A](field: Field[E, C], value: A)(using
       ElementOf[C, A],
@@ -172,11 +177,14 @@ object Update:
     case Mul(path, factor)               => operator(target, update.key, path.render(naming), factor)
     case Min(path, value)                => operator(target, update.key, path.render(naming), value)
     case Max(path, value)                => operator(target, update.key, path.render(naming), value)
-    case CurrentDate(path)               => operator(target, update.key, path.render(naming), BsonBoolean(true))
+    case CurrentDate(path, asTimestamp)  =>
+      val kind = if asTimestamp then BsonDocument("$type", BsonString("timestamp")) else BsonBoolean(true)
+      operator(target, update.key, path.render(naming), kind)
     case Push(path, value)               => operator(target, update.key, path.render(naming), value)
     case PushEach(path, values, options) => operator(target, update.key, path.render(naming), each(values, options, naming))
     case Pull(path, value)               => operator(target, update.key, path.render(naming), value)
     case PullAll(path, values)           => operator(target, update.key, path.render(naming), values)
+    case PullWhere(path, condition)      => operator(target, update.key, path.render(naming), condition.toBson(naming))
     case Pop(path, first)                => operator(target, update.key, path.render(naming), BsonInt32(if first then -1 else 1))
     case Bit(path, operation, mask)      => operator(target, update.key, path.render(naming), BsonDocument(operation, mask))
     case AddToSet(path, value)           => operator(target, update.key, path.render(naming), value)

@@ -11,13 +11,13 @@ import mongo4s.bson.{BsonEncoder, BsonField, FieldNaming}
 import scala.jdk.CollectionConverters.given
 
 enum Stage[E](val key: String):
-  case MatchStage(filter: Filter[E])                                extends Stage[E]("$match")
-  case ProjectStage(projection: Projection[E])                      extends Stage[E]("$project")
-  case SortStage(sort: Sort[E])                                     extends Stage[E]("$sort")
-  case Limit(n: Int)                                                extends Stage[E]("$limit")
-  case Skip(n: Int)                                                 extends Stage[E]("$skip")
-  case Count(fieldName: String)                                     extends Stage[E]("$count")
-  case Unwind(path: FieldPath, preserveNullAndEmptyArrays: Boolean) extends Stage[E]("$unwind")
+  case MatchStage(filter: Filter[E])                                                                   extends Stage[E]("$match")
+  case ProjectStage(projection: Projection[E])                                                         extends Stage[E]("$project")
+  case SortStage(sort: Sort[E])                                                                        extends Stage[E]("$sort")
+  case Limit(n: Int)                                                                                   extends Stage[E]("$limit")
+  case Skip(n: Int)                                                                                    extends Stage[E]("$skip")
+  case Count(fieldName: String)                                                                        extends Stage[E]("$count")
+  case Unwind(path: FieldPath, preserveNullAndEmptyArrays: Boolean, includeArrayIndex: Option[String]) extends Stage[E]("$unwind")
 
   case Lookup(
       from: String,
@@ -57,7 +57,7 @@ enum Stage[E](val key: String):
   case ReplaceRoot(path: FieldPath)                                               extends Stage[E]("$replaceRoot")
   case Sample(size: Int)                                                          extends Stage[E]("$sample")
   case SortByCount(path: FieldPath)                                               extends Stage[E]("$sortByCount")
-  case UnionWith(collection: String)                                              extends Stage[E]("$unionWith")
+  case UnionWith(collection: String, pipeline: List[Stage[?]])                    extends Stage[E]("$unionWith")
   case Facet(facets: List[(String, List[Stage[E]])])                              extends Stage[E]("$facet")
 
   case Bucket(
@@ -107,19 +107,18 @@ enum Stage[E](val key: String):
   case Raw(document: BsonDocument) extends Stage[E]("")
 
   def toBson(naming: FieldNaming): BsonDocument = this match
-    case Stage.MatchStage(filter)                         => BsonDocument(key, filter.toBson(naming))
-    case Stage.ProjectStage(projection)                   => BsonDocument(key, projection.toBson(naming))
-    case Stage.SortStage(sort)                            => BsonDocument(key, sort.toBson(naming))
-    case Stage.Limit(n)                                   => BsonDocument(key, BsonInt32(n))
-    case Stage.Skip(n)                                    => BsonDocument(key, BsonInt32(n))
-    case Stage.Count(fieldName)                           => BsonDocument(key, BsonString(fieldName))
-    case Stage.Unwind(path, preserveNullAndEmptyArrays)   =>
-      BsonDocument(
-        key,
-        BsonDocument("path", BsonString("$" + path.render(naming)))
-          .append("preserveNullAndEmptyArrays", BsonBoolean(preserveNullAndEmptyArrays)),
-      )
-    case Stage.Lookup(from, localField, foreignField, as) =>
+    case Stage.MatchStage(filter)                                          => BsonDocument(key, filter.toBson(naming))
+    case Stage.ProjectStage(projection)                                    => BsonDocument(key, projection.toBson(naming))
+    case Stage.SortStage(sort)                                             => BsonDocument(key, sort.toBson(naming))
+    case Stage.Limit(n)                                                    => BsonDocument(key, BsonInt32(n))
+    case Stage.Skip(n)                                                     => BsonDocument(key, BsonInt32(n))
+    case Stage.Count(fieldName)                                            => BsonDocument(key, BsonString(fieldName))
+    case Stage.Unwind(path, preserveNullAndEmptyArrays, includeArrayIndex) =>
+      val unwound = BsonDocument("path", BsonString("$" + path.render(naming)))
+        .append("preserveNullAndEmptyArrays", BsonBoolean(preserveNullAndEmptyArrays))
+      includeArrayIndex.foreach(name => unwound.append("includeArrayIndex", BsonString(name)))
+      BsonDocument(key, unwound)
+    case Stage.Lookup(from, localField, foreignField, as)                  =>
       BsonDocument(
         key,
         BsonDocument("from", BsonString(from))
@@ -127,7 +126,7 @@ enum Stage[E](val key: String):
           .append("foreignField", BsonString(foreignField.render(naming)))
           .append("as", BsonString(as)),
       )
-    case Stage.LookupPipeline(from, let, pipeline, as)    =>
+    case Stage.LookupPipeline(from, let, pipeline, as)                     =>
       val lookup = BsonDocument("from", BsonString(from))
 
       let.foreach(value => lookup.append("let", value): Unit)
@@ -179,10 +178,12 @@ enum Stage[E](val key: String):
         case List(path) => BsonDocument(key, BsonString(path.render(naming)))
         case _          => BsonDocument(key, BsonArray(paths.map(path => BsonString(path.render(naming)): BsonValue).asJava))
 
-    case Stage.ReplaceRoot(path)     => BsonDocument(key, BsonDocument("newRoot", BsonString("$" + path.render(naming))))
-    case Stage.Sample(size)          => BsonDocument(key, BsonDocument("size", BsonInt32(size)))
-    case Stage.SortByCount(path)     => BsonDocument(key, BsonString("$" + path.render(naming)))
-    case Stage.UnionWith(collection) => BsonDocument(key, BsonString(collection))
+    case Stage.ReplaceRoot(path)               => BsonDocument(key, BsonDocument("newRoot", BsonString("$" + path.render(naming))))
+    case Stage.Sample(size)                    => BsonDocument(key, BsonDocument("size", BsonInt32(size)))
+    case Stage.SortByCount(path)               => BsonDocument(key, BsonString("$" + path.render(naming)))
+    case Stage.UnionWith(collection, Nil)      => BsonDocument(key, BsonString(collection))
+    case Stage.UnionWith(collection, pipeline) =>
+      BsonDocument(key, BsonDocument("coll", BsonString(collection)).append("pipeline", BsonArray(pipeline.map(_.toBson(naming)).asJava)))
 
     case Stage.Facet(facets) =>
       val document = BsonDocument()
@@ -284,8 +285,8 @@ object Stage:
   def skip[E](n: Int): Stage[E]                       = Skip(Bounds.notNegative(n, "$skip"))
   def count[E](fieldName: String): Stage[E]           = Count(fieldName)
 
-  def unwind[E, A](field: Field[E, A], preserveNullAndEmptyArrays: Boolean = false): Stage[E] =
-    Unwind(field.path, preserveNullAndEmptyArrays)
+  def unwind[E, A](field: Field[E, A], preserveNullAndEmptyArrays: Boolean = false, includeArrayIndex: Option[String] = None): Stage[E] =
+    Unwind(field.path, preserveNullAndEmptyArrays, includeArrayIndex)
 
   def lookupWith[E, B](from: String, pipeline: List[Stage[B]], as: String, let: Option[BsonDocument] = None): Stage[E] =
     LookupPipeline(from, let, pipeline, as)
@@ -332,7 +333,9 @@ object Stage:
   def replaceRoot[E, A](field: Field[E, A]): Stage[E] = ReplaceRoot(field.path)
 
   def sample[E](size: Int): Stage[E]             = Sample(Bounds.atLeastOne(size, "$sample size", "which MongoDB refuses"))
-  def unionWith[E](collection: String): Stage[E] = UnionWith(collection)
+  def unionWith[E](collection: String): Stage[E] = UnionWith(collection, Nil)
+
+  def unionWith[E, B](collection: String, pipeline: List[Stage[B]]): Stage[E] = UnionWith(collection, pipeline)
 
   def sortByCount[E, A](field: Field[E, A]): Stage[E] = SortByCount(field.path)
 

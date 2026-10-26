@@ -8,7 +8,7 @@ import scala.collection.mutable
 import com.mongodb.bulk.BulkWriteError
 import com.mongodb.MongoCommandException
 import com.mongodb.client.model.Collation
-import org.bson.{BsonArray, BsonBoolean, BsonDateTime, BsonDocument, BsonDouble, BsonInt32, BsonInt64, BsonNull, BsonObjectId, BsonString, BsonValue}
+import org.bson.{BsonArray, BsonBoolean, BsonDateTime, BsonDocument, BsonDouble, BsonInt32, BsonInt64, BsonNull, BsonObjectId, BsonString, BsonTimestamp, BsonValue}
 import com.mongodb.{ExplainVerbosity, MongoBulkWriteException, MongoWriteException, ReadConcern, ReadPreference, ServerAddress, WriteConcern, WriteError}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
@@ -68,7 +68,11 @@ final class FakeMongoCollection[F[*], S[*], E](
   private def requireRenderable(update: Update[E]): Unit =
     update.toPipeline(naming) match
       case Some(_) => throw UnsupportedOperationException("FakeMongoCollection: a pipeline update computes from the document on the server, so it is not simulated")
-      case None    => update.toBson(naming): Unit
+      case None    =>
+        val rendered = update.toBson(naming)
+        val paths    = rendered.values.asScala.collect { case fields: BsonDocument => fields.keySet.asScala }.flatten
+        if paths.exists(_.split('.').exists(_.startsWith("$")))
+        then throw UnsupportedOperationException("FakeMongoCollection: the positional operators $, $[] and $[identifier] are not simulated")
 
   private def refuseCollation: Nothing =
     throw UnsupportedOperationException("FakeMongoCollection: a collation changes what matches and how it sorts, so it is not simulated")
@@ -514,6 +518,11 @@ final class FakeMongoCollection[F[*], S[*], E](
     val matched = matching(filter)
     (if sort.isEmpty then matched else matched.sortWith(orderedBy(sort))).headOption
 
+  private def elementMatches(element: BsonValue, filter: Filter[E]): Boolean =
+    if element.isDocument
+    then matches(element.asDocument, filter)
+    else matches(BsonDocument("", element), filter)
+
   private def matches(document: BsonDocument, filter: Filter[E]): Boolean = filter match
     case Filter.Eq(path, value)               => equals(document, path, value)
     case Filter.Ne(path, value)               => !equals(document, path, value)
@@ -536,13 +545,13 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Filter.All(path, values) =>
       values.nonEmpty && elementsAt(document, path).exists(elements => values.forall(value => elements.exists(BsonOrdering.same(_, value))))
     case Filter.Size(path, size)  => at(document, path).exists(v => v.isArray && v.asArray.size == size)
-    case Filter.Type(path, name)  => at(document, path).exists(v => mongo4s.bson.BsonTypeName.of(v) == name)
+    case Filter.Type(path, names) => at(document, path).exists(v => names.contains(mongo4s.bson.BsonTypeName.of(v)))
 
     case Filter.Mod(path, divisor, remainder) =>
       at(document, path).exists(v => v.isNumber && v.asNumber.longValue % divisor == remainder)
 
     case Filter.ElemMatch(path, inner) =>
-      elementsAt(document, path).exists(_.exists(element => element.isDocument && matches(element.asDocument, inner.asInstanceOf[Filter[E]])))
+      elementsAt(document, path).exists(_.exists(element => elementMatches(element, inner.asInstanceOf[Filter[E]])))
 
     case Filter.Text(_, _) =>
       throw UnsupportedOperationException("FakeMongoCollection: $text needs a real text index, so it is not simulated")
@@ -654,8 +663,9 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Update.Min(path, value) => keepExtreme(document, path, value, _ < 0)
     case Update.Max(path, value) => keepExtreme(document, path, value, _ > 0)
 
-    case Update.CurrentDate(path) =>
-      setAt(document, storedSegments(path), BsonDateTime(System.currentTimeMillis()))
+    case Update.CurrentDate(path, asTimestamp) =>
+      val now = if asTimestamp then BsonTimestamp((System.currentTimeMillis() / 1000).toInt, 1) else BsonDateTime(System.currentTimeMillis())
+      setAt(document, storedSegments(path), now)
 
     case Update.Rename(path, to) =>
       at(document, path) match
@@ -666,6 +676,9 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Update.Pull(path, value) => withArray(document, path)(_.filterNot(_ == value))
     case Update.Pop(path, first)  =>
       withArray(document, path)(elements => if elements.isEmpty then elements else if first then elements.tail else elements.init)
+
+    case Update.PullWhere(path, condition) =>
+      withArray(document, path)(_.filterNot(element => elementMatches(element, condition.asInstanceOf[Filter[E]])))
 
     case Update.PullAll(path, values) =>
       val removed = values.getValues.asScala.toList

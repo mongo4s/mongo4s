@@ -28,6 +28,9 @@ object FakeFidelityParityItSpec:
   def strings(values: String*): BsonArray =
     BsonArray(values.toList.map(v => BsonString(v): BsonValue).asJava)
 
+  def ints(values: Int*): BsonArray =
+    BsonArray(values.toList.map(v => BsonInt32(v): BsonValue).asJava)
+
   def items(values: (String, Int)*): BsonArray =
     BsonArray(values.toList.map((n, q) => BsonDocument("name", BsonString(n)).append("qty", BsonInt32(q)): BsonValue).asJava)
 
@@ -95,6 +98,38 @@ final class FakeFidelityParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matcher
 
     "agree that $all over an empty list matches nothing" in {
       agree("all_empty", people)(_.find(Filter.All(tagsF.path, Nil)).all.map(namesOf))
+    }
+
+    "agree on $pull with a condition, over document elements and over scalar ones" in {
+      val scores = Field.stored[BsonDocument, List[Int]]("scores")
+      val seed   = List(BsonDocument("_id", BsonString("a")).append("items", items(("pen", 2), ("cup", 7))).append("scores", ints(3, 7, 9, 12)))
+
+      agree("pull_where", seed) { collection =>
+        for
+          _     <- collection.updateOne(Filter.all, Field.stored[BsonDocument, List[BsonDocument]]("items").pullWhere(Field.stored[BsonDocument, Int]("qty").lt(5)))
+          _     <- collection.updateOne(Filter.all, scores.pullWhere(Field.self[Int].gte(7) && Field.self[Int].lt(10)))
+          after <- collection.find().first
+        yield after
+      }
+    }
+
+    "agree on $elemMatch over a range of scalar elements" in {
+      val scores = Field.stored[BsonDocument, List[Int]]("scores")
+      val seed   = List(BsonDocument("name", BsonString("low")).append("scores", ints(3, 12)), BsonDocument("name", BsonString("mid")).append("scores", ints(8)))
+
+      agree("elem_match_scalars", seed)(_.find(scores.elemMatch(Field.self[Int].gt(7) && Field.self[Int].lt(9))).all.map(namesOf))
+    }
+
+    "agree on $type over several types, and on the type $currentDate stores as a timestamp" in {
+      val seed = List(BsonDocument("name", BsonString("int")).append("v", BsonInt32(1)), BsonDocument("name", BsonString("text")).append("v", BsonString("x")))
+
+      agree("types_and_timestamps", seed) { collection =>
+        for
+          typed <- collection.find(Field.stored[BsonDocument, Any]("v").hasAnyType(mongo4s.bson.BsonTypeName.Int, mongo4s.bson.BsonTypeName.Long)).all.map(namesOf)
+          _     <- collection.updateMany(Filter.all, Update.currentTimestamp(Field.stored[BsonDocument, BsonTimestamp]("synced")))
+          kinds <- collection.find().all.map(_.map(_.get("synced").getBsonType))
+        yield (typed, kinds)
+      }
     }
 
     "agree on a dotted path through an array of documents" in {
@@ -438,7 +473,7 @@ final class FakeFidelityParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matcher
       val filters = List(
         ageF.gte(18),
         ageF.in(List(1, 2)) || nameF.exists,
-        Filter.Type[BsonDocument](ageF.path, mongo4s.bson.BsonTypeName.Int),
+        ageF.hasType(mongo4s.bson.BsonTypeName.Int),
         !ageF.gte(18),
         ageF.in(Nil),
         Filter.Ne[BsonDocument](ageF.path, BsonInt32(1)),

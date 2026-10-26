@@ -362,6 +362,21 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "a positional update" should {
+    "be refused by name rather than written to a field called $[]" in {
+      val items = Field.stored[BsonDocument, List[BsonDocument]]("items")
+      val qty   = Field.stored[BsonDocument, Int]("qty")
+      val c     = fake(BsonDocument("_id", BsonString("a")).append("items", docs(("pen", 2))))
+
+      List(items.each / qty, items.matched / qty, items.where(Field.element[BsonDocument]("low")) / qty).foreach { path =>
+        val refused = intercept[UnsupportedOperationException](c.updateOne(Filter.all, Update.set(path, 1)).unsafeRunSync())
+        refused.getMessage should include("positional")
+      }
+
+      c.find().first.unsafeRunSync().map(_.getArray("items").get(0).asDocument.getInt32("qty").getValue) shouldBe Some(2)
+    }
+  }
+
   "a tailable cursor" should {
     "be refused by name, since it waits for writes the fake's cursor never sees, while a plain one reads as usual" in {
       val c = fake(keyed("a"))

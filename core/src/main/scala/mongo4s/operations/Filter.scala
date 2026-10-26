@@ -22,7 +22,7 @@ enum Filter[E](val key: String):
   case ElemMatch[T, U](path: FieldPath, filter: Filter[U])         extends Filter[T]("$elemMatch")
   case All[T](path: FieldPath, values: List[BsonValue])            extends Filter[T]("$all")
   case Size[T](path: FieldPath, size: Int)                         extends Filter[T]("$size")
-  case Type[T](path: FieldPath, bsonType: BsonTypeName)            extends Filter[T]("$type")
+  case Type[T](path: FieldPath, bsonTypes: List[BsonTypeName])     extends Filter[T]("$type")
   case Mod[T](path: FieldPath, divisor: Long, remainder: Long)     extends Filter[T]("$mod")
   case Text[T](search: String, language: Option[String])           extends Filter[T]("$text")
 
@@ -66,7 +66,7 @@ enum Filter[E](val key: String):
   def unary_! : Filter[E] = Not(this)
 
   def toBson(naming: FieldNaming): BsonDocument = this match
-    case Eq(path, value)               => BsonDocument(path.render(naming), value)
+    case Eq(path, value)               => if path.isEmpty then BsonDocument("$eq", value) else BsonDocument(path.render(naming), value)
     case Ne(path, value)               => Filter.operator(naming, path, key, value)
     case Gt(path, value)               => Filter.operator(naming, path, key, value)
     case Gte(path, value)              => Filter.operator(naming, path, key, value)
@@ -75,11 +75,15 @@ enum Filter[E](val key: String):
     case In(path, values)              => Filter.operator(naming, path, key, BsonArray(values.asJava))
     case Nin(path, values)             => Filter.operator(naming, path, key, BsonArray(values.asJava))
     case Exists(path, exists)          => Filter.operator(naming, path, key, BsonBoolean(exists))
-    case Regex(path, pattern, options) => BsonDocument(path.render(naming), BsonRegularExpression(pattern, options))
+    case Regex(path, pattern, options) =>
+      val expression = BsonRegularExpression(pattern, options)
+      if path.isEmpty then BsonDocument("$regex", expression) else BsonDocument(path.render(naming), expression)
     case ElemMatch(path, filter)       => Filter.operator(naming, path, key, filter.toBson(naming))
     case All(path, values)             => Filter.operator(naming, path, key, BsonArray(values.asJava))
     case Size(path, size)              => Filter.operator(naming, path, key, BsonInt32(size))
-    case Type(path, bsonType)          => Filter.operator(naming, path, key, BsonString(bsonType.wireName))
+    case Type(path, bsonTypes)         =>
+      val names = bsonTypes.map(bsonType => BsonString(bsonType.wireName): BsonValue)
+      Filter.operator(naming, path, key, if names.size == 1 then names.head else BsonArray(names.asJava))
     case Mod(path, divisor, remainder) =>
       Filter.operator(naming, path, key, BsonArray(List[BsonValue](BsonInt64(divisor), BsonInt64(remainder)).asJava))
     case Text(search, language)        =>
@@ -98,7 +102,11 @@ enum Filter[E](val key: String):
     case BitsAnySet(path, mask)        => Filter.operator(naming, path, key, BsonInt64(mask))
     case BitsAllClear(path, mask)      => Filter.operator(naming, path, key, BsonInt64(mask))
     case BitsAnyClear(path, mask)      => Filter.operator(naming, path, key, BsonInt64(mask))
-    case And(filters)                  => BsonDocument(key, BsonArray(filters.map(_.toBson(naming)).asJava))
+    case And(filters)                  =>
+      val rendered = filters.map(_.toBson(naming))
+      if filters.forall(Filter.onSelf) && rendered.flatMap(_.keySet.asScala).distinct.size == rendered.map(_.size).sum
+      then rendered.foldLeft(BsonDocument())((merged, conjunct) => merged.append(conjunct.getFirstKey, conjunct.get(conjunct.getFirstKey)))
+      else BsonDocument(key, BsonArray(rendered.asJava))
     case Or(filters)                   => BsonDocument(key, BsonArray(filters.map(_.toBson(naming)).asJava))
     case Not(filter)                   => BsonDocument(key, BsonArray(List(filter.toBson(naming)).asJava))
     case MatchAll()                    => BsonDocument()
@@ -175,7 +183,27 @@ object Filter:
       name: String,
       value: BsonValue,
   ): BsonDocument =
-    BsonDocument(
-      path.render(naming),
-      BsonDocument(name, value),
-    )
+    if path.isEmpty
+    then BsonDocument(name, value)
+    else BsonDocument(path.render(naming), BsonDocument(name, value))
+
+  private def onSelf(filter: Filter[?]): Boolean = pathOf(filter).exists(_.isEmpty)
+
+  private def pathOf(filter: Filter[?]): Option[FieldPath] =
+    filter match
+      case Eq(path, _)        => Some(path)
+      case Ne(path, _)        => Some(path)
+      case Gt(path, _)        => Some(path)
+      case Gte(path, _)       => Some(path)
+      case Lt(path, _)        => Some(path)
+      case Lte(path, _)       => Some(path)
+      case In(path, _)        => Some(path)
+      case Nin(path, _)       => Some(path)
+      case Exists(path, _)    => Some(path)
+      case Regex(path, _, _)  => Some(path)
+      case ElemMatch(path, _) => Some(path)
+      case All(path, _)       => Some(path)
+      case Size(path, _)      => Some(path)
+      case Type(path, _)      => Some(path)
+      case Mod(path, _, _)    => Some(path)
+      case _                  => None

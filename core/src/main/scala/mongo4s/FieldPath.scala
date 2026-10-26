@@ -22,6 +22,7 @@ object FieldPath:
   def of(segment: String): FieldPath             = List(Segment.Derived(segment))
   def derived(segments: List[String]): FieldPath = segments.map(Segment.Derived.apply)
   def literal(stored: String): FieldPath         = stored.split('.').toList.map(Segment.Stored.apply)
+  val empty: FieldPath                           = Nil
 
   extension (path: FieldPath)
 
@@ -31,6 +32,11 @@ object FieldPath:
         case many          => many.iterator.map(_.render(naming)).mkString(".")
 
     def stored(segment: String): FieldPath = path :+ Segment.Stored(segment)
+
+    def isEmpty: Boolean = path.isEmpty
+
+    @targetName("andThen")
+    infix def ++(other: FieldPath): FieldPath = path ::: other
 
     @targetName("child")
     infix def /(segment: String): FieldPath = path.stored(segment)

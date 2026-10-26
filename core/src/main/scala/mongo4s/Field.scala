@@ -3,7 +3,7 @@ package mongo4s
 import scala.annotation.unused
 import scala.annotation.targetName
 
-import mongo4s.bson.{BsonEncoder, BsonTypeName}
+import mongo4s.bson.{BsonEncoder, BsonTypeName, FieldNaming}
 import mongo4s.operations.geometry.{GeoShape, Geometry}
 import mongo4s.operations.{Filter, PushOptions, Sort, Update}
 
@@ -15,6 +15,15 @@ object Field:
   inline def of[E, A](inline selector: E => A): Field[E, A] = ${ FieldMacro.impl[E, A]('selector) }
 
   def stored[E, A](path: String): Field[E, A] = Field(FieldPath.literal(path))
+
+  def self[A]: Field[A, A] = Field(FieldPath.empty)
+
+  def element[A](identifier: String): Field[A, A] =
+    require(
+      identifier.matches("[a-z][A-Za-z0-9]*"),
+      s"an array filter identifier starts with a lowercase letter and holds only letters and digits, got '$identifier'"
+    )
+    Field(FieldPath.empty.stored(identifier))
 
   extension [E, A](field: Field[E, A]) def path: FieldPath = field
 
@@ -60,6 +69,10 @@ object Field:
     infix def /[A](segment: String): Field[E, A] = Field(field.path.stored(segment))
 
   extension [E, A](field: Field[E, A])
+    @targetName("nested")
+    infix def /[B](inner: Field[A, B]): Field[E, B] = Field(field.path ++ inner.path)
+
+  extension [E, A](field: Field[E, A])
     def exists: Filter[E]                                                        = Filter.Exists(field.path, true)
     def notExists: Filter[E]                                                     = Filter.Exists(field.path, false)
     def regex(pattern: String, options: String = "")(using TextOf[A]): Filter[E] = Filter.Regex(field.path, pattern, options)
@@ -85,6 +98,7 @@ object Field:
     ): Update[E] = Update.pushAll(field, values, options)
 
     def pull[A](value: A)(using ElementOf[C, A], BsonEncoder[A]): Update[E]     = Update.pull(field, value)
+    def pullWhere[A](condition: Filter[A])(using ElementOf[C, A]): Update[E]    = Update.pullWhere(field, condition)
     def addToSet[A](value: A)(using ElementOf[C, A], BsonEncoder[A]): Update[E] = Update.addToSet(field, value)
 
     def elemMatch[A](filter: Filter[A])(using ElementOf[C, A]): Filter[E]                    =
@@ -99,6 +113,12 @@ object Field:
 
     def hasSize[A](size: Int)(using ElementOf[C, A]): Filter[E] = Filter.Size(field.path, size)
 
+    def each[A](using ElementOf[C, A]): Field[E, A]    = Field(field.path.stored("$[]"))
+    def matched[A](using ElementOf[C, A]): Field[E, A] = Field(field.path.stored("$"))
+
+    def where[A](element: Field[A, A])(using ElementOf[C, A]): Field[E, A] =
+      Field(field.path.stored(s"$$[${element.path.render(FieldNaming.identity)}]"))
+
   extension [E, A](field: Field[E, A])
     def near(point: Geometry.Point, maxDistance: Option[Double] = None, minDistance: Option[Double] = None): Filter[E] =
       Filter.Near(field.path, point, minDistance, maxDistance)
@@ -111,7 +131,8 @@ object Field:
     def intersects(geometry: Geometry): Filter[E] = Filter.GeoIntersects(field.path, geometry)
 
   extension [E, A](field: Field[E, A])
-    def hasType(bsonType: BsonTypeName): Filter[E]                                                = Filter.Type(field.path, bsonType)
+    def hasAnyType(bsonType: BsonTypeName, more: BsonTypeName*): Filter[E]                        = Filter.Type(field.path, bsonType :: more.toList)
+    def hasType(bsonType: BsonTypeName): Filter[E]                                                = Filter.Type(field.path, List(bsonType))
     def mod[N](divisor: Long, remainder: Long)(using @unused numeric: NumericOf[A, N]): Filter[E] = Filter.Mod(field.path, divisor, remainder)
 
     def bitsAllSet(mask: Long)(using @unused bits: BitwiseOf[A, ?]): Filter[E]   = Filter.BitsAllSet(field.path, mask)
