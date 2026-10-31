@@ -184,6 +184,14 @@ What still resolves without `derives` is the `BsonEncoder`/`BsonDecoder` bridge 
 wrote rather than inventing one, and it is how a `medeia` or `zio-bson` model reaches the direct path at all. Its
 cost is the one `BsonValue` per field it has always cost.
 
+**A sum's cases are gathered by a macro, not by inline recursion.** The audit expected wide products to hit the
+compiler's 32-deep inline limit; a probe put 120 fields through `derives WireCodec` without it, because `summonAll`
+and `constValueTuple` no longer recurse. The sum was what failed: its cases' codecs came from a hand-written inline
+method that called itself once per case, so an enum of 33 cases needed `-Xmax-inlines` in every consumer's build —
+which two of them carried at 200 and 256 without knowing why. The macro walks the cases' types and asks, per case,
+for the case's own `WireCodec` and otherwise its `Mirror`, which is what `summonFrom` asked. `WideDerivationSpec`
+round-trips sixty cases and sixty fields under the default limit.
+
 ## The AST-free path
 
 Every other Scala Mongo library encodes through an intermediate tree: case class → some JSON or BSON AST →

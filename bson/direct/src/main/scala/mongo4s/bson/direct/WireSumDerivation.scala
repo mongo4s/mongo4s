@@ -1,8 +1,9 @@
 package mongo4s.bson.direct
 
 import scala.deriving.Mirror
+import scala.quoted.{Expr, Quotes, Type, Varargs}
 import scala.annotation.publicInBinary
-import scala.compiletime.{constValueTuple, erasedValue, summonFrom}
+import scala.compiletime.constValueTuple
 
 import org.bson.{BsonReader, BsonType, BsonWriter}
 
@@ -24,20 +25,39 @@ object WireSumDerivation:
       discriminators,
       config.fieldNaming,
       config.encodeEmptyCasesAsString,
-      () => childCodecs[mirror.MirroredElemTypes].toArray,
+      childCodecs[A](mirror, config),
     )
   end derived
 
-  private inline def childCodecs[T <: Tuple](using config: WireCodecConfig): List[WireCodec[Any]] =
-    inline erasedValue[T] match
-      case _: EmptyTuple     => Nil
-      case _: (head *: tail) => childCodec[head] :: childCodecs[tail]
+  private inline def childCodecs[A](mirror: Mirror.SumOf[A], config: WireCodecConfig): () => Array[WireCodec[Any]] =
+    ${ childCodecsOf[A]('mirror, 'config) }
 
-  private inline def childCodec[A](using config: WireCodecConfig): WireCodec[Any] =
-    summonFrom {
-      case codec: WireCodec[A]  => codec.asInstanceOf[WireCodec[Any]]
-      case mirror: Mirror.Of[A] => WireCodec.derived[A](using mirror, config).asInstanceOf[WireCodec[Any]]
-    }
+  @publicInBinary private[direct] def childCodecsOf[A: Type](mirror: Expr[Mirror.SumOf[A]], config: Expr[WireCodecConfig])(using
+      quotes: Quotes
+  ): Expr[() => Array[WireCodec[Any]]] =
+    import quotes.reflect.*
+
+    def codecOf[T: Type]: Expr[WireCodec[Any]] =
+      Expr.summon[WireCodec[T]] match
+        case Some(codec) => '{ $codec.asInstanceOf[WireCodec[Any]] }
+        case None        =>
+          Expr.summon[Mirror.Of[T]] match
+            case Some(childMirror) => '{ WireCodec.derived[T](using $childMirror, $config).asInstanceOf[WireCodec[Any]] }
+            case None              => report.errorAndAbort(s"No WireCodec[${Type.show[T]}] for a case of ${Type.show[A]}, and no Mirror to derive one from")
+
+    def cases(elements: Type[?]): List[Expr[WireCodec[Any]]] =
+      elements match
+        case '[EmptyTuple]   => Nil
+        case '[head *: tail] => codecOf[head] :: cases(Type.of[tail])
+        case _               => report.errorAndAbort(s"Cannot list the cases of ${Type.show[A]}")
+
+    mirror match
+      case '{ $_ : Mirror.SumOf[A] { type MirroredElemTypes = elements } } =>
+        val built = cases(Type.of[elements])
+        '{ () => Array[WireCodec[Any]](${ Varargs(built) }*) }
+      case _                                                               =>
+        report.errorAndAbort(s"Cannot read the cases of ${Type.show[A]} from its Mirror")
+  end childCodecsOf
 
   @publicInBinary private[direct] def make[A](
       mirror: Mirror.SumOf[A],

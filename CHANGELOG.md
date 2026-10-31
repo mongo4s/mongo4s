@@ -53,6 +53,9 @@ Binary compatible with `5.0.0`, checked by MiMa.
 
 ### Fixed
 
+- **A sealed trait or an enum with more than 32 cases did not derive** without raising `-Xmax-inlines` in the user's
+  build: the cases' codecs were gathered by an inline method that recursed once per case. A macro gathers them now,
+  so the size of a sum no longer matters; products were never affected.
 - **`MongoError` misfiled the failures operations teams alert on.** An operation whose client `timeoutMS` ran out
   was `Unavailable`, because the driver's `MongoOperationTimeoutException` extends the server-selection timeout; it is
   `ExecutionTimeout` now, and `withTransaction` no longer re-commits a commit that ran out of it. Refused credentials
