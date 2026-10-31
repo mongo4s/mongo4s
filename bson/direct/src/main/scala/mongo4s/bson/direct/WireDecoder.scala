@@ -20,12 +20,14 @@ trait WireDecoder[A]:
 
   def emap[B](f: A => Either[String, B]): WireDecoder[B] =
     new WireDecoder[B]:
-      def decode(reader: BsonReader): B =
-        f(WireDecoder.this.decode(reader)) match
-          case Right(value) => value
-          case Left(reason) => throw BsonError.DecodingFailure(BsonError.InvalidValue(reason))
-
+      def decode(reader: BsonReader): B        = WireDecoder.orFail(f)(WireDecoder.this.decode(reader))
       override def defaultOnMissing: Option[B] = WireDecoder.this.defaultOnMissing.flatMap(f(_).toOption)
 
 object WireDecoder:
+  private[direct] def orFail[A, B](f: A => Either[String, B]): A => B =
+    value =>
+      f(value) match
+        case Right(result) => result
+        case Left(reason)  => throw BsonError.DecodingFailure(BsonError.InvalidValue(reason))
+
   inline def apply[A](using instance: WireDecoder[A]): WireDecoder[A] = instance

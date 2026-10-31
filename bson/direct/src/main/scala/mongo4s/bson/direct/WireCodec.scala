@@ -13,10 +13,14 @@ trait WireCodec[A] extends WireEncoder[A] with WireDecoder[A]:
   def fieldNaming: mongo4s.bson.FieldNaming = mongo4s.bson.FieldNaming.identity
 
   def imap[B](f: A => B)(g: B => A): WireCodec[B] =
-    mapped(contramap(g), map(f))
+    this match
+      case fields: FieldCodec[A @unchecked] => FieldCodec.mapped(fields, f, g)
+      case _                                => mapped(contramap(g), map(f))
 
   def iemap[B](f: A => Either[String, B])(g: B => A): WireCodec[B] =
-    mapped(contramap(g), emap(f))
+    this match
+      case fields: FieldCodec[A @unchecked] => FieldCodec.mapped(fields, WireDecoder.orFail(f), g)
+      case _                                => mapped(contramap(g), emap(f))
 
   def toBsonCodec: BsonCodec[A] = BsonCodec.from(value => WireValues.encode(this, value), bson => WireValues.decode(this, bson))
 

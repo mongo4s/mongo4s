@@ -1757,7 +1757,8 @@ encode and decode sides.
 Both keep what the codec underneath knows about an absent field: a wrapper over an `Option` leaves the field out of
 the document when it is empty, and reads the missing field back as that same empty value — through `iemap` too, as
 long as the validation accepts it. They keep the codec's naming as well, so a derived entity wrapped in `iemap` to
-validate what it reads still has its queries spelled the way it writes.
+validate what it reads still has its queries spelled the way it writes — and its shape: as a case of a sealed trait
+or a branch of an `Either`, its fields stay inline beside `_type`, as they were before it was wrapped.
 
 Resolution order matters when a type qualifies for more than one instance. An existing `BsonEncoder`/`BsonDecoder`
 pair — hand-written, or coming from `mongo4s-bson-medeia`/`-zio`/`-calypso` — is bridged into a `WireCodec`, so a

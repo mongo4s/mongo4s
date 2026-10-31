@@ -53,6 +53,14 @@ Binary compatible with `5.0.0`, checked by MiMa.
 
 ### Fixed
 
+- **`imap` or `iemap` on a derived case class moved its fields under `value`** when that class was a case of a sealed
+  trait or a branch of an `Either` — so wrapping it to validate what it reads, as the README suggests, changed how
+  existing documents had to look. The mapped codec keeps the class's shape now. Documents already written in the
+  nested shape by such a codec still read through `WireCodec.from(codec, codec)`, which keeps it.
+- **A field whose codec reads `null` as a value was reported missing.** Derived products told an unread field from
+  a read one by a `null` in the decoded slot; they use a marker of their own now.
+- **A `_type` that is not a string was the reader's own exception.** It is a `TypeMismatch` under `_type`, like any
+  other value of the wrong type.
 - **A sealed trait or an enum with more than 32 cases did not derive** without raising `-Xmax-inlines` in the user's
   build: the cases' codecs were gathered by an inline method that recursed once per case. A macro gathers them now,
   so the size of a sum no longer matters; products were never affected.

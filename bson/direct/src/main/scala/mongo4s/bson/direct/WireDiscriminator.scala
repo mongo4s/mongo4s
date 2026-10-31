@@ -2,7 +2,7 @@ package mongo4s.bson.direct
 
 import org.bson.{BsonReader, BsonType}
 
-import mongo4s.bson.BsonError
+import mongo4s.bson.{BsonError, BsonTypeName}
 
 private[bson] object WireDiscriminator:
 
@@ -19,7 +19,7 @@ private[bson] object WireDiscriminator:
       if firstName == null
       then throw BsonError.DecodingFailure(BsonError.MissingField(Field))
       else if firstName == Field
-      then reader.readString()
+      then readTag(reader)
       else locate(reader)
 
     start.reset()
@@ -41,6 +41,14 @@ private[bson] object WireDiscriminator:
     value.getOrElse(throw BsonError.DecodingFailure(BsonError.MissingField(ValueField)))
   end readValue
 
+  private def readTag(reader: BsonReader): String =
+    if reader.getCurrentBsonType == BsonType.STRING
+    then reader.readString()
+    else
+      throw BsonError.DecodingFailure(
+        BsonError.Nested(Field, BsonError.TypeMismatch(BsonTypeName.String, BsonTypeName.of(reader.getCurrentBsonType)))
+      )
+
   private def locate(reader: BsonReader): String =
     reader.skipValue()
 
@@ -48,7 +56,7 @@ private[bson] object WireDiscriminator:
     while tag == null && reader.readBsonType() != BsonType.END_OF_DOCUMENT
     do
       if reader.readName() == Field
-      then tag = reader.readString()
+      then tag = readTag(reader)
       else reader.skipValue()
     end while
 

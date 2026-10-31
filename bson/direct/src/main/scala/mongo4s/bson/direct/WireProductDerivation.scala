@@ -10,6 +10,8 @@ import mongo4s.bson.BsonError
 
 object WireProductDerivation:
 
+  private val Unread: AnyRef = new Object
+
   inline def derived[A](using m: Mirror.ProductOf[A], config: WireCodecConfig): WireCodec[A] =
     val labels: Array[String] = constValueTuple[m.MirroredElemLabels].toList.map(label => config.fieldNaming(label.asInstanceOf[String])).toArray
 
@@ -50,21 +52,26 @@ object WireProductDerivation:
         else super.readEmpty
 
       def writeFields(writer: BsonWriter, value: A): Unit =
-        val values = value.asInstanceOf[Product].productIterator
-        var i      = 0
-        while values.hasNext do
-          val field = values.next()
+        val product     = value.asInstanceOf[Product]
+        val fieldCodecs = codecs
+        var i           = 0
 
-          if !(omitAbsentFields && codecs(i).isAbsent(field))
+        while i < labels.length
+        do
+          val field = product.productElement(i)
+
+          if !(omitAbsentFields && fieldCodecs(i).isAbsent(field))
           then
             writer.writeName(labels(i))
-            codecs(i).encode(writer, field)
+            fieldCodecs(i).encode(writer, field)
 
           i += 1
+        end while
       end writeFields
 
       def readFields(reader: BsonReader): A =
         val values = new Array[Any](labels.length)
+        java.util.Arrays.fill(values.asInstanceOf[Array[AnyRef]], WireProductDerivation.Unread)
 
         while reader.readBsonType() != BsonType.END_OF_DOCUMENT
         do
@@ -78,7 +85,7 @@ object WireProductDerivation:
 
         while i < values.length
         do
-          if values(i) == null
+          if values(i).asInstanceOf[AnyRef] eq WireProductDerivation.Unread
           then
             values(i) = defaults.get(i) match
               case Some(default) => default()

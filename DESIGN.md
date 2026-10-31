@@ -184,6 +184,20 @@ What still resolves without `derives` is the `BsonEncoder`/`BsonDecoder` bridge 
 wrote rather than inventing one, and it is how a `medeia` or `zio-bson` model reaches the direct path at all. Its
 cost is the one `BsonValue` per field it has always cost.
 
+**Mapping a derived product keeps it a product.** `imap` and `iemap` used to wrap any codec in a plain `WireCodec`,
+which a sum or an `Either` then nests under `value` — so the README's own advice, wrap a case class in `iemap` to
+validate what it reads, changed the stored shape of every case it was applied to. A mapped `FieldCodec` is a
+`FieldCodec` now, delegating its fields through the two functions. The documents that advice already produced are the
+cost: they carry the nested shape, and `WireCodec.from(codec, codec)` — a codec that is deliberately not a
+`FieldCodec` — is how they keep reading.
+
+**An unread field is marked, not `null`.** A derived product told a field it had not read from one it had by a `null`
+in the slot, so a codec that reads `null` as a value — a Java type, a nullable interop field — was reported missing.
+The slots are filled with a marker first. Measured, because this loop is the decode path: decoding is unchanged
+within noise. Reading the codecs' `lazy val` into a local once per document, which the audit suggested, cost seven
+percent in `readFields` and was left out; `writeFields` takes the local and reads fields by position rather than
+through `productIterator`, and is four percent faster for it.
+
 **A sum's cases are gathered by a macro, not by inline recursion.** The audit expected wide products to hit the
 compiler's 32-deep inline limit; a probe put 120 fields through `derives WireCodec` without it, because `summonAll`
 and `constValueTuple` no longer recurse. The sum was what failed: its cases' codecs came from a hand-written inline
