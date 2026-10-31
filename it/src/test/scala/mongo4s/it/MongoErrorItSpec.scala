@@ -6,11 +6,14 @@ import org.scalatest.matchers.should.Matchers
 import cats.effect.testing.scalatest.AsyncIOSpec
 import org.testcontainers.mongodb.MongoDBContainer
 
+import java.util.concurrent.TimeUnit
+
 import cats.effect.IO
+import com.mongodb.{ConnectionString, MongoClientSettings, WriteConcern}
 import org.bson.{BsonDocument, BsonInt32, BsonString}
 
 import mongo4s.cats.CatsStream
-import mongo4s.operations.Index
+import mongo4s.operations.{Filter, Index}
 import mongo4s.{Field, MongoClient, MongoCollection, MongoError}
 
 import scala.concurrent.duration.given
@@ -79,6 +82,49 @@ final class MongoErrorItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befor
       program.timeout(30.seconds).asserting {
         case Left(error: MongoError) => error.getCause shouldBe a[com.mongodb.MongoWriteException]
         case other                   => fail(s"expected a MongoError, got $other")
+      }
+    }
+  }
+
+  "a write concern the server cannot satisfy" should {
+
+    "arrive as a BulkWriteFailed from insertMany with no failed document and the write-concern failure in it" in {
+      val program =
+        for
+          collection <- unique("unsatisfiable_concern")
+          failure    <- collection.withWriteConcern(WriteConcern(2).withWTimeout(1, TimeUnit.SECONDS)).insertMany(List(person("a@b.c"))).attempt
+          stored     <- collection.count()
+        yield (failure, stored)
+
+      program.timeout(30.seconds).asserting {
+        case (Left(error: MongoError.BulkWriteFailed), stored) =>
+          error.failures shouldBe Nil
+          error.writeConcernErrors.map(_.code) should not be empty
+          stored shouldBe 1L
+        case other                                             => fail(s"expected a BulkWriteFailed, got $other")
+      }
+    }
+  }
+
+  "an operation that runs past the client's timeoutMS" should {
+
+    "arrive as MongoError.ExecutionTimeout rather than as an unreachable server" in {
+      val slow = Filter.Raw[BsonDocument](BsonDocument("$where", BsonString("sleep(2000) || true")))
+
+      val program =
+        for
+          client     <- MongoClient.fromSettings[IO, S](
+                          MongoClientSettings.builder().applyConnectionString(ConnectionString(container.getConnectionString)).timeout(500, TimeUnit.MILLISECONDS).build()
+                        )
+          database   <- client.getDatabase("mongo_error_it")
+          collection <- database.getCollection[BsonDocument]("csot")
+          _          <- collection.insertOne(person("a@b.c"))
+          failure    <- collection.find(slow).all.attempt
+        yield failure
+
+      program.timeout(30.seconds).asserting {
+        case Left(error: MongoError.ExecutionTimeout) => error.cause shouldBe a[com.mongodb.MongoOperationTimeoutException]
+        case other                                    => fail(s"expected an ExecutionTimeout, got $other")
       }
     }
   }

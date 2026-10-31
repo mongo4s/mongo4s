@@ -12,7 +12,20 @@ part of `2.0.0` below.
 
 Binary compatible with `5.0.0`, checked by MiMa.
 
+### Added
+
+- `MongoError.writeConcernErrors`, with `MongoError.WriteConcernFailure`: what the write concern reported, on a single
+  write, a bulk write and a client bulk write.
+
 ### Fixed
+
+- **`MongoError` misfiled the failures operations teams alert on.** An operation whose client `timeoutMS` ran out
+  was `Unavailable`, because the driver's `MongoOperationTimeoutException` extends the server-selection timeout; it is
+  `ExecutionTimeout` now, and `withTransaction` no longer re-commits a commit that ran out of it. Refused credentials
+  (`MongoSecurityException`) were `Failed` and are `Unauthorized`. A primary that stepped down, a node recovering, a
+  cleared connection pool and a closed server were `Failed` and are `Unavailable`.
+- **A bulk write that failed only on its write concern raised a `BulkWriteFailed` with nothing in it.** `failures`
+  is still empty — no document failed — and `writeConcernErrors` now says what did.
 
 - **A filter that matches nothing was planned as a collection scan.** `in(Nil)`, `containsAll(Nil)`, `Filter.none`
   and an empty `KeyRef.inFilter` rendered `{$nor: [{}]}`, which the server reads every document to answer. They render

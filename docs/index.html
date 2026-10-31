@@ -917,20 +917,28 @@ collection.insertOne(user).recoverWith {
         </tr>
         <tr>
             <td><code>ExecutionTimeout</code></td>
-            <td><code>maxTime</code> expired, or the server's own limit</td>
+            <td><code>maxTime</code> expired, the client's <code>timeoutMS</code> ran out, or the server's own limit</td>
         </tr>
         <tr>
             <td><code>Unauthorized</code></td>
-            <td>the credentials do not allow the operation</td>
+            <td>the credentials were refused, or do not allow the operation</td>
         </tr>
         <tr>
             <td><code>Unavailable</code></td>
-            <td>the socket failed, or no server could be selected</td>
+            <td>the socket failed, no server could be selected, the pool was cleared, or the primary stepped down or
+                the node is recovering
+            </td>
         </tr>
         <tr>
             <td><code>BulkWriteFailed</code></td>
             <td>one bulk command, several failures &mdash; <code>failures</code> keeps them all,
                 <code>duplicateKeys</code> filters
+            </td>
+        </tr>
+        <tr>
+            <td><code>ClientBulkWriteFailed</code></td>
+            <td>the same for <code>client.bulkWrite</code>, by position across collections, with the
+                <code>partialResult</code>
             </td>
         </tr>
         <tr>
@@ -941,7 +949,8 @@ collection.insertOne(user).recoverWith {
     <p class="muted">
         Every case carries <code>cause</code>, the driver's own exception, so nothing is lost &mdash; along with
         <code>code</code>, <code>labels</code> and <code>hasLabel</code>, which is how <code>withTransaction</code>
-        decides what to retry. Translation happens on the <code>Publisher</code> before any runtime sees it, so
+        decides what to retry. <code>writeConcernErrors</code> lists what the write concern reported: the write was
+        applied, but not acknowledged the way it was asked to be &mdash; on a bulk write possibly the only failure. Translation happens on the <code>Publisher</code> before any runtime sees it, so
         <code>IO</code>, <code>Task</code>, <code>KIO</code>, <code>rapid.Task</code> and every stream report the same
         type for the same failure. Errors mongo4s raises itself are untouched:
         <code>BsonError.DecodingFailure</code> for a document that does not fit, <code>RsBridgeError</code> for the

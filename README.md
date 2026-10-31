@@ -730,14 +730,17 @@ collection.insertOne(user).recoverWith {
 | --- | --- |
 | `DuplicateKey` | a unique index violation |
 | `WriteConflict` | two transactions touching the same document |
-| `ExecutionTimeout` | `maxTime` expired, or the server's own limit |
-| `Unauthorized` | the credentials do not allow the operation |
-| `Unavailable` | the socket failed, or no server could be selected |
+| `ExecutionTimeout` | `maxTime` expired, the client's `timeoutMS` ran out, or the server's own limit |
+| `Unauthorized` | the credentials were refused, or do not allow the operation |
+| `Unavailable` | the socket failed, no server could be selected, the pool was cleared, or the primary stepped down or the node is recovering |
 | `BulkWriteFailed` | one bulk command, several failures — `failures` keeps them all, `duplicateKeys` filters |
+| `ClientBulkWriteFailed` | the same for `client.bulkWrite`, by position across collections, with the `partialResult` |
 | `Failed` | anything else the server reported, with its `code` intact |
 
 Every case carries `cause`, the driver's own exception, so nothing is lost — along with `code`, `labels` and
-`hasLabel`, which is how `withTransaction` decides what to retry. Errors `mongo4s` raises itself are untouched:
+`hasLabel`, which is how `withTransaction` decides what to retry. `writeConcernErrors` lists what the write concern
+reported: the write itself was applied, but not acknowledged the way it was asked to be. On a bulk write that can be
+the only failure, a `BulkWriteFailed` whose `failures` is empty. Errors `mongo4s` raises itself are untouched:
 `BsonError.DecodingFailure` for a document that does not fit, `RsBridgeError` for the stream bridge.
 
 Translation happens on the `Publisher` before any runtime sees it, so `IO`, `Task`, `KIO`, `rapid.Task` and every

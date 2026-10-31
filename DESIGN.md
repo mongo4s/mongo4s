@@ -312,6 +312,21 @@ which codes mean a duplicate key or an execution timeout, so `MongoError` asks i
 11001. Only `WriteConflict` and the two authorisation codes are named here, because the driver has no category for
 them.
 
+**Classification follows the exception's meaning, not where the driver put it in its hierarchy.** Three driver
+classes sit under a parent whose meaning is wrong for them, and each was misfiled until `5.1`.
+`MongoOperationTimeoutException` — the client's `timeoutMS` ran out — extends the server-selection
+`MongoTimeoutException`, so it read as `Unavailable`; worse, `withTransaction` re-commits an unknown commit result
+unless it was a timeout, and kept re-committing a commit that had already used up its `timeoutMS`. Refused credentials
+arrive as `MongoSecurityException`, a client exception with code `-4` and no category, so they read as `Failed`. A
+primary stepping down and a node recovering are command exceptions with codes the driver files nowhere, though they
+mean exactly what `Unavailable` promises: retry somewhere else, later. They are matched by class now, ahead of
+their parents.
+
+**A write-concern failure is not a failed write**, so it is not a case of its own: the document was written, and
+what failed is the acknowledgement. It is reported on whatever case the exception lands in, as `writeConcernErrors`,
+because `BulkWriteFailed` with an empty `failures` was otherwise indistinguishable from nothing having gone wrong.
+A new case would also have broken every exhaustive match over `MongoError` in a minor release.
+
 **A bulk write keeps all of its failures.** One `bulkWrite` or `insertMany` can fail several documents at once, and
 collapsing that to a single `DuplicateKey` would silently drop the rest, so `BulkWriteFailed` carries every failure
 with the index of the operation that produced it, and `duplicateKeys` is a filter over them rather than a different
