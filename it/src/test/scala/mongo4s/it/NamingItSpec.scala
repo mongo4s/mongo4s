@@ -25,6 +25,10 @@ object NamingItSpec:
 
   final case class Checked(firstName: String, age: Int)
 
+  final case class Address(zipCode: String) derives WireCodec
+
+  final case class Resident(fullName: String, homeAddress: Option[Address], pastAddresses: List[Address]) derives WireCodec
+
   object Identity:
     given WireCodecConfig = WireCodecConfig.Default
 
@@ -125,6 +129,32 @@ final class NamingItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAnd
       program.timeout(30.seconds).asserting(_ shouldBe List(NamingItSpec.Checked("bob", 30)))
     }
 
+  }
+
+  "a typed path through an Option and into an array of documents" should {
+
+    "find documents by the names the codec wrote, on every segment" in {
+      import NamingItSpec.{Address, Resident}
+
+      val zip  = Field.of[Address, String](_.zipCode)
+      val home = Field.of[Resident, Option[Address]](_.homeAddress) / zip
+      val past = Field.of[Resident, List[Address]](_.pastAddresses) / zip
+
+      val program =
+        for
+          client    <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          db        <- client.getDatabase("naming_it")
+          residents <- db.getDirectCollection[Resident]("residents")
+          _         <- residents.insertMany(
+                         List(Resident("ann", Some(Address("1")), List(Address("2"), Address("3"))), Resident("bob", None, List(Address("4"))))
+                       )
+          byHome    <- residents.find(home.equalTo("1")).all
+          byPast    <- residents.find(past.equalTo("4")).all
+          sorted    <- residents.find().sort(mongo4s.operations.Sort.desc(past)).all
+        yield (byHome.map(_.fullName), byPast.map(_.fullName), sorted.map(_.fullName))
+
+      program.timeout(30.seconds).asserting(_ shouldBe (List("ann"), List("bob"), List("bob", "ann")))
+    }
   }
 
   "a join between collections with different namings" should {

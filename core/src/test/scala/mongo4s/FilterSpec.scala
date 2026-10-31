@@ -10,7 +10,17 @@ import mongo4s.bson.BsonInstances.given
 
 object FilterSpec:
   final case class Address(city: String, zipCode: String)
-  final case class User(firstName: String, age: Int, address: Address, tags: List[String], totalsByCurrency: Map[String, Int])
+  final case class User(
+      firstName: String,
+      age: Int,
+      address: Address,
+      tags: List[String],
+      totalsByCurrency: Map[String, Int],
+      homeAddress: Option[Address],
+      pastAddresses: List[Address],
+      formerAddresses: Option[Vector[Address]],
+      nickNames: Option[List[String]],
+  )
 
 final class FilterSpec extends AnyWordSpec with Matchers:
   import FilterSpec.{Address, User}
@@ -34,6 +44,56 @@ final class FilterSpec extends AnyWordSpec with Matchers:
     "leave the appended segment alone while still renaming the derived prefix" in {
       val path = Field.of[User, Address](_.address).path / "zipCode"
       path.render(FieldNaming.snakeCase) shouldBe "address.zipCode"
+    }
+  }
+
+  "a typed path through an Option or into the elements of a collection" should {
+    val zipCode = Field.of[Address, String](_.zipCode)
+
+    "continue into the fields of an optional document, renaming every segment" in {
+      val zip = Field.of[User, Option[Address]](_.homeAddress) / zipCode
+
+      zip.equalTo("12345").toBson(FieldNaming.snakeCase).toJson shouldBe """{"home_address.zip_code": "12345"}"""
+    }
+
+    "continue into the fields of a collection's elements, the way MongoDB traverses an array" in {
+      val past   = Field.of[User, List[Address]](_.pastAddresses) / zipCode
+      val former = Field.of[User, Option[Vector[Address]]](_.formerAddresses) / zipCode
+
+      past.equalTo("12345").toBson(FieldNaming.snakeCase).toJson shouldBe """{"past_addresses.zip_code": "12345"}"""
+      former.in(List("1", "2")).toBson(FieldNaming.snakeCase).toJson shouldBe """{"former_addresses.zip_code": {"$in": ["1", "2"]}}"""
+    }
+
+    "serve wherever a field does — a sort, a projection, an index" in {
+      val past = Field.of[User, List[Address]](_.pastAddresses) / zipCode
+
+      operations.Sort.asc(past).toBson(FieldNaming.snakeCase).toJson shouldBe """{"past_addresses.zip_code": 1}"""
+      operations.Projection.empty[User].include(past).toBson(FieldNaming.snakeCase).toJson shouldBe """{"past_addresses.zip_code": 1}"""
+      operations.Index.ascending(past).keysToBson(FieldNaming.snakeCase).toJson shouldBe """{"past_addresses.zip_code": 1}"""
+    }
+
+    "still compose an exact type the way it did" in {
+      (Field.of[User, Address](_.address) / zipCode).path.render(FieldNaming.snakeCase) shouldBe "address.zip_code"
+    }
+
+    "not compose through a field that holds no such document" in {
+      "Field.of[FilterSpec.User, Int](_.age) / Field.of[FilterSpec.Address, String](_.zipCode)" shouldNot typeCheck
+      "Field.stored[FilterSpec.User, Option[String]](\"nick\") / Field.of[FilterSpec.Address, String](_.zipCode)" shouldNot typeCheck
+      "Field.of[FilterSpec.User, List[String]](_.tags) / Field.of[FilterSpec.Address, String](_.zipCode)" shouldNot typeCheck
+    }
+  }
+
+  "array operators on an optional collection" should {
+    val nickNames = Field.of[User, Option[List[String]]](_.nickNames)
+
+    "apply the way they do to the collection itself" in {
+      nickNames.contains("bob").toBson(FieldNaming.snakeCase).toJson shouldBe """{"nick_names": "bob"}"""
+      nickNames.push("bob").toBson(FieldNaming.snakeCase).toJson shouldBe """{"$push": {"nick_names": "bob"}}"""
+      nickNames.hasSize(2).toBson(FieldNaming.snakeCase).toJson shouldBe """{"nick_names": {"$size": 2}}"""
+    }
+
+    "still refuse an element of another type" in {
+      "Field.of[FilterSpec.User, Option[List[String]]](_.nickNames).contains(1)" shouldNot typeCheck
     }
   }
 

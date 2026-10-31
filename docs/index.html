@@ -696,6 +696,12 @@ val city   = Field.of[Order, String](_.address.city).equalTo("Barcelona") // dot
 val eur    = totals.at("EUR")                         // "totals" is renamed, "EUR" is not
 val first: Field[Order, Item] = itemsField / "0"      // any other stored segment
 val id     = Field.stored[Order, ObjectId]("_id")</code></pre>
+    <p class="muted">
+        A stored segment is never renamed. To go on into the fields of a case class held in an <code>Option</code> or
+        in a collection's elements, <code>/</code> takes that class's own <code>Field</code> and adds derived segments:
+        <code>itemsField / Field.of[Item, String](_.sku)</code> is <code>items.sku</code> under any naming, and reads
+        the way MongoDB reads a path into an array — for filters, sorts, projections and indexes.
+    </p>
 
     <h3 id="queries">Filters, updates, queries</h3>
     <pre><code>ageField.gte(13) &amp;&amp; ageField.lte(19)     // $and

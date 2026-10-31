@@ -14,3 +14,5 @@ object ElementOf:
   given set: [A] => ElementOf[Set[A], A]           = of
   given iterable: [A] => ElementOf[Iterable[A], A] = of
   given array: [A] => ElementOf[Array[A], A]       = of
+
+  given optional: [C, A] => ElementOf[C, A] => ElementOf[Option[C], A] = of

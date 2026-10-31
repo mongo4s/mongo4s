@@ -454,6 +454,23 @@ reads the selector at compile time; each segment it produces is a *derived* name
 field names, a `$lookup`'s foreign field given as a string — are *stored* names, used verbatim. Per-segment is the only granularity
 that works: `totals.at("EUR")` has to rename `totals` under `snake_case` while leaving the map key alone.
 
+**A typed path continues through an `Option` and into a collection's elements, with derived segments.** Up to `5.0`
+`Field.of` stopped at an `Option[Address]` — `Option` has no case fields — and `addressField / cityField` needed
+`cityField` typed against `Option[Address]`, so the only way on was `addressField / "city"`, a stored segment the
+naming never touches. Under `snakeCase` that path matched nothing, silently, which is the bug this library exists to
+remove; a consumer had `Option[List[...]]` fields it could not reach at all. `/` now takes the inner type's `Field`
+when the outer one holds that type — exactly, in an `Option`, or as the elements of a collection, the last also through
+an `Option` — and appends derived segments. Teaching the macro to read `_.address.get.city` was the other option, and
+was turned down: it reads like code that runs, and `.get` is the one call nobody should be writing. Through an array
+the path has MongoDB's read semantics, which suits filters, sorts, projections and indexes; updating through it is
+refused by the server, loudly, and `each`/`matched`/`where` remain the way to name elements in an update.
+
+Adding the overload exposed a resolution rule: two extension methods share their first parameter list — the receiver
+— and Scala resolves the second list before fixing the receiver's type parameters, so `/(inner: Field[A, B])` matched
+an inner field of *any* outer type and the pair was ambiguous. The exact form is therefore no longer an extension. It
+stays in `Field` as a plain method, binary-identical (`nested`), for code compiled against `5.0`; the one extension
+`/` takes a `DocumentOf[A, A2]`, whose `exact` instance covers the case the old method served.
+
 **A join's foreign side is spelled by the foreign collection.** `lookupWithKeys` and `graphLookup` type their foreign
 fields against the foreign entity, but up to `5.0` rendered them — and the foreign sub-pipeline — through the naming of
 the collection running the aggregation, while this record claimed they were stored names. One `identity` collection

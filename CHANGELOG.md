@@ -18,6 +18,10 @@ Binary compatible with `5.0.0`, checked by MiMa.
   write, a bulk write and a client bulk write.
 - `field.setNull` and `Update.setNull(field)` on an `Option` field: the explicit `null` that `set(None)` no longer
   writes.
+- **Typed paths through an `Option` and into a collection's elements.** `field / inner` takes the inner case class's
+  own `Field` when `field` holds it in an `Option`, a collection, or an optional collection, and spells every segment
+  through the naming — `itemsField / skuField` is `items.sku`, where `itemsField / "sku"` stays a stored segment the
+  naming never renames. The array operators also apply to an `Option` of a collection.
 - **Joins that take the foreign collection.** `Stage.lookup`, `lookupWith`, `lookupWithKeys` and `graphLookup` accept
   the foreign `MongoCollection` in place of its name, and render its fields, sub-pipeline and `restrictSearchWithMatch`
   through that collection's `FieldNaming` rather than the one running the aggregation, so collections with different

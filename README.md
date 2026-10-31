@@ -196,6 +196,20 @@ val first: Field[Order, Item] = itemsField / "0"      // any other stored segmen
 val id     = Field.stored[Order, ObjectId]("_id")
 ```
 
+A stored segment is never renamed: under `snakeCase`, `addressField / "zipCode"` renders `address.zipCode`, whatever
+the codec wrote. To go on into the fields of a case class held in an `Option`, or in the elements of a collection, `/`
+takes that class's own `Field` instead, and every segment it adds is derived:
+
+```scala
+val anySku: Field[Order, String] = itemsField / Field.of[Item, String](_.sku) // "items.sku"
+```
+
+The same `/` crosses an `Option[Address]` and an `Option[List[Item]]`; a field holding neither does not compile.
+Through an array the path reads the way MongoDB reads it — a filter matches when any element does, a sort takes the
+smallest or largest — so it serves filters, sorts, projections and indexes. An update names the elements it changes
+with `each`, `matched` or `where`. The array operators (`contains`, `push`, `elemMatch`, …) apply to an optional
+collection as they do to the collection itself.
+
 ### Filters
 
 ```scala

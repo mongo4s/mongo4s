@@ -70,9 +70,12 @@ object Field:
     @targetName("child")
     infix def /[A](segment: String): Field[E, A] = Field(field.path.stored(segment))
 
+  @targetName("nested")
+  def /[E, A](field: Field[E, A])[B](inner: Field[A, B]): Field[E, B] = Field(field.path ++ inner.path)
+
   extension [E, A](field: Field[E, A])
-    @targetName("nested")
-    infix def /[B](inner: Field[A, B]): Field[E, B] = Field(field.path ++ inner.path)
+    @targetName("nestedThrough")
+    infix def /[A2, B](inner: Field[A2, B])(using DocumentOf[A, A2]): Field[E, B] = Field(field.path ++ inner.path)
 
     def expr[B](using Expr.Unwrapped[A, B]): Expr[E, B] = Expr.of(field)
 
