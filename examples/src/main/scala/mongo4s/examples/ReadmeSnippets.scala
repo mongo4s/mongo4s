@@ -12,7 +12,7 @@ import com.mongodb.client.model.changestream.FullDocument
 import mongo4s.cats.{CatsStream, MongoClientResource}
 import mongo4s.results.{BulkWriteResult, ExplainSummary, UpdateResult}
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
-import mongo4s.repositories.{BaseMongoRepository, MongoCounters, Page}
+import mongo4s.repositories.{BaseMongoRepository, MongoCounters, Page, Repository}
 import mongo4s.bson.{BsonCodec, BsonDocumentCodec, BsonEncoder, BsonTypeName, DecodeResult, FieldNaming}
 import mongo4s.bson.direct.{notStored, stored, DocumentCodecBridge, ScalarWireCodec, WireCodec, WireCodecConfig}
 import mongo4s.operations.*
@@ -339,6 +339,18 @@ object ReadmeSnippets:
     yield listed
 
   // --- Keyset paging ---
+
+  def handRolledNoMore(users: Repository[IO, S, User, String], fresh: List[User]): IO[Unit] =
+    val ageOf = Field.of[User](_.age)
+
+    for
+      _ <- users.findOneByFilter(ageOf.gte(18))
+      _ <- users.estimatedCount
+      _ <- users.updateByKeys(List("1", "2"), ageOf.inc(1))
+      _ <- users.updateEach(List("1" -> Field.of[User](_.name).set("al"), "2" -> ageOf.inc(1)))
+      _ <- users.upsertKeeping(fresh, List(Field.of[User](_.score).path))
+    yield ()
+  end handRolledNoMore
 
   def walk(users: BaseMongoRepository[IO, S, User, String]): IO[List[User]] =
     def from(after: Option[String]): IO[List[User]] =

@@ -49,6 +49,28 @@ final class RepositoryBulkItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, B
   private def inserts(ids: String*): Seq[WriteCommand[Person]] =
     ids.map(id => WriteCommand.InsertOne(Person(id, s"$id@x")))
 
+  "upsertKeeping over a key on _id, with every other field kept" should {
+
+    "only make sure the key exists, the way the fake does" in {
+      given PrimaryKey[org.bson.BsonDocument, String] = PrimaryKey.storedId(_.getString("_id").getValue)
+
+      def doc(id: String, who: String) = org.bson.BsonDocument("_id", org.bson.BsonString(id)).append("name", org.bson.BsonString(who))
+
+      val program =
+        for
+          client     <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database   <- client.getDatabase("repository_bulk_it")
+          collection <- database.getCollection[org.bson.BsonDocument]("keeping_id")
+          repo        = BaseMongoRepository[IO, S, org.bson.BsonDocument, String](collection)
+          _          <- repo.insertOne(doc("1", "bob"))
+          _          <- repo.upsertKeeping(List(doc("1", "x"), doc("2", "y")), List(Field.stored[org.bson.BsonDocument, String]("name").path))
+          stored     <- collection.find().all
+        yield stored
+
+      program.timeout(30.seconds).asserting(_ should contain theSameElementsAs List(doc("1", "bob"), org.bson.BsonDocument("_id", org.bson.BsonString("2"))))
+    }
+  }
+
   "an unordered bulk write" should {
 
     "apply every command the server could apply, not stop at the first failing batch" in {

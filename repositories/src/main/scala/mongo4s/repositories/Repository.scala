@@ -4,7 +4,7 @@ import com.mongodb.reactivestreams.client.ClientSession
 
 import mongo4s.operations.*
 import mongo4s.bson.BsonEncoder
-import mongo4s.{Field, Streamable}
+import mongo4s.{Effect, Field, FieldPath, Streamable}
 import mongo4s.results.{BulkWriteResult, DeleteResult, UpdateResult}
 
 trait Repository[F[*], S[*], E, K]:
@@ -119,3 +119,21 @@ trait Repository[F[*], S[*], E, K]:
   def ensureKeyIndex(using session: Option[ClientSession] = None): F[String]
 
   def createIndex(index: Index[E])(using session: Option[ClientSession] = None): F[String]
+
+  def findOneByFilter(filter: Filter[E])(using session: Option[ClientSession] = None)(using F: Effect[F]): F[Option[E]] =
+    F.map(findByFilter(filter, Page.first[E](1))(using session))(_.headOption)
+
+  def estimatedCount: F[Long] = count()
+
+  def updateByKeys(keys: List[K], update: Update[E])(using session: Option[ClientSession] = None): F[UpdateResult] =
+    throw Repository.notImplemented(this, "updateByKeys")
+
+  def updateEach(updates: Seq[(K, Update[E])])(using session: Option[ClientSession] = None): F[BulkWriteResult] =
+    throw Repository.notImplemented(this, "updateEach")
+
+  def upsertKeeping(entities: List[E], keep: List[FieldPath])(using session: Option[ClientSession] = None): F[BulkWriteResult] =
+    throw Repository.notImplemented(this, "upsertKeeping")
+
+object Repository:
+  private def notImplemented(repository: Repository[?, ?, ?, ?], method: String): UnsupportedOperationException =
+    UnsupportedOperationException(s"${repository.getClass.getName} does not implement $method; BaseMongoRepository does")

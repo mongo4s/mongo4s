@@ -43,6 +43,11 @@ Binary compatible with `5.0.0`, checked by MiMa.
 - **`Map` keyed by more than `String`.** A `KeyCodec[K]` writes each key as the field name it has to be — `Int`,
   `Long` and `UUID` have one, and any type whose `ScalarWireCodec` writes a string gets one — so `Map[Provider, V]`
   derives without a hand-written codec, and `field.at(key)` reaches an entry in a query.
+- **`Field.of[E](_.field)`** names only the entity and takes the field's type from the selector.
+- **Repository methods services were writing by hand**: `findOneByFilter`, `estimatedCount`, `updateByKeys` (one
+  update for every listed key, batched), `updateEach` (each key its own update, one bulk write) and `upsertKeeping`
+  (an upsert that leaves the fields another writer owns as stored). Each has a body on `Repository`, so a hand-written
+  implementation keeps compiling.
 - `MongoError.writeConcernErrors`, with `MongoError.WriteConcernFailure`: what the write concern reported, on a single
   write, a bulk write and a client bulk write.
 - `field.setNull` and `Update.setNull(field)` on an `Option` field: the explicit `null` that `set(None)` no longer

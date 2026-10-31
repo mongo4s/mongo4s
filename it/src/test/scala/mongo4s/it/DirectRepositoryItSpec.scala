@@ -27,6 +27,11 @@ object DirectRepositoryItSpec:
     object Account:
       given PrimaryKey[Account, String] = PrimaryKey.of(_.accountId)
 
+    final case class Profile(accountId: String, displayName: String, karma: Option[Int]) derives WireCodec
+
+    object Profile:
+      given PrimaryKey[Profile, String] = PrimaryKey.of(_.accountId)
+
 trait DirectRepositoryItSpec[F[*], S[*]] extends AnyWordSpec, Matchers, BeforeAndAfterAll:
   import DirectRepositoryItSpec.Person
   import DirectRepositoryItSpec.Person.given
@@ -99,6 +104,22 @@ trait DirectRepositoryItSpec[F[*], S[*]] extends AnyWordSpec, Matchers, BeforeAn
       byKey shouldBe Some(Account("a1", "Ann"))
       keyIndex shouldBe "account_id_1"
       stored.map(_.keySet.toArray.toList.map(_.toString).filterNot(_ == "_id")) shouldBe List(List("account_id", "display_name"))
+    }
+
+    "upsert every field but the kept ones, leaving those as another writer stored them" in {
+      import DirectRepositoryItSpec.Snake.Profile
+
+      given Effect[F]      = effectInstance
+      given RsBridge[F, S] = rsBridge
+      val client           = run(MongoClient.fromConnectionString[F, S](container.getConnectionString))
+      val database         = run(client.getDatabase("direct_it_upsert_keeping"))
+      val repo             = run(BaseMongoRepository.direct[F, S, Profile, String](database, "profiles"))
+      run(repo.insertOne(Profile("a1", "Ann", Some(5))))
+      run(repo.upsertKeeping(List(Profile("a1", "Annie", Some(9)), Profile("a2", "Bob", Some(1))), List(Field.of[Profile](_.karma).path)))
+      val found            = run(repo.findMany(List("a1", "a2")))
+      run(client.close)
+
+      found should contain theSameElementsAs List(Profile("a1", "Annie", Some(5)), Profile("a2", "Bob", None))
     }
 
     "insertMany / findMany / findByField / findByFilter batch and filter correctly" in {

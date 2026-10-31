@@ -155,6 +155,33 @@ open class BaseMongoRepository[F[*], S[*], E, K](
     then batchedResults(commands.toList)(chunk => collection.bulkWrite(chunk, options)(using session))
     else collection.bulkWrite(commands, options)(using session)
 
+  override def estimatedCount: F[Long] = collection.estimatedCount
+
+  override def updateByKeys(keys: List[K], update: Update[E])(using session: Option[ClientSession]): F[UpdateResult] =
+    F.map(batchedList(keys.distinct)(chunk => collection.updateMany(pk.inFilter(chunk), update)(using session))) { results =>
+      UpdateResult(results.map(_.matchedCount).sum, results.map(_.modifiedCount).sum, None)
+    }
+
+  override def updateEach(updates: Seq[(K, Update[E])])(using session: Option[ClientSession]): F[BulkWriteResult] =
+    batchedResults(updates.toList)(chunk => collection.bulkWrite(chunk.map((key, update) => WriteCommand.updateOne(pk.eqFilter(key), update)))(using session))
+
+  override def upsertKeeping(entities: List[E], keep: List[FieldPath])(using session: Option[ClientSession]): F[BulkWriteResult] =
+    val kept = (keep ++ pk.keyPaths).map(_.render(collection.naming)).toSet + BsonField.Id
+
+    def merged(entity: E): Update[E] =
+      val fields = collection.codec.encodeDocument(entity).entrySet.asScala.toList
+      val sets   = fields.filterNot(entry => kept(entry.getKey)).map(entry => Update.Set[E](FieldPath.literal(entry.getKey), entry.getValue))
+
+      if sets.nonEmpty
+      then Update.Combine(sets)
+      else Update.Combine(pk.keyPaths.zip(pk.fields(pk.key(entity)).toList).map((path, entry) => Update.SetOnInsert[E](path, entry._2)))
+    end merged
+
+    batchedResults(entities)(chunk =>
+      collection.bulkWrite(chunk.map(entity => WriteCommand.updateOne(pk.eqFilter(pk.key(entity)), merged(entity), UpdateOptions.upsert)))(using session)
+    )
+  end upsertKeeping
+
   def deleteOne(key: K)(using session: Option[ClientSession]): F[DeleteResult] =
     collection.deleteOne(pk.eqFilter(key))(using session)
 

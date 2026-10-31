@@ -15,6 +15,14 @@ object Field:
 
   inline def of[E, A](inline selector: E => A): Field[E, A] = ${ FieldMacro.impl[E, A]('selector) }
 
+  def of[E]: Of[E] = Of.any.asInstanceOf[Of[E]]
+
+  final class Of[E] private[Field] ():
+    inline def apply[A](inline selector: E => A): Field[E, A] = ${ FieldMacro.impl[E, A]('selector) }
+
+  object Of:
+    private[Field] val any: Of[Any] = new Of[Any]
+
   def stored[E, A](path: String): Field[E, A] = Field(FieldPath.literal(path))
 
   def self[A]: Field[A, A] = Field(FieldPath.empty)

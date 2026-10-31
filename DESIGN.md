@@ -745,6 +745,14 @@ names, and `eqFilter`, `inFilter`, `afterFilter`, `keyOrder` and `ensureKeyIndex
 `KeyRef` users wrote by hand keeps compiling and rendering as before; `fieldNames` of a key built by `of` holds the
 unrenamed names, since there is no collection to rename them against yet.
 
+**New repository methods carry bodies on the trait, and some of those bodies throw.** One consumer implements
+`Repository` by hand, so a new abstract member would break its build and MiMa alike. `findOneByFilter` and
+`estimatedCount` can be built from methods every implementation has, and are. `updateByKeys`, `updateEach` and
+`upsertKeeping` cannot: the trait has neither a `PrimaryKey` nor a codec. A default that quietly did something else —
+`upsertKeeping` as a plain `upsertMany`, say — would be the fake that lies, so the trait's body throws, naming
+`BaseMongoRepository` as the implementation that has them. `upsertKeeping` takes the kept fields as `FieldPath`s, since
+a wildcard `Field[E, ?]` over an opaque type does not reduce.
+
 **`direct` answers a `Repository`, not a `BaseMongoRepository`.** The consumers built every repository over a
 `WireCodec` through `withoutId`, which takes a `BsonDocumentCodec`: they bridged the codec by hand, passed
 `FieldNaming.snakeCase` again although the codec already said it, spelled all four type arguments because nothing

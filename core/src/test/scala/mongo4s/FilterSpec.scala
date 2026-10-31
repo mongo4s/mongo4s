@@ -47,6 +47,14 @@ final class FilterSpec extends AnyWordSpec with Matchers:
       Field.of[User, String](_.address.city).path shouldBe FieldPath.derived(List("address", "city"))
     }
 
+    "infer the field's type when only the entity is named" in {
+      val city: Field[User, String] = Field.of[User](_.address.city)
+
+      city.path shouldBe FieldPath.derived(List("address", "city"))
+      Field.of[User](_.age).gt(18).toBson(FieldNaming.snakeCase).toJson shouldBe """{"age": {"$gt": 18}}"""
+      "Field.of[FilterSpec.User](_.firstName.length)" shouldNot typeCheck
+    }
+
     "reject a selector that is not a chain of case-class fields" in {
       "Field.of[User, Int](_.firstName.length)" shouldNot typeCheck
       "Field.of[User, String](_.firstName.toLowerCase)" shouldNot typeCheck

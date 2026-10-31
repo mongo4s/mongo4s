@@ -183,7 +183,9 @@ val city   = Field.of[Order, String](_.address.city).equalTo("Barcelona") // dot
 ```
 
 Each segment is checked against the case class it is selected from, so `_.name.length` and `_.items.head.sku` are
-compile errors rather than paths that render fine and match nothing.
+compile errors rather than paths that render fine and match nothing. Naming only the entity lets the field's type
+come from the selector — `Field.of[User](_.age)` is a `Field[User, Int]` — which is what a repository hoisting its
+fields into `val`s wants.
 
 Selector-derived names are spelled through the collection's `FieldNaming`. Names that are already what the document
 stores — a map key, an array position, `_id`, a shape with no case class — go through `at`, `/` or `Field.stored`,
@@ -1964,6 +1966,23 @@ users.deleteByField(ageField, 30)                 // likewise
 
 A `…ByField` call is exactly its `…ByFilter` counterpart over `field.equalTo(value)` — there for the common case
 that would otherwise spell out a one-field filter.
+
+A few more cover what services otherwise build by hand:
+
+```scala
+users.findOneByFilter(adults)                                  // F[Option[User]]
+users.estimatedCount                                           // the collection's metadata count
+users.updateByKeys(List("1", "2"), birthday)                   // one update, every listed key, batched
+users.updateEach(List("1" -> nameField.set("al"), "2" -> birthday)) // each key its own update, one bulk write
+users.upsertKeeping(fresh, List(Field.of[User](_.score).path))      // upsert, leaving score as stored
+```
+
+`upsertKeeping` is for an entity some of whose fields another writer owns. Each entity is upserted with `$set` on
+every field the codec writes except the kept ones, the key and `_id`, so an existing document keeps those fields as
+they were, and a new one is inserted without them. A field the codec leaves out — a `None` — is left as stored too,
+not removed. A `Repository` written by hand rather than through `BaseMongoRepository` inherits `findOneByFilter`
+and `estimatedCount` built from its own methods; the other three need a key and a codec the trait does not have, and
+throw until it implements them.
 
 `bulkWrite` takes the same `BulkWriteOptions` the collection does, and `insertMany` the same `InsertManyOptions`. An
 ordered write is sent in batches, which keeps its meaning — it stops at the first failure and what came before it
