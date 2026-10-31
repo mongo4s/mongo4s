@@ -48,6 +48,8 @@ Binary compatible with `5.0.0`, checked by MiMa.
   update for every listed key, batched), `updateEach` (each key its own update, one bulk write) and `upsertKeeping`
   (an upsert that leaves the fields another writer owns as stored). Each has a body on `Repository`, so a hand-written
   implementation keeps compiling.
+- **`FakeRepository.direct` and `FakeMongoCollection.direct`** build a fake from a `WireCodec`, its naming included,
+  and `FakeRepository` is `open`, so a service's own repository trait can mix into it.
 - `MongoError.writeConcernErrors`, with `MongoError.WriteConcernFailure`: what the write concern reported, on a single
   write, a bulk write and a client bulk write.
 - `field.setNull` and `Update.setNull(field)` on an `Option` field: the explicit `null` that `set(None)` no longer

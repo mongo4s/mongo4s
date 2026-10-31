@@ -853,6 +853,13 @@ fake cannot answer the way the server would. Where the server refuses outright, 
 code: a `unique` index on `_id` alone (197), a partial filter holding `$ne`, `$nin`, `$regex`, `$exists: false`,
 `$elemMatch`, `$size`, `$mod`, `$bits` or a `$nor` (67). Each is a parity case against MongoDB 8.2.
 
+**The fake opens up, and says what it does not do.** All three consumers wrote their own in-memory repository rather
+than use `FakeRepository`: it was `final`, so it could not take a service's own repository trait, and it wanted a
+`BsonDocumentCodec` where they had a `WireCodec`. It is `open` now and builds from a `WireCodec` with that codec's
+naming. What it still does not do is transactions: every method takes a `session` and ignores it, so a
+`withTransaction` body over the fake commits as it goes. Simulating abort would mean a second, transactional copy of
+the store for a case that needs a replica set to mean anything, so the README says so instead.
+
 **Comparison was the fake's widest gap, and it was a refusal pretending to be a rule.** The fake compared two values
 only when they had the same type and threw `cannot compare` otherwise — so a range filter, a sort, `$min`/`$max` or a
 group extreme over a field that was `null` in one document failed the test, and every codec except the direct one

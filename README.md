@@ -2213,8 +2213,29 @@ against a real server anyway.
 
 `FakeRepository` is the same idea one layer up: a real `BaseMongoRepository` over a `FakeMongoCollection`, so the
 repository logic under test is the one that ships. `repository.fake` reaches the collection underneath, for seeding
-and for `snapshot`. Both take the runtime's `Effect` and `RsBridge` from scope — the same givens a real client uses —
-so `FakeRepository[IO, S, User, String]()` and `FakeMongoCollection[IO, S, User](codec)` are all there is to it.
+and for `snapshot`. Both take the runtime's `Effect` and `RsBridge` from scope — the same givens a real client uses.
+
+A fake stores documents, so it needs a `BsonDocumentCodec` and the naming a query is spelled with; with a `WireCodec`,
+`direct` takes both from it, the way `getDirectCollection` does. `FakeMongoCollection[IO, S, User](codec, naming = …)`
+is the long form:
+
+```scala
+val users = FakeRepository.direct[IO, S, User, String]()
+val raw   = FakeMongoCollection.direct[IO, S, User]()
+```
+
+`FakeRepository` is open, so a service's own repository trait — the `Repository` plus the finders that service adds —
+can be tested over the real logic rather than a hand-written double:
+
+```scala
+val players: PlayerRepository[IO] =
+  new FakeRepository[IO, S, Player, String](FakeMongoCollection.direct()) with PlayerRepository[IO]:
+    def adults: IO[List[Player]] = findByFilter(Field.of[Player](_.age).gte(18))
+```
+
+The fake takes a `session` and ignores it: each operation is atomic on its own, and nothing groups several of them.
+A `withTransaction` body over the fake runs, but an error in it does not undo the writes that came before, so a test
+of rollback needs a real replica set.
 
 ## Runtime backends
 

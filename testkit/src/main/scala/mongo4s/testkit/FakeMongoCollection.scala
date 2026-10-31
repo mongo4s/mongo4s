@@ -32,6 +32,7 @@ import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSM
 import mongo4s.operations.*
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.{DistinctOf, Effect, Field, FieldPath, MongoCollection, MongoError, RsBridge, Streamable}
+import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec}
 import mongo4s.bson.{BsonDocumentCodec, BsonDocumentDecoder, BsonField, DecodeResult, FieldNaming}
 import mongo4s.queries.{AggregateQuery, DecodeAttempts, DistinctQuery, FindQuery, SelectQuery}
 import mongo4s.results.{BulkWriteResult, DeleteResult, InsertManyResult, InsertOneResult, UpdateResult}
@@ -1261,6 +1262,11 @@ final class FakeMongoCollection[F[*], S[*], E](
           .decodeDocument(document)
           .fold(error => throw error.toThrowable, identity)
       }
+
+object FakeMongoCollection:
+
+  def direct[F[*], S[*], E](name: String = "fake")(using Effect[F], RsBridge[F, S], WireCodec[E]): FakeMongoCollection[F, S, E] =
+    new FakeMongoCollection(DocumentCodecBridge.toDocumentCodec[E], name, WireCodec[E].fieldNaming)
 
 private object BsonOrdering:
   def same(a: BsonValue, b: BsonValue): Boolean =
