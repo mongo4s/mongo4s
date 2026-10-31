@@ -8,7 +8,24 @@ import scala.collection.mutable
 import com.mongodb.bulk.BulkWriteError
 import com.mongodb.MongoCommandException
 import com.mongodb.client.model.Collation
-import org.bson.{BsonArray, BsonBoolean, BsonDateTime, BsonDocument, BsonDouble, BsonInt32, BsonInt64, BsonNull, BsonObjectId, BsonString, BsonTimestamp, BsonValue}
+import org.bson.{
+  BsonArray,
+  BsonBinary,
+  BsonBoolean,
+  BsonDateTime,
+  BsonDocument,
+  BsonDouble,
+  BsonInt32,
+  BsonInt64,
+  BsonMaxKey,
+  BsonMinKey,
+  BsonNull,
+  BsonObjectId,
+  BsonString,
+  BsonTimestamp,
+  BsonType,
+  BsonValue
+}
 import com.mongodb.{ExplainVerbosity, MongoBulkWriteException, MongoWriteException, ReadConcern, ReadPreference, ServerAddress, WriteConcern, WriteError}
 import com.mongodb.reactivestreams.client.{ClientSession, MongoCollection as RSMongoCollection}
 
@@ -595,10 +612,10 @@ final class FakeMongoCollection[F[*], S[*], E](
   private def matches(document: BsonDocument, filter: Filter[E]): Boolean = filter match
     case Filter.Eq(path, value)               => equals(document, path, value)
     case Filter.Ne(path, value)               => !equals(document, path, value)
-    case Filter.Gt(path, value)               => leaves(document, path).exists(BsonOrdering.compare(_, value) > 0)
-    case Filter.Gte(path, value)              => leaves(document, path).exists(BsonOrdering.compare(_, value) >= 0)
-    case Filter.Lt(path, value)               => leaves(document, path).exists(BsonOrdering.compare(_, value) < 0)
-    case Filter.Lte(path, value)              => leaves(document, path).exists(BsonOrdering.compare(_, value) <= 0)
+    case Filter.Gt(path, value)               => ranged(document, path, value, inclusive = false)(_ > 0)
+    case Filter.Gte(path, value)              => ranged(document, path, value, inclusive = true)(_ >= 0)
+    case Filter.Lt(path, value)               => ranged(document, path, value, inclusive = false)(_ < 0)
+    case Filter.Lte(path, value)              => ranged(document, path, value, inclusive = true)(_ <= 0)
     case Filter.In(path, values)              => values.exists(equals(document, path, _))
     case Filter.Nin(path, values)             => !values.exists(equals(document, path, _))
     case Filter.Exists(path, exists)          => candidates(document, path).nonEmpty == exists
@@ -671,6 +688,23 @@ final class FakeMongoCollection[F[*], S[*], E](
       case array: BsonArray => array :: array.getValues.asScala.toList
       case value            => List(value)
     }
+
+  private def ranged(document: BsonDocument, path: mongo4s.FieldPath, operand: BsonValue, inclusive: Boolean)(accept: Int => Boolean): Boolean =
+    if operand.isNull
+    then inclusive && equals(document, path, operand)
+    else leaves(document, path).exists(value => BsonOrdering.comparable(value, operand) && accept(BsonOrdering.compare(value, operand)))
+
+  private def sortKey(document: BsonDocument, path: mongo4s.FieldPath, ascending: Boolean): BsonValue =
+    val found = candidates(document, path).flatMap {
+      case array: BsonArray if array.isEmpty => List(BsonMinKey())
+      case array: BsonArray                  => array.getValues.asScala.toList
+      case value                             => List(value)
+    }
+
+    if found.isEmpty then BsonNull.VALUE
+    else if ascending then found.min(using BsonOrdering.compare(_, _))
+    else found.max(using BsonOrdering.compare(_, _))
+  end sortKey
 
   private def equals(document: BsonDocument, path: mongo4s.FieldPath, value: BsonValue): Boolean =
     if value.isNull
@@ -796,11 +830,8 @@ final class FakeMongoCollection[F[*], S[*], E](
         options.sort.fold(placed) { sort =>
           placed.sortWith { (left, right) =>
             sort.fields.view.map { (field, order) =>
-              val comparison = (documentAt(left, field), documentAt(right, field)) match
-                case (Some(l), Some(r)) => BsonOrdering.compare(l, r)
-                case (None, Some(_))    => -1
-                case (Some(_), None)    => 1
-                case (None, None)       => 0
+              val comparison =
+                BsonOrdering.compare(documentAt(left, field).getOrElse(BsonNull.VALUE), documentAt(right, field).getOrElse(BsonNull.VALUE))
               if order == SortOrder.Ascending then comparison else -comparison
             }.find(_ != 0).exists(_ < 0)
           }
@@ -890,13 +921,10 @@ final class FakeMongoCollection[F[*], S[*], E](
 
     (left, right) =>
       sort.fields.view.map { (path, order) =>
-        val comparison = (at(left, path), at(right, path)) match
-          case (Some(l), Some(r)) => BsonOrdering.compare(l, r)
-          case (None, Some(_))    => -1
-          case (Some(_), None)    => 1
-          case (None, None)       => 0
+        val ascending  = order == SortOrder.Ascending
+        val comparison = BsonOrdering.compare(sortKey(left, path, ascending), sortKey(right, path, ascending))
 
-        if order == SortOrder.Ascending then comparison else -comparison
+        if ascending then comparison else -comparison
       }.find(_ != 0).exists(_ < 0)
   end orderedBy
 
@@ -1088,7 +1116,7 @@ final class FakeMongoCollection[F[*], S[*], E](
       if numbers.isEmpty then BsonNull.VALUE else BsonDouble(numbers.map(_.asNumber.doubleValue).sum / numbers.size)
 
   private def extreme(values: List[BsonValue], keep: Int => Boolean): BsonValue =
-    values.reduceOption((left, right) => if keep(BsonOrdering.compare(left, right)) then left else right).getOrElse(BsonNull.VALUE)
+    values.filterNot(_.isNull).reduceOption((left, right) => if keep(BsonOrdering.compare(left, right)) then left else right).getOrElse(BsonNull.VALUE)
 
   private def distinctValues(path: mongo4s.FieldPath, filter: Filter[E]): List[BsonValue] =
     matching(filter).flatMap { document =>
@@ -1265,14 +1293,75 @@ private object BsonOrdering:
     else Right(java.math.BigDecimal.valueOf(value.asNumber.longValue))
   end magnitude
 
+  def bracket(value: BsonValue): Int =
+    value.getBsonType match
+      case BsonType.MIN_KEY                                                           => 1
+      case BsonType.NULL | BsonType.UNDEFINED                                         => 2
+      case BsonType.INT32 | BsonType.INT64 | BsonType.DOUBLE | BsonType.DECIMAL128    => 3
+      case BsonType.STRING | BsonType.SYMBOL                                          => 4
+      case BsonType.DOCUMENT                                                          => 5
+      case BsonType.ARRAY                                                             => 6
+      case BsonType.BINARY                                                            => 7
+      case BsonType.OBJECT_ID                                                         => 8
+      case BsonType.BOOLEAN                                                           => 9
+      case BsonType.DATE_TIME                                                         => 10
+      case BsonType.TIMESTAMP                                                         => 11
+      case BsonType.REGULAR_EXPRESSION                                                => 12
+      case BsonType.DB_POINTER | BsonType.JAVASCRIPT | BsonType.JAVASCRIPT_WITH_SCOPE => 13
+      case BsonType.MAX_KEY                                                           => 14
+      case BsonType.END_OF_DOCUMENT                                                   => 0
+
+  def comparable(value: BsonValue, operand: BsonValue): Boolean =
+    operand.isInstanceOf[BsonMinKey] || operand.isInstanceOf[BsonMaxKey] || bracket(value) == bracket(operand)
+
   def compare(a: BsonValue, b: BsonValue): Int =
+    val byBracket = Integer.compare(bracket(a), bracket(b))
+    if byBracket != 0 then byBracket else within(a, b)
+
+  private def within(a: BsonValue, b: BsonValue): Int =
     if a.isNumber && b.isNumber then compareNumbers(a, b)
-    else if a.isString && b.isString then a.asString.getValue.compareTo(b.asString.getValue)
-    else if a.isDateTime && b.isDateTime then java.lang.Long.compare(a.asDateTime.getValue, b.asDateTime.getValue)
-    else if a.isObjectId && b.isObjectId then a.asObjectId.getValue.compareTo(b.asObjectId.getValue)
-    else if a.isBoolean && b.isBoolean then java.lang.Boolean.compare(a.asBoolean.getValue, b.asBoolean.getValue)
-    else if a.isTimestamp && b.isTimestamp then a.asTimestamp.getValue.compareTo(b.asTimestamp.getValue)
-    else throw UnsupportedOperationException(s"FakeMongoCollection: cannot compare $a and $b")
+    else if bracket(a) == 4 then textOf(a).compareTo(textOf(b))
+    else if a.isDocument then entries(a.asDocument, b.asDocument)
+    else if a.isArray then elements(a.asArray.getValues.asScala.toList, b.asArray.getValues.asScala.toList)
+    else if a.isBinary then binary(a.asBinary, b.asBinary)
+    else if a.isObjectId then a.asObjectId.getValue.compareTo(b.asObjectId.getValue)
+    else if a.isBoolean then java.lang.Boolean.compare(a.asBoolean.getValue, b.asBoolean.getValue)
+    else if a.isDateTime then java.lang.Long.compare(a.asDateTime.getValue, b.asDateTime.getValue)
+    else if a.isTimestamp then a.asTimestamp.getValue.compareTo(b.asTimestamp.getValue)
+    else if a.isRegularExpression then
+      val byPattern = a.asRegularExpression.getPattern.compareTo(b.asRegularExpression.getPattern)
+      if byPattern != 0 then byPattern else a.asRegularExpression.getOptions.compareTo(b.asRegularExpression.getOptions)
+    else 0
+
+  private def textOf(value: BsonValue): String = if value.isSymbol then value.asSymbol.getSymbol else value.asString.getValue
+
+  private def entries(a: BsonDocument, b: BsonDocument): Int =
+    val left  = a.entrySet.asScala.toList
+    val right = b.entrySet.asScala.toList
+
+    left
+      .zip(right)
+      .view
+      .map { (l, r) =>
+        val byType = Integer.compare(bracket(l.getValue), bracket(r.getValue))
+        if byType != 0 then byType
+        else
+          val byName = l.getKey.compareTo(r.getKey)
+          if byName != 0 then byName else compare(l.getValue, r.getValue)
+      }
+      .find(_ != 0)
+      .getOrElse(Integer.compare(left.size, right.size))
+  end entries
+
+  private def elements(a: List[BsonValue], b: List[BsonValue]): Int =
+    a.zip(b).view.map(compare).find(_ != 0).getOrElse(Integer.compare(a.size, b.size))
+
+  private def binary(a: BsonBinary, b: BsonBinary): Int =
+    val byLength = Integer.compare(a.getData.length, b.getData.length)
+    if byLength != 0 then byLength
+    else
+      val bySubtype = Integer.compare(a.getType.toInt, b.getType.toInt)
+      if bySubtype != 0 then bySubtype else java.util.Arrays.compareUnsigned(a.getData, b.getData)
 
   def regex(pattern: String, options: String): java.util.regex.Pattern =
     val flags = options.foldLeft(0) { (acc, flag) =>

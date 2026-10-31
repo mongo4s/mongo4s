@@ -525,6 +525,76 @@ final class FakeFidelityParityItSpec extends AsyncWordSpec, AsyncIOSpec, Matcher
     }
   }
 
+  "the fake and the server, comparing values of different types" should {
+    val k = Field.stored[BsonDocument, Int]("k")
+    val v = Field.stored[BsonDocument, BsonValue]("v")
+
+    val values: List[Option[BsonValue]] = List(
+      Some(BsonInt32(5)),
+      Some(BsonNull.VALUE),
+      None,
+      Some(BsonString("x")),
+      Some(ints(1, 9)),
+      Some(BsonArray()),
+      Some(BsonDouble(3.5)),
+      Some(BsonDocument("a", BsonInt32(1))),
+      Some(BsonBoolean.TRUE),
+      Some(BsonDateTime(1000L)),
+      Some(BsonInt64(4L)),
+      Some(strings("b", "y")),
+    )
+
+    val seed = values.zipWithIndex.map { (value, index) =>
+      val document = BsonDocument("k", BsonInt32(index + 1))
+      value.foreach(document.append("v", _))
+      document
+    }
+
+    def keys(documents: List[BsonDocument]): List[Int] = documents.map(_.getInt32("k").getValue)
+
+    "agree on which values a range filter matches, bracketed by type and element by element through arrays" in {
+      val operands: List[BsonValue] = List(BsonInt32(4), BsonDouble(3.5), BsonString("a"), BsonString("z"), BsonNull.VALUE, BsonDateTime(0L), ints(1))
+
+      agree("range_across_types", seed) { collection =>
+        operands.traverse { operand =>
+          List(
+            Filter.Gt[BsonDocument](v.path, operand),
+            Filter.Gte[BsonDocument](v.path, operand),
+            Filter.Lt[BsonDocument](v.path, operand),
+            Filter.Lte[BsonDocument](v.path, operand)
+          )
+            .traverse(filter => collection.find(filter).sort(Sort.asc(k)).all.map(keys))
+        }
+      }
+    }
+
+    "agree on the order of a sort over a field holding every type, missing and null and arrays included" in {
+      agree("sort_across_types", seed) { collection =>
+        for
+          ascending  <- collection.find().sort(Sort.asc(v).asc(k)).all.map(keys)
+          descending <- collection.find().sort(Sort.desc(v).asc(k)).all.map(keys)
+        yield (ascending, descending)
+      }
+    }
+
+    "agree on what $min and $max leave against a value of another type" in {
+      def after(update: Update[BsonDocument])(collection: Coll) =
+        collection.updateMany(Filter.all, update) *> collection.find().sort(Sort.asc(k)).all.map(_.map(document => Option(document.get("v"))))
+
+      agree("min_across_types", seed)(after(Update.Min[BsonDocument](v.path, BsonInt32(4)))) *>
+        agree("max_across_types", seed)(after(Update.Max[BsonDocument](v.path, BsonString("m"))))
+    }
+
+    "agree on the extremes of a group over values of every type, ignoring null and missing" in {
+      agree("group_extremes_across_types", seed) { collection =>
+        collection
+          .aggregate[BsonDocument](Seq(Stage.groupAll("lowest" -> Accumulator.min(v), "highest" -> Accumulator.max(v))))
+          .all
+          .map(_.map(document => { document.remove("_id"); document }))
+      }
+    }
+  }
+
   "the fake and the server, grouping documents with gaps in them" should {
     val score = Field.stored[BsonDocument, Int]("score")
     val attrs = Field.stored[BsonDocument, BsonDocument]("attrs")

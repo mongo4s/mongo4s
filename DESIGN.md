@@ -853,6 +853,16 @@ fake cannot answer the way the server would. Where the server refuses outright, 
 code: a `unique` index on `_id` alone (197), a partial filter holding `$ne`, `$nin`, `$regex`, `$exists: false`,
 `$elemMatch`, `$size`, `$mod`, `$bits` or a `$nor` (67). Each is a parity case against MongoDB 8.2.
 
+**Comparison was the fake's widest gap, and it was a refusal pretending to be a rule.** The fake compared two values
+only when they had the same type and threw `cannot compare` otherwise — so a range filter, a sort, `$min`/`$max` or a
+group extreme over a field that was `null` in one document failed the test, and every codec except the direct one
+writes `None` as `null`. The server has a total order instead: types first, by BSON's bracket order, then values within
+a bracket, and per operation a rule on top — a range filter matches only its operand's bracket and goes element by
+element through an array; a sort reads a missing field as `null`, an array by its least element ascending and its
+greatest descending, an empty array below `null`; a group's `$min`/`$max` skip `null`. The parity case seeds one field
+with every type side by side, and the fake matched the server's answers on the first run — which the spec was then
+made to print once, to be sure it had compared something.
+
 ## Aggregation expressions are a phantom-typed tree
 
 `Expr[-E, +A]` reads a document of `E` and computes an `A`, but the tree underneath is untyped: every node is an

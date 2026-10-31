@@ -2157,7 +2157,12 @@ inserts, so `wasUpserted` and `upsertedIds` say what the server would say. A `so
 the document the server would pick.
 
 Numbers compare the way the server compares them: an `Int64` of 5 equals an `Int32` of 5 and a `Double` of 5.0,
-`Long`s past `Double`'s precision sort exactly, and `NaN` sorts below every number. A duplicate in `insertMany` or a
+`Long`s past `Double`'s precision sort exactly, and `NaN` sorts below every number. Values of different types compare
+in BSON's order — `null` below numbers, numbers below strings, and so on up to dates — so a range filter matches
+only values of its operand's type, element by element through an array; a sort treats a missing field as `null` and
+an array by its smallest element ascending and its largest descending; `$min`/`$max` replace across types; and a
+group's `$min`/`$max` skip `null`. A field holding `null` — which every codec but the direct one writes for a
+`None` — sorts and filters as it does on the server rather than failing the test. A duplicate in `insertMany` or a
 `bulkWrite` is a `BulkWriteFailed` naming the command, after the writes before it — and, unordered, the writes after
 it too. A unique index is enforced, sparse and partial ones included, and is named as the server names it
 (`email_1`), so `dropIndex` finds it. `listIndexes` describes each index as the server does — `v`, `key`, `name` and

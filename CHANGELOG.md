@@ -76,6 +76,11 @@ Binary compatible with `5.0.0`, checked by MiMa.
 
 ### Fixed
 
+- **The fake failed on a field holding `null`, values of mixed types or an array** in a range filter, a sort, an
+  `$min`/`$max` update or a group's `$min`/`$max`, throwing `cannot compare` where the server answers — and every
+  codec but the direct one writes `None` as `null`. It compares in BSON's type order now, filters element by element
+  through arrays and by the operand's type, and sorts an array by its extreme element; each case is checked against
+  MongoDB 8.2.
 - **`imap` or `iemap` on a derived case class moved its fields under `value`** when that class was a case of a sealed
   trait or a branch of an `Either` — so wrapping it to validate what it reads, as the README suggests, changed how
   existing documents had to look. The mapped codec keeps the class's shape now. Documents already written in the
