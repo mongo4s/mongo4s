@@ -13,7 +13,7 @@ import mongo4s.bson.direct.WireCodec
 import mongo4s.bson.{BsonDecoder, BsonDocumentCodec, BsonError}
 import mongo4s.cats.CatsStream
 import mongo4s.operations.{Accumulator, Stage}
-import mongo4s.{Field, MongoClient, MongoCollection}
+import mongo4s.{Field, MongoClient, MongoCollection, RsBridge}
 
 import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
@@ -101,7 +101,27 @@ final class DirectAggregateItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, 
 
       program.timeout(30.seconds).asserting { (lenient, strict) =>
         lenient shouldBe Some(Counted(3L, "total"))
-        strict.isLeft shouldBe true
+        strict match
+          case Left(failure: BsonError.DecodingFailure) => failure.error shouldBe BsonError.MissingField("label")
+          case other                                    => fail(s"expected a DecodingFailure, got $other")
+      }
+    }
+
+    "fail on a document it cannot decode with a DecodingFailure naming the field, through find as well as the pipeline" in {
+      val program =
+        for
+          collection <- seeded("mistyped")
+          _          <- RsBridge[IO, S].one(collection.underlying.insertOne(BsonDocument("name", BsonString("dave")).append("age", BsonString("old"))))
+          found      <- collection.find(Field.of[Person, String](_.name).equalTo("dave")).all.attempt
+          piped      <- collection.aggregateDirect[Person](Seq(Stage.matching(Field.of[Person, String](_.name).equalTo("dave")))).all.attempt
+        yield (found, piped)
+
+      program.timeout(30.seconds).asserting { (found, piped) =>
+        List(found, piped).foreach {
+          case Left(failure: BsonError.DecodingFailure) => failure.getMessage shouldBe "age -> Expected int but got string"
+          case other                                    => fail(s"expected a DecodingFailure, got $other")
+        }
+        succeed
       }
     }
 

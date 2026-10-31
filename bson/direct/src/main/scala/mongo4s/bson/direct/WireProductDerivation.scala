@@ -70,7 +70,7 @@ object WireProductDerivation:
         do
           val name = reader.readName()
           indexOf.get(name) match
-            case Some(idx) => values(idx) = codecs(idx).decode(reader)
+            case Some(idx) => values(idx) = WirePath.under(labels(idx))(codecs(idx).decode(reader))
             case None      => reader.skipValue()
         end while
 

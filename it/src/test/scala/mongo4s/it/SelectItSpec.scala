@@ -8,7 +8,7 @@ import org.testcontainers.mongodb.MongoDBContainer
 
 import cats.effect.IO
 
-import mongo4s.bson.FieldNaming
+import mongo4s.bson.{BsonError, FieldNaming}
 import mongo4s.bson.direct.{WireCodec, WireCodecConfig}
 import mongo4s.cats.CatsStream
 import mongo4s.{Field, MongoClient, MongoCollection}
@@ -93,7 +93,10 @@ final class SelectItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAnd
                           .attempt
         yield outcome
 
-      program.timeout(30.seconds).asserting(_.isLeft shouldBe true)
+      program.timeout(30.seconds).asserting {
+        case Left(failure: BsonError.DecodingFailure) => failure.error shouldBe BsonError.MissingField("id")
+        case other                                    => fail(s"expected a DecodingFailure, got $other")
+      }
     }
   }
 

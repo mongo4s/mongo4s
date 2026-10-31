@@ -36,9 +36,13 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
     def decode(reader: BsonReader): List[A] =
       reader.readStartArray()
       val builder = List.newBuilder[A]
+      var index   = 0
 
       while reader.readBsonType() != BsonType.END_OF_DOCUMENT
-      do builder += inner.decode(reader)
+      do
+        builder += WirePath.under(index.toString)(inner.decode(reader))
+        index += 1
+      end while
 
       reader.readEndArray()
       builder.result()
@@ -55,9 +59,13 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
     def decode(reader: BsonReader): Vector[A] =
       reader.readStartArray()
       val builder = Vector.newBuilder[A]
+      var index   = 0
 
       while reader.readBsonType() != BsonType.END_OF_DOCUMENT
-      do builder += inner.decode(reader)
+      do
+        builder += WirePath.under(index.toString)(inner.decode(reader))
+        index += 1
+      end while
 
       reader.readEndArray()
       builder.result()
@@ -74,9 +82,13 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
     def decode(reader: BsonReader): Seq[A] =
       reader.readStartArray()
       val builder = Seq.newBuilder[A]
+      var index   = 0
 
       while reader.readBsonType() != BsonType.END_OF_DOCUMENT
-      do builder += inner.decode(reader)
+      do
+        builder += WirePath.under(index.toString)(inner.decode(reader))
+        index += 1
+      end while
 
       reader.readEndArray()
       builder.result()
@@ -93,9 +105,13 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
     def decode(reader: BsonReader): Set[A] =
       reader.readStartArray()
       val builder = Set.newBuilder[A]
+      var index   = 0
 
       while reader.readBsonType() != BsonType.END_OF_DOCUMENT
-      do builder += inner.decode(reader)
+      do
+        builder += WirePath.under(index.toString)(inner.decode(reader))
+        index += 1
+      end while
 
       reader.readEndArray()
       builder.result()
@@ -119,7 +135,7 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
       while reader.readBsonType() != BsonType.END_OF_DOCUMENT
       do
         val key = reader.readName()
-        builder += key -> inner.decode(reader)
+        builder += key -> WirePath.under(key)(inner.decode(reader))
       end while
 
       reader.readEndDocument()
@@ -137,9 +153,13 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
     def decode(reader: BsonReader): Array[A] =
       reader.readStartArray()
       val builder = Array.newBuilder[A]
+      var index   = 0
 
       while reader.readBsonType() != BsonType.END_OF_DOCUMENT
-      do builder += inner.decode(reader)
+      do
+        builder += WirePath.under(index.toString)(inner.decode(reader))
+        index += 1
+      end while
 
       reader.readEndArray()
       builder.result()

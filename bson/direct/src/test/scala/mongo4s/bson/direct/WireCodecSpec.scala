@@ -10,7 +10,7 @@ import org.bson.types.ObjectId
 import org.bson.io.{BasicOutputBuffer, ByteBufferBsonInput}
 import org.bson.codecs.{BsonDocumentCodec as DriverBsonDocumentCodec, DecoderContext, EncoderContext}
 
-import mongo4s.bson.{BsonError, FieldNaming}
+import mongo4s.bson.{BsonError, BsonTypeName, FieldNaming}
 
 object WireCodecSpec:
 
@@ -86,6 +86,8 @@ object WireCodecSpec:
     final case class Lit(value: Int)              extends Expr derives WireCodec
     final case class Add(left: Expr, right: Expr) extends Expr derives WireCodec
 
+  final case class Ledger(totals: Map[String, Address], shapes: Vector[Shape]) derives WireCodec
+
 final class WireCodecSpec extends AnyWordSpec, Matchers:
   import WireCodecSpec.*
 
@@ -111,6 +113,63 @@ final class WireCodecSpec extends AnyWordSpec, Matchers:
 
   private def documentOf[A](value: A)(using WireCodec[A]): BsonDocument =
     DriverBsonDocumentCodec().decode(readerOf(bytesOf(value)), DecoderContext.builder().build())
+
+  "a decoding failure" should {
+
+    def failureOf[A: WireCodec](document: BsonDocument): BsonError =
+      intercept[BsonError.DecodingFailure](WireCodec[A].decode(readerOf(bytesOfDocument(document)))).error
+
+    val person = Person("1", "bob", 30, 9.5, active = true, List("a", "b"), None, Address("NYC", "10001"))
+
+    "name the field it happened in" in {
+      val document = documentOf(person)
+      document.put("age", BsonString("thirty"))
+
+      failureOf[Person](document) shouldBe BsonError.Nested("age", BsonError.TypeMismatch(BsonTypeName.Int, BsonTypeName.String))
+    }
+
+    "name the whole path down to a nested field, missing or mistyped" in {
+      val mistyped = documentOf(person)
+      mistyped.getDocument("address").put("city", BsonInt32(7))
+
+      val missing = documentOf(person)
+      missing.getDocument("address").remove("zip")
+
+      failureOf[Person](mistyped).message shouldBe "address -> city -> Expected string but got int"
+      failureOf[Person](missing) shouldBe BsonError.Nested("address", BsonError.MissingField("zip"))
+    }
+
+    "name the array position and the map key it happened under" in {
+      val tree = documentOf(Tree(1, List(Tree(2, Nil), Tree(3, Nil))))
+      tree.getArray("children").get(1).asDocument.put("value", BsonString("three"))
+
+      val ledger = documentOf(Ledger(Map("eur" -> Address("Paris", "75001")), Vector(Shape.Circle(1.0))))
+      ledger.getDocument("totals").getDocument("eur").remove("city")
+      ledger.getArray("shapes").get(0).asDocument.put("radius", BsonString("wide"))
+
+      failureOf[Tree](tree).message shouldBe "children -> 1 -> value -> Expected int but got string"
+      failureOf[Ledger](ledger) shouldBe BsonError.Nested("totals", BsonError.Nested("eur", BsonError.MissingField("city")))
+
+      ledger.getDocument("totals").getDocument("eur").put("city", BsonString("Paris"))
+      failureOf[Ledger](ledger).message shouldBe "shapes -> 0 -> radius -> Expected double but got string"
+    }
+
+    "report a value of the wrong shape as a decoding failure naming the field, rather than as the reader's own exception" in {
+      val document = documentOf(person)
+      document.put("tags", BsonString("a,b"))
+
+      failureOf[Person](document) match
+        case BsonError.Nested("tags", BsonError.Thrown(_, cause)) => cause shouldBe a[BsonInvalidOperationException]
+        case other                                                => fail(s"expected the failure under tags, got $other")
+    }
+
+    "leave a missing top-level field as it was, since it already names itself" in {
+      val document = documentOf(person)
+      document.remove("age")
+
+      failureOf[Person](document) shouldBe BsonError.MissingField("age")
+    }
+  }
 
   "WireCodec derivation" should {
 

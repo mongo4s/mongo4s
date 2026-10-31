@@ -34,7 +34,7 @@ private[bson] object WireDiscriminator:
     do
       val name = reader.readName()
       if value.isEmpty && name == ValueField
-      then value = Some(codec.decode(reader))
+      then value = Some(WirePath.under(ValueField)(codec.decode(reader)))
       else reader.skipValue()
     end while
 

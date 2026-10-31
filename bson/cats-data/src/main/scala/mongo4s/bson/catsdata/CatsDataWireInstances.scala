@@ -9,7 +9,7 @@ import cats.data.{Chain, Ior, NonEmptyList, NonEmptyMap, NonEmptySet, NonEmptyVe
 import org.bson.{BsonReader, BsonType, BsonWriter}
 
 import mongo4s.bson.BsonError
-import mongo4s.bson.direct.{WireCodec, WireDiscriminator}
+import mongo4s.bson.direct.{WireCodec, WireDiscriminator, WirePath}
 
 trait CatsDataWireInstances:
 
@@ -75,8 +75,8 @@ trait CatsDataWireInstances:
 
       while reader.readBsonType() != BsonType.END_OF_DOCUMENT do
         reader.readName() match
-          case IorLeftField  => left = Some(codecA.decode(reader))
-          case IorRightField => right = Some(codecB.decode(reader))
+          case IorLeftField  => left = Some(WirePath.under(IorLeftField)(codecA.decode(reader)))
+          case IorRightField => right = Some(WirePath.under(IorRightField)(codecB.decode(reader)))
           case _             => reader.skipValue()
 
       (left, right) match

@@ -369,6 +369,15 @@ to throw. `BsonError.fromThrowable` was giving those back re-wrapped as `Thrown`
 `ScalarWireCodecParitySpec` runs both paths over every numeric width and asserts they agree — value for value and
 message for message — which is the guard that keeps them from separating again.
 
+**A wire decoding failure carries its path.** Up to `5.0` a derived product let a field's failure through bare, so a
+consumer's forty-field entity failed with `Expected string but got null` and nothing to say which of eleven string
+fields was null, or in which nested document. Each field read, array element, map value, sum `value` and `Ior` side
+now wraps a failure in `BsonError.Nested` as it passes — only on the failure path: the wrapper is an inlined
+`try`/`catch`, so a successful read allocates nothing more and the segment's name is built only when there is
+something to report. A reader exception (an array where a string was expected) is caught at the same point and
+reported as a `DecodingFailure` under the field's name rather than escaping as a driver type. The cost moved to the
+structure: code that matched a top-level `TypeMismatch` now sees it inside a `Nested`.
+
 ## An operator is declared with the case that renders it
 
 `Filter`, `Update`, `Stage` and `Accumulator` each carry `val key` — the MongoDB operator the case renders as —

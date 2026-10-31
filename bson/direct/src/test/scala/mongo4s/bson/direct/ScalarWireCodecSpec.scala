@@ -118,7 +118,7 @@ final class ScalarWireCodecSpec extends AnyWordSpec, Matchers:
 
     "report a wrong type as a BsonError rather than a raw driver exception" in {
       counterFrom(BsonString("seven")) match
-        case Left(error)  => error shouldBe BsonError.TypeMismatch(BsonTypeName.Long, BsonTypeName.String)
+        case Left(error)  => error shouldBe BsonError.Nested("count", BsonError.TypeMismatch(BsonTypeName.Long, BsonTypeName.String))
         case Right(value) => fail(s"expected a decoding failure, got $value")
     }
   }

@@ -106,7 +106,7 @@ final class ScalarWireCodecParitySpec extends AnyWordSpec, Matchers:
       BsonDecoder[Instant].decode(stored).isLeft shouldBe true
 
       intercept[BsonError.DecodingFailure](decodeAudit(document)).error shouldBe
-        BsonError.TypeMismatch(BsonTypeName.Date, BsonTypeName.String)
+        BsonError.Nested("at", BsonError.TypeMismatch(BsonTypeName.Date, BsonTypeName.String))
     }
   }
 
@@ -155,7 +155,7 @@ final class ScalarWireCodecParitySpec extends AnyWordSpec, Matchers:
     "reject what the BsonValue path rejects, with the same reason" in {
       val impossible = List(BsonDouble(7.5), BsonString("seven"), BsonDouble(1e300))
 
-      impossible.foreach(stored => throughWire[Long](stored) shouldBe throughValue[Long](stored))
+      impossible.foreach(stored => throughWire[Long](stored) shouldBe throughValue[Long](stored).left.map(reason => s"v -> $reason"))
     }
   }
 
@@ -168,6 +168,6 @@ final class ScalarWireCodecParitySpec extends AnyWordSpec, Matchers:
       val viaValue = BsonDecoder[UUID].decode(stored).left.toOption.get
       val viaWire  = intercept[BsonError.DecodingFailure](decodeAudit(document)).error
 
-      viaWire shouldBe viaValue
+      viaWire shouldBe BsonError.Nested("session", viaValue)
     }
   }

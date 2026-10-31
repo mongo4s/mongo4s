@@ -26,6 +26,11 @@ Binary compatible with `5.0.0`, checked by MiMa.
   last. `setOnInsert(None)` adds nothing to the update, and `Repository.updateField(key, field, None)` removes the
   field. Where the `null` was wanted, `setNull` writes it. Documents already carrying a `null` read back as `None` as
   before.
+- **A `WireCodec` decoding failure names where it happened.** Each field, array position, map key, sum `value` and
+  `Ior` side wraps the failure in `BsonError.Nested`, so the message reads `address -> city -> Expected string but got
+  int` instead of the leaf alone; code matching a field's `TypeMismatch` directly now finds it inside a `Nested`. A
+  reader exception for a value of the wrong shape is reported the same way, as a `DecodingFailure`, rather than as the
+  driver's `BsonInvalidOperationException`.
 
 ### Fixed
 
