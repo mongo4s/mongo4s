@@ -66,6 +66,15 @@ final class BsonCodecSourceSpec extends AnyWordSpec, Matchers:
       BsonEncoder[Imported.Code].encode(Imported.code("x")) shouldBe BsonString("x")
     }
 
+    "not displace the encoder the library already has for a type, so an Instant stored another way needs its encoder too" in {
+      given ScalarWireCodec[java.time.Instant] = ScalarWireCodec.instantAsEpochSeconds
+
+      val at = java.time.Instant.ofEpochSecond(10L)
+
+      BsonEncoder[java.time.Instant].encode(at) shouldBe org.bson.BsonDateTime(10000L)
+      ScalarWireCodec[java.time.Instant].toBsonEncoder.encode(at) shouldBe BsonInt64(10L)
+    }
+
     "still be the WireCodec of its type, rather than the BsonValue fallback built from the bridge" in {
       (WireCodec[PlayerId] eq summon[ScalarWireCodec[PlayerId]]) shouldBe true
     }

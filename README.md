@@ -1575,9 +1575,26 @@ enum Shape derives WireCodec:   // Circle and Square derive with it
 
 `String`, `Int`, `Long`, `Double`, `Boolean`, `BigDecimal`, `Instant`, `UUID` and `ObjectId` are read and written
 natively, in the same BSON representation the `BsonEncoder`/`BsonDecoder` path uses — `Decimal128` for `BigDecimal`,
-`Date` for `Instant`, `ObjectId` for `ObjectId` — so the server indexes and range-compares them exactly as it would
-on a collection opened with `getCollection`. Any *other* type with an existing `BsonEncoder`/`BsonDecoder` bridges
-automatically, at the cost of one `BsonValue` per field instead of zero.
+`Date` for `Instant`, `ObjectId` for `ObjectId`, a string for `UUID` — so the server indexes and range-compares them
+exactly as it would on a collection opened with `getCollection`. A BSON date holds milliseconds, so an `Instant`
+loses anything finer on the way in. A `UUID` is also read from the binary subtype 4 other drivers write; a legacy
+subtype 3 is refused, since nothing in it says which byte order wrote it. Any *other* type with an existing
+`BsonEncoder`/`BsonDecoder` bridges automatically, at the cost of one `BsonValue` per field instead of zero.
+
+Where a collection already stores one of these another way, `ScalarWireCodec` has the common alternatives ready to
+be made the given — `instantAsEpochMillis`, `instantAsEpochSeconds`, `instantAsIsoString`, `uuidAsBinary` — and two
+for `LocalDate`, which has no default because neither representation is the obvious one: `localDateAsString`
+(`2026-10-31`) and `localDateAsDate(zone)` (the start of that day in `zone`, UTC unless given):
+
+```scala
+given ScalarWireCodec[Instant]   = ScalarWireCodec.instantAsEpochSeconds
+given BsonEncoder[Instant]       = ScalarWireCodec.instantAsEpochSeconds.toBsonEncoder
+given ScalarWireCodec[LocalDate] = ScalarWireCodec.localDateAsDate()
+```
+
+The second line matters for a type the library already encodes: queries take `Instant`'s own `BsonEncoder`, a BSON
+date, before a `ScalarWireCodec` of yours, so without it a filter on such a field would compare a date with a number.
+A type with no encoder of its own, like `LocalDate`, needs no second line.
 
 `List`/`Vector`/`Seq`/`Set`/`Array` write a real BSON array, and `Map[String, A]` a real `BSON` document keyed by its
 own keys — `String` being the key type isn't a limitation of the general mechanism, it's just what BSON's own field

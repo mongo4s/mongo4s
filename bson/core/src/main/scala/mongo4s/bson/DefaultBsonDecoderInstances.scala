@@ -101,6 +101,12 @@ trait DefaultBsonDecoderInstances:
     then
       try Right(UUID.fromString(value.asString.getValue))
       catch case error: IllegalArgumentException => Left(BsonError.InvalidValue(s"Invalid UUID: ${error.getMessage}"))
+    else if value.isBinary && value.asBinary.getType == BsonBinarySubType.UUID_STANDARD.getValue
+    then
+      try Right(value.asBinary.asUuid())
+      catch case error: BsonInvalidOperationException => Left(BsonError.InvalidValue(s"Invalid UUID: ${error.getMessage}"))
+    else if value.isBinary && value.asBinary.getType == BsonBinarySubType.UUID_LEGACY.getValue
+    then Left(BsonError.InvalidValue("A legacy UUID (binary subtype 3) does not say which byte order wrote it, so it is not read"))
     else Left(BsonError.typeMismatch(BsonTypeName.String, value))
 
   given BsonDecoder[ObjectId] = value =>

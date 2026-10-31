@@ -13,8 +13,8 @@ import mongo4s.cats.{CatsStream, MongoClientResource}
 import mongo4s.results.{BulkWriteResult, ExplainSummary, UpdateResult}
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.repositories.{BaseMongoRepository, MongoCounters, Page}
-import mongo4s.bson.{BsonCodec, BsonDocumentCodec, BsonTypeName, DecodeResult, FieldNaming}
-import mongo4s.bson.direct.{notStored, stored, DocumentCodecBridge, WireCodec, WireCodecConfig}
+import mongo4s.bson.{BsonCodec, BsonDocumentCodec, BsonEncoder, BsonTypeName, DecodeResult, FieldNaming}
+import mongo4s.bson.direct.{notStored, stored, DocumentCodecBridge, ScalarWireCodec, WireCodec, WireCodecConfig}
 import mongo4s.operations.*
 import mongo4s.operations.geometry.Geometry
 import mongo4s.{Field, MongoClient, MongoCollection, MongoDatabase, MongoError, PrimaryKey, RsBridgeConfig, WithId, withTransaction}
@@ -491,6 +491,15 @@ object ReadmeSnippets:
     yield found
 
   // --- Derivation config ---
+
+  object storedOtherwise:
+    given ScalarWireCodec[Instant]             = ScalarWireCodec.instantAsEpochSeconds
+    given BsonEncoder[Instant]                 = ScalarWireCodec.instantAsEpochSeconds.toBsonEncoder
+    given ScalarWireCodec[java.time.LocalDate] = ScalarWireCodec.localDateAsDate()
+
+    final case class Booking(at: Instant, day: java.time.LocalDate) derives WireCodec
+
+    val since = Field.of[Booking, Instant](_.at).gte(Instant.EPOCH)
 
   object snakeCased:
     given WireCodecConfig = WireCodecConfig.SnakeCase.withDiscriminatorNaming(FieldNaming.snakeCase)

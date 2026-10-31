@@ -1,6 +1,10 @@
 package mongo4s.bson.direct
 
-import org.bson.{BsonReader, BsonWriter}
+import java.util.UUID
+import java.time.format.DateTimeParseException
+import java.time.{Instant, LocalDate, ZoneId, ZoneOffset}
+
+import org.bson.{BsonBinary, BsonReader, BsonWriter}
 
 import mongo4s.bson.{BsonCodec, BsonCodecSource, BsonDecoder, BsonEncoder}
 
@@ -24,6 +28,22 @@ trait ScalarWireCodec[A] extends WireCodec[A], BsonCodecSource[A]:
 
 object ScalarWireCodec:
   inline def apply[A](using instance: ScalarWireCodec[A]): ScalarWireCodec[A] = instance
+
+  lazy val instantAsEpochMillis: ScalarWireCodec[Instant]  = ScalarWireCodec[Long].imap(Instant.ofEpochMilli)(_.toEpochMilli)
+  lazy val instantAsEpochSeconds: ScalarWireCodec[Instant] = ScalarWireCodec[Long].imap(Instant.ofEpochSecond)(_.getEpochSecond)
+  lazy val instantAsIsoString: ScalarWireCodec[Instant]    = ScalarWireCodec[String].iemap(parsed(Instant.parse))(_.toString)
+
+  lazy val localDateAsString: ScalarWireCodec[LocalDate] = ScalarWireCodec[String].iemap(parsed(LocalDate.parse))(_.toString)
+
+  def localDateAsDate(zone: ZoneId = ZoneOffset.UTC): ScalarWireCodec[LocalDate] =
+    ScalarWireCodec[Instant].imap(_.atZone(zone).toLocalDate)(_.atStartOfDay(zone).toInstant)
+
+  lazy val uuidAsBinary: ScalarWireCodec[UUID] = instance((writer, value) => writer.writeBinaryData(BsonBinary(value)), ScalarWireCodec[UUID].decode)
+
+  private def parsed[A](parse: CharSequence => A): String => Either[String, A] =
+    raw =>
+      try Right(parse(raw))
+      catch case error: DateTimeParseException => Left(error.getMessage)
 
   def instance[A](enc: (BsonWriter, A) => Unit, dec: BsonReader => A): ScalarWireCodec[A] =
     new ScalarWireCodec[A]:
