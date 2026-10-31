@@ -7,10 +7,11 @@ import cats.effect.testing.scalatest.AsyncIOSpec
 import org.testcontainers.mongodb.MongoDBContainer
 
 import cats.effect.IO
-import org.bson.BsonDocument
+import org.bson.{BsonDocument, BsonString}
 
 import mongo4s.bson.direct.{WireCodec, WireCodecConfig}
 import mongo4s.cats.CatsStream
+import mongo4s.operations.Stage
 import mongo4s.{Field, MongoClient}
 
 import scala.concurrent.duration.given
@@ -23,6 +24,11 @@ object NamingItSpec:
   final case class Person(firstName: String, age: Int) derives WireCodec
 
   final case class Checked(firstName: String, age: Int)
+
+  object Identity:
+    given WireCodecConfig = WireCodecConfig.Default
+
+    final case class Badge(holderName: String, badgeLevel: Int) derives WireCodec
 
   object Checked:
     given WireCodec[Checked] =
@@ -119,4 +125,29 @@ final class NamingItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAnd
       program.timeout(30.seconds).asserting(_ shouldBe List(NamingItSpec.Checked("bob", 30)))
     }
 
+  }
+
+  "a join between collections with different namings" should {
+
+    "match on the foreign collection's own spelling when it is given the collection" in {
+      import NamingItSpec.Identity.Badge
+
+      val holder = Field.of[Badge, String](_.holderName)
+      val senior = Field.of[Badge, Int](_.badgeLevel).gte(2)
+
+      val program =
+        for
+          client <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          db     <- client.getDatabase("naming_it")
+          people <- db.getDirectCollection[Person]("join_people")
+          badges <- db.getDirectCollection[Badge]("join_badges")
+          _      <- people.insertOne(Person("ann", 30))
+          _      <- badges.insertMany(List(Badge("ann", 3), Badge("ann", 1)))
+          plain  <- people.aggregate[BsonDocument](Seq(Stage.lookup(badges, firstName, holder, "badges"))).all
+          keyed  <- people.aggregate[BsonDocument](Seq(Stage.lookupWithKeys(badges, firstName, holder, List(Stage.matching(senior)), "badges"))).all
+          graph  <- people.aggregate[BsonDocument](Seq(Stage.graphLookup[Person, Badge, String](badges, BsonString("$first_name"), holder, holder, "badges"))).all
+        yield (badges.naming("holderName"), people.naming("firstName"), List(plain, keyed, graph).map(_.head.getArray("badges").size))
+
+      program.timeout(30.seconds).asserting(_ shouldBe ("holderName", "first_name", List(2, 1, 2)))
+    }
   }

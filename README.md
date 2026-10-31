@@ -1016,9 +1016,18 @@ Stage.graphLookup[Order, User, String](
 ```
 
 Note the second type parameter: the sub-pipeline and the `connectFrom`/`connectTo` fields belong to the **foreign**
-collection, so they are typed against it rather than against `A`. They are rendered with the outer collection's
-`FieldNaming` — fine when a project uses one convention throughout, which is the usual case; if the two collections
-disagree, spell the foreign names with `Field.stored`.
+collection, so they are typed against it rather than against `A`. Given its name, they are rendered with the outer
+collection's `FieldNaming` — fine when a project uses one convention throughout. Given the foreign collection itself,
+each form takes the name from it and renders the foreign side through *its* naming, so two collections that disagree
+still join on the right fields, and the foreign entity type is inferred:
+
+```scala
+Stage.lookupWithKeys(users, Field.of[Order, String](_.userId), Field.of[User, String](_.id), List(Stage.matching(adults)), "adultOwner")
+Stage.graphLookup[Order, User, String](users, BsonString("$user_id"), Field.of[User, String](_.managerId), Field.of[User, String](_.id), "chain")
+```
+
+`Stage.lookup(users, localField, foreignField, as)` is the typed equality join. `let` and `GraphLookupOptions` are
+the last argument on these forms, with an overload that leaves them out.
 
 `$out` and `$merge` write the pipeline's result into a collection, and both take options that stay out of the way
 until you need them — with none set they render as the bare collection name the server also accepts:
@@ -1626,7 +1635,7 @@ A collection has one naming, so the entity and everything nested in it should be
 renders every segment through the root's; reach such a field with `Field.stored` and its stored path.
 
 `FieldNaming` applies per *derived* segment only. Stored names — `Field.stored`, a `PrimaryKey`'s field names, a
-`$lookup`'s foreign field, map keys — are used verbatim. `FieldNaming.snakeCase` splits on every capital, so
+`$lookup`'s foreign field given as a string, map keys — are used verbatim. `FieldNaming.snakeCase` splits on every capital, so
 `userID` becomes `user_i_d`; `FieldNaming.overrides(Map("userID" -> "userId"), fallback = snakeCase)` is the way out
 of that.
 

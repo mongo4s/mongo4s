@@ -5,7 +5,7 @@ import scala.annotation.unused
 import org.bson.*
 
 import mongo4s.operations.geometry.Geometry
-import mongo4s.{Field, FieldPath, NumericValue}
+import mongo4s.{Field, FieldPath, MongoCollection, NumericValue}
 import mongo4s.bson.{BsonEncoder, BsonField, FieldNaming}
 
 import scala.jdk.CollectionConverters.given
@@ -340,6 +340,60 @@ object Stage:
       foreignField = FieldPath.literal(foreignField),
       as = as,
     )
+
+  def lookup[E, B, A](from: MongoCollection[?, ?, B], localField: Field[E, A], foreignField: Field[B, A], as: String): Stage[E] =
+    Lookup(from.name, localField.path, foreignPath(foreignField.path, from.naming), as)
+
+  def lookupWith[E, B](from: MongoCollection[?, ?, B], pipeline: List[Stage[B]], as: String): Stage[E] =
+    lookupWith(from, pipeline, as, None)
+
+  def lookupWith[E, B](from: MongoCollection[?, ?, B], pipeline: List[Stage[B]], as: String, let: Option[BsonDocument]): Stage[E] =
+    LookupPipeline(from.name, let, foreignPipeline(pipeline, from.naming), as)
+
+  def lookupWithKeys[E, B, A](
+      from: MongoCollection[?, ?, B],
+      localField: Field[E, A],
+      foreignField: Field[B, A],
+      pipeline: List[Stage[B]],
+      as: String,
+  ): Stage[E] =
+    lookupWithKeys(from, localField, foreignField, pipeline, as, None)
+
+  def lookupWithKeys[E, B, A](
+      from: MongoCollection[?, ?, B],
+      localField: Field[E, A],
+      foreignField: Field[B, A],
+      pipeline: List[Stage[B]],
+      as: String,
+      let: Option[BsonDocument],
+  ): Stage[E] =
+    LookupKeyedPipeline(from.name, localField.path, foreignPath(foreignField.path, from.naming), let, foreignPipeline(pipeline, from.naming), as)
+
+  def graphLookup[E, B, A](
+      from: MongoCollection[?, ?, B],
+      startWith: BsonValue,
+      connectFrom: Field[B, A],
+      connectTo: Field[B, A],
+      as: String,
+  ): Stage[E] =
+    graphLookup(from, startWith, connectFrom, connectTo, as, GraphLookupOptions.default[B])
+
+  def graphLookup[E, B, A](
+      from: MongoCollection[?, ?, B],
+      startWith: BsonValue,
+      connectFrom: Field[B, A],
+      connectTo: Field[B, A],
+      as: String,
+      options: GraphLookupOptions[B],
+  ): Stage[E] =
+    val restricted = options.restrictSearch.fold(options)(filter => options.restrictedTo(Filter.Raw[B](filter.toBson(from.naming))))
+
+    GraphLookup(from.name, startWith, foreignPath(connectFrom.path, from.naming), foreignPath(connectTo.path, from.naming), as, restricted)
+  end graphLookup
+
+  private def foreignPath(path: FieldPath, naming: FieldNaming): FieldPath = FieldPath.literal(path.render(naming))
+
+  private def foreignPipeline[B](pipeline: List[Stage[B]], naming: FieldNaming): List[Stage[B]] = pipeline.map(stage => Raw[B](stage.toBson(naming)))
 
   def groupBy[E, A](field: Field[E, A])(accumulators: (String, Accumulator[E])*): Stage[E] =
     Group(GroupKey.Path(field.path), accumulators.toList)

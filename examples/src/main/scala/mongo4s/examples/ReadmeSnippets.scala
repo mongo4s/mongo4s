@@ -291,6 +291,10 @@ object ReadmeSnippets:
     as = "adultOwner",
   )
 
+  // Given the foreign collection, the join spells the foreign side through that collection's naming.
+  def adultOwnerOf(users: MongoCollection[IO, S, User]): Stage[Order] =
+    Stage.lookupWithKeys(users, Field.of[Order, String](_.userId), Field.of[User, String](_.id), List(Stage.matching(adults)), "adultOwner")
+
   val flagged    = scoreField.bitsAllSet(4) && Filter.jsonSchema[User](BsonDocument("required", BsonArray(java.util.List.of(BsonString("age")))))
   val flagRaised = scoreField.bitOr(4L)
   val ageMasked  = Update.bitAnd(ageField, 6)

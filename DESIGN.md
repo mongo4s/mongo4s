@@ -451,8 +451,20 @@ than passed through.
 **Field paths track derived-vs-stored per segment, not per path.** `Field.of[E, A](_.some.field)` is a macro that
 reads the selector at compile time; each segment it produces is a *derived* name, spelled through the collection's
 `FieldNaming`. Names that are already what the document stores — a map key, an array index, `_id`, a `PrimaryKey`'s
-field names, a `$lookup`'s foreign field — are *stored* names, used verbatim. Per-segment is the only granularity
+field names, a `$lookup`'s foreign field given as a string — are *stored* names, used verbatim. Per-segment is the only granularity
 that works: `totals.at("EUR")` has to rename `totals` under `snake_case` while leaving the map key alone.
+
+**A join's foreign side is spelled by the foreign collection.** `lookupWithKeys` and `graphLookup` type their foreign
+fields against the foreign entity, but up to `5.0` rendered them — and the foreign sub-pipeline — through the naming of
+the collection running the aggregation, while this record claimed they were stored names. One `identity` collection
+joined to one `snakeCase` collection produced a `$lookup` on a misspelled field and empty arrays, silently. A
+`foreignNaming` parameter defaulting to `identity` was the obvious fix and the wrong one: it would have broken every
+project whose collections already share `snakeCase`, which is most of them. Instead each form has an overload taking
+the foreign `MongoCollection`: the handle carries both the name and the naming, and its entity type fixes `B`. The
+foreign parts are rendered through that naming when the stage is built — paths become stored segments, the
+sub-pipeline becomes raw stages — so the `Stage` cases did not change, and nor did the string forms. Scala refuses
+default arguments on two overloads of one method, so the handle forms spell `let` and `options` as a trailing
+argument with an overload that leaves them out.
 
 `Field[E, A]` is opaque over `FieldPath`, which is opaque over `List[Segment]`. Both aliases being transparent
 *inside the same file* is a live hazard: `Field./` calling `field.path / segment` resolved to its own `/` and became

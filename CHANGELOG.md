@@ -18,6 +18,10 @@ Binary compatible with `5.0.0`, checked by MiMa.
   write, a bulk write and a client bulk write.
 - `field.setNull` and `Update.setNull(field)` on an `Option` field: the explicit `null` that `set(None)` no longer
   writes.
+- **Joins that take the foreign collection.** `Stage.lookup`, `lookupWith`, `lookupWithKeys` and `graphLookup` accept
+  the foreign `MongoCollection` in place of its name, and render its fields, sub-pipeline and `restrictSearchWithMatch`
+  through that collection's `FieldNaming` rather than the one running the aggregation, so collections with different
+  namings join on the right fields. The string forms are unchanged.
 
 ### Changed
 
