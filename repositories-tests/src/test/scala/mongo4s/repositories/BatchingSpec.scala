@@ -123,6 +123,15 @@ final class BatchingSpec extends AsyncWordSpec, AsyncIOSpec, Matchers:
         left shouldBe 2L
     }
 
+    "return a document once even when its key repeats in different batches" in {
+      val repository = repo(batchSize = 2)
+
+      for
+        _     <- repository.fake.insertMany(people(3))
+        found <- repository.findMany(List("1", "2", "1", "3", "1", "2"))
+      yield found.map(_.id) should contain theSameElementsAs List("1", "2", "3")
+    }
+
     "issue no query at all for an empty key list" in {
       val repository = repo(batchSize = 2)
 

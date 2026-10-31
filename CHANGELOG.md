@@ -8,6 +8,16 @@ Notable changes per release. Breaking changes and how to migrate are in
 This file starts at `2.0.0`. `1.0.0` was released without one, and `1.1.0` was never published — its changes are
 part of `2.0.0` below.
 
+## 5.1.0
+
+Binary compatible with `5.0.0`, checked by MiMa.
+
+### Fixed
+
+- **`findMany` returned a document once per batch its key appeared in.** A key repeated further down the list than
+  `batchSize` went out in a second `$in`, and the document came back twice. The keys are made distinct before they
+  are batched, as the README already promised.
+
 ## 5.0.1
 
 Binary compatible with `5.0.0`, checked by MiMa.

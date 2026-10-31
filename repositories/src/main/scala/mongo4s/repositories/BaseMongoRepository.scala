@@ -33,7 +33,7 @@ open class BaseMongoRepository[F[*], S[*], E, K](
     collection.find(pk.eqFilter(key))(using session).projection(defaultProjection).first
 
   def findMany(keys: List[K])(using session: Option[ClientSession]): F[List[E]] =
-    batched(keys)(chunk => collection.find(pk.inFilter(chunk))(using session).projection(defaultProjection).all)
+    batched(keys.distinct)(chunk => collection.find(pk.inFilter(chunk))(using session).projection(defaultProjection).all)
 
   def findByField[A](field: Field[E, A], value: A, page: Page[E])(using
       session: Option[ClientSession]
@@ -159,7 +159,7 @@ open class BaseMongoRepository[F[*], S[*], E, K](
     collection.deleteOne(pk.eqFilter(key))(using session)
 
   def deleteMany(keys: List[K])(using session: Option[ClientSession]): F[DeleteResult] =
-    F.map(batchedList(keys)(chunk => collection.deleteMany(pk.inFilter(chunk))(using session)))(results => DeleteResult(results.map(_.deletedCount).sum))
+    F.map(batchedList(keys.distinct)(chunk => collection.deleteMany(pk.inFilter(chunk))(using session)))(results => DeleteResult(results.map(_.deletedCount).sum))
 
   def deleteByField[A](field: Field[E, A], value: A)(using
       session: Option[ClientSession]
