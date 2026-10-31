@@ -1804,6 +1804,17 @@ hand-rolled `WireCodec.instance(...)` for the common case of one type wrapping a
 calls to write by hand, and the wrap/unwrap logic lives in exactly one place instead of being duplicated across the
 encode and decode sides.
 
+The enum case above is common enough to have its own spelling. `ScalarWireCodec.byValue` stores each case as the
+value it names, refuses two cases stored alike, and reports a stored value no case matches; being a
+`ScalarWireCodec`, it filters too:
+
+```scala
+given ScalarWireCodec[Provider] = ScalarWireCodec.byValue(Provider.values)(_.value)
+```
+
+A type that is only ever read — a projection, a view another service writes — can have a codec without an encoder:
+`WireCodec.decodeOnly(decoder)` reads with the decoder and refuses to write, naming why.
+
 Both keep what the codec underneath knows about an absent field: a wrapper over an `Option` leaves the field out of
 the document when it is empty, and reads the missing field back as that same empty value — through `iemap` too, as
 long as the validation accepts it. They keep the codec's naming as well, so a derived entity wrapped in `iemap` to

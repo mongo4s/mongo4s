@@ -492,6 +492,15 @@ object ReadmeSnippets:
 
   // --- Derivation config ---
 
+  enum Provider(val value: String):
+    case Stripe extends Provider("stripe")
+    case Adyen  extends Provider("adyen")
+
+  object Provider:
+    given ScalarWireCodec[Provider] = ScalarWireCodec.byValue(Provider.values)(_.value)
+
+  val readOnlyCount: WireCodec[Int] = WireCodec.decodeOnly[Int](reader => reader.readInt32())
+
   object storedOtherwise:
     given ScalarWireCodec[Instant]             = ScalarWireCodec.instantAsEpochSeconds
     given BsonEncoder[Instant]                 = ScalarWireCodec.instantAsEpochSeconds.toBsonEncoder

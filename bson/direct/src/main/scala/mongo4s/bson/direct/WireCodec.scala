@@ -40,6 +40,14 @@ object WireCodec extends WireCodecLowPriorityDerivation, WireIterableLowPriority
       def encode(writer: BsonWriter, value: A): Unit = enc(writer, value)
       def decode(reader: BsonReader): A              = dec(reader)
 
+  def decodeOnly[A](decoder: WireDecoder[A]): WireCodec[A] =
+    new WireCodec[A]:
+      def encode(writer: BsonWriter, value: A): Unit =
+        throw UnsupportedOperationException(s"this codec only reads — it was built with WireCodec.decodeOnly, and cannot write $value")
+
+      def decode(reader: BsonReader): A        = decoder.decode(reader)
+      override def defaultOnMissing: Option[A] = decoder.defaultOnMissing
+
   def from[A](encoder: WireEncoder[A], decoder: WireDecoder[A]): WireCodec[A] =
     new WireCodec[A]:
       def encode(writer: BsonWriter, value: A): Unit = encoder.encode(writer, value)

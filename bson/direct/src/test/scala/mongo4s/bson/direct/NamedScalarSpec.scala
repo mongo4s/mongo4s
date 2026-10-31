@@ -69,3 +69,33 @@ final class NamedScalarSpec extends AnyWordSpec, Matchers:
       read(ScalarWireCodec.uuidAsBinary, BsonBinary(uuid)) shouldBe Right(uuid)
     }
   }
+
+  "ScalarWireCodec.byValue" should {
+    enum Provider(val value: String):
+      case Stripe extends Provider("stripe")
+      case Adyen  extends Provider("adyen")
+
+    val codec = ScalarWireCodec.byValue(Provider.values)(_.value)
+
+    "store each case as its value and read it back" in {
+      write(codec, Provider.Adyen) shouldBe BsonString("adyen")
+      read(codec, BsonString("stripe")) shouldBe Right(Provider.Stripe)
+    }
+
+    "report a value no case is stored as" in {
+      read(codec, BsonString("paypal")) shouldBe Left(BsonError.InvalidValue("no case is stored as paypal"))
+    }
+
+    "refuse two cases stored as the same value" in {
+      an[IllegalArgumentException] should be thrownBy ScalarWireCodec.byValue(List("a", "b"))(_ => 1)
+    }
+  }
+
+  "WireCodec.decodeOnly" should {
+    "read with the decoder it was given, and refuse to write" in {
+      val codec = WireCodec.decodeOnly[Int](reader => reader.readInt32() * 2)
+
+      read(codec, BsonInt32(21)) shouldBe Right(42)
+      an[UnsupportedOperationException] should be thrownBy write(codec, 1)
+    }
+  }

@@ -40,6 +40,14 @@ object ScalarWireCodec:
 
   lazy val uuidAsBinary: ScalarWireCodec[UUID] = instance((writer, value) => writer.writeBinaryData(BsonBinary(value)), ScalarWireCodec[UUID].decode)
 
+  def byValue[A, V](values: Iterable[A])(value: A => V)(using codec: ScalarWireCodec[V]): ScalarWireCodec[A] =
+    val byStored = values.iterator.map(entry => (value(entry), entry)).toMap
+
+    require(byStored.size == values.size, s"two of ${values.mkString(", ")} are stored as the same value")
+
+    codec.iemap(stored => byStored.get(stored).toRight(s"no case is stored as $stored"))(value)
+  end byValue
+
   private def parsed[A](parse: CharSequence => A): String => Either[String, A] =
     raw =>
       try Right(parse(raw))

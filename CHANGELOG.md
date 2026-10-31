@@ -38,6 +38,8 @@ Binary compatible with `5.0.0`, checked by MiMa.
   `localDateAsDate(zone)` — each ready to be made the given where a collection already stores the type that way.
 - **A `UUID` stored as binary subtype 4**, as every other driver writes it, reads on both paths; a legacy subtype 3 is
   refused by name.
+- `ScalarWireCodec.byValue(values)(_.value)`, the codec of an enum stored by a value of its own, and
+  `WireCodec.decodeOnly(decoder)`, for a type that is only read.
 - `MongoError.writeConcernErrors`, with `MongoError.WriteConcernFailure`: what the write concern reported, on a single
   write, a bulk write and a client bulk write.
 - `field.setNull` and `Update.setNull(field)` on an `Option` field: the explicit `null` that `set(None)` no longer
