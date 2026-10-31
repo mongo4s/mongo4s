@@ -7,6 +7,7 @@ import org.bson.types.ObjectId
 
 import mongo4s.cats.CatsStream
 import mongo4s.bson.BsonDocumentCodec
+import mongo4s.operations.Projection
 import mongo4s.repositories.BaseMongoRepository
 import mongo4s.{Field, MongoClient, PrimaryKey, WithId}
 import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec}
@@ -30,7 +31,6 @@ final case class AuditEntry(ref: String, action: String, at: Instant) derives Wi
 
 object AuditEntry:
   given PrimaryKey[AuditEntry, String] = PrimaryKey.single("ref")(_.ref)
-  given BsonDocumentCodec[AuditEntry]  = DocumentCodecBridge.toDocumentCodec[AuditEntry]
 
 object RepositoryCatsBsonDirectApp extends IOApp.Simple:
 
@@ -73,7 +73,7 @@ object RepositoryCatsBsonDirectApp extends IOApp.Simple:
         _          <- tokens.insertOne(token)
         foundToken <- tokens.findOne(token._id)
         _          <- IO.println(s"token: $foundToken")
-        audit      <- BaseMongoRepository.withoutId[IO, S, AuditEntry, String](db, "repo_direct_audit")
+        audit      <- BaseMongoRepository.direct[IO, S, AuditEntry, String](db, "repo_direct_audit", projection = Projection.excludeId[AuditEntry])
         _          <- audit.insertOne(AuditEntry("a-1", "login", Instant.now()))
         foundAudit <- audit.findOne("a-1")
         _          <- IO.println(s"audit: $foundAudit")

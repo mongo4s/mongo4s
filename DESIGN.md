@@ -694,6 +694,15 @@ write one.
 Batching is empty-list-safe throughout, which follows from `Filter`'s folding: `inFilter(Nil)` is `Filter.none`, so
 `deleteMany(Nil)` deletes nothing.
 
+**`direct` answers a `Repository`, not a `BaseMongoRepository`.** The consumers built every repository over a
+`WireCodec` through `withoutId`, which takes a `BsonDocumentCodec`: they bridged the codec by hand, passed
+`FieldNaming.snakeCase` again although the codec already said it, spelled all four type arguments because nothing
+fixed `E` and `K`, and called `.widen` because `F[BaseMongoRepository[…]]` is not an `F[Repository[…]]`. Their
+hottest write path ran through `BsonDocument` twice as a result. `BaseMongoRepository`'s public surface is exactly
+`Repository`'s, so answering the trait costs nothing, and it lets the type the result is assigned to decide `E` and
+`K`. `createDirect` stays as it was; changing what an existing factory returns is a binary break, and a default
+argument cannot be added to it either, so the projection that `withoutId` exists for is a parameter of the new one.
+
 **`BulkWriteResult.upsertedIds` is keyed by command position**, so `combine` deliberately does *not* rebase indices;
 a caller splitting one logical write into batches calls `shiftUpsertedIds(offset)` per batch first, since only the
 caller knows how many commands preceded it. Getting this wrong collapsed every batch onto index 0 — a bug that only

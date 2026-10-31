@@ -1784,7 +1784,14 @@ final case class Team(members: NonEmptyList[String]) derives MedeiaDocumentCodec
 BaseMongoRepository.create[F, S, E, K](db, "collection")       // reads return the document as stored, _id included
 BaseMongoRepository.createDirect[F, S, E, K](db, "collection") // the same over getDirectCollection and a WireCodec
 BaseMongoRepository.withoutId[F, S, E, K](db, "collection")    // strips _id from reads — for entities that do not model it
-BaseMongoRepository.objectId[F, S, E](db, "collection")        // WithId[ObjectId, E], auto _id round-trip</code></pre>
+BaseMongoRepository.objectId[F, S, E](db, "collection")        // WithId[ObjectId, E], auto _id round-trip
+BaseMongoRepository.direct(db, "collection")                   // a Repository over a WireCodec, typed by where it goes</code></pre>
+    <p class="muted">
+        <code>direct</code> is the one for an entity with a <code>WireCodec</code>: the names come from the codec's
+        naming, and it answers <code>F[Repository[F, S, E, K]]</code>, so the type it is assigned to decides
+        <code>E</code> and <code>K</code> with no type arguments and no <code>.widen</code>;
+        <code>projection = Projection.excludeId[E]</code> is its <code>withoutId</code>.
+    </p>
     <p class="muted">
         <code>create</code> is the default, and it is the right one more often than it looks: none of the four
         codec backends rejects a document carrying an <code>_id</code> the entity does not model &mdash; medeia,

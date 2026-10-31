@@ -1909,7 +1909,21 @@ BaseMongoRepository.create[F, S, E, K](db, "collection")       // reads return t
 BaseMongoRepository.createDirect[F, S, E, K](db, "collection") // the same over getDirectCollection and a WireCodec
 BaseMongoRepository.withoutId[F, S, E, K](db, "collection")    // strips _id from reads — for entities that do not model it
 BaseMongoRepository.objectId[F, S, E](db, "collection")        // WithId[ObjectId, E], auto _id round-trip
+BaseMongoRepository.direct(db, "collection")                   // a Repository over a WireCodec, typed by where it goes
 ```
+
+`direct` is the one to reach for when the entity has a `WireCodec`. It reads and writes through `getDirectCollection`,
+so the field names come from the codec's own naming and no `FieldNaming` is passed a second time, and it answers
+`F[Repository[F, S, E, K]]`, so the type it is assigned to decides `E` and `K` — no type arguments, no `.widen`:
+
+```scala
+type PlayerRepository[F[*]] = Repository[F, CatsStream[F], Player, PlayerId]
+
+def players[F[*]: Async](db: MongoDatabase[F, CatsStream[F]]): F[PlayerRepository[F]] =
+  BaseMongoRepository.direct(db, "players", projection = Projection.excludeId[Player])
+```
+
+`projection` is what `withoutId` sets, and `batchSize` is the same as everywhere else.
 
 `create` is the default, and it is the right one far more often than it looks: none of the four codec backends
 rejects a document carrying an `_id` the entity does not model — `medeia`, `zio-bson`, `calypso` and a bridged

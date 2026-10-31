@@ -235,6 +235,16 @@ object BaseMongoRepository:
       BaseMongoRepository(collection, batchSize)
     }
 
+  def direct[F[*], S[*], E, K](
+      database: MongoDatabase[F, S],
+      collectionName: String,
+      batchSize: Int = DefaultBatchSize,
+      projection: Projection[E] = Projection.empty[E],
+  )(using F: Effect[F], codec: WireCodec[E], tag: ClassTag[E], pk: PrimaryKey[E, K]): F[Repository[F, S, E, K]] =
+    F.map(database.getDirectCollection[E](collectionName)) { collection =>
+      BaseMongoRepository(collection, batchSize, projection)
+    }
+
   def withoutId[F[*], S[*], E, K](
       database: MongoDatabase[F, S],
       collectionName: String,

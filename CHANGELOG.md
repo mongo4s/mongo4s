@@ -18,6 +18,9 @@ Binary compatible with `5.0.0`, checked by MiMa.
   `distinct` find it in the type's companion or an import, so `given BsonEncoder[X] = codec.toBsonEncoder` is no longer
   needed; one written by hand still wins. `ScalarWireCodec.toBsonDecoder`, and `toBsonCodec` on every `WireCodec`,
   document-shaped ones included.
+- **`BaseMongoRepository.direct`** builds a repository over `getDirectCollection` and answers it as a
+  `Repository[F, S, E, K]`, so the type it is assigned to fixes `E` and `K` — no type arguments, no `.widen` — and the
+  codec's naming applies without a `FieldNaming` argument. A `projection` argument does what `withoutId` does.
 - `MongoError.writeConcernErrors`, with `MongoError.WriteConcernFailure`: what the write concern reported, on a single
   write, a bulk write and a client bulk write.
 - `field.setNull` and `Update.setNull(field)` on an `Option` field: the explicit `null` that `set(None)` no longer

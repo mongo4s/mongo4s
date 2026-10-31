@@ -5,9 +5,9 @@ import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 import org.testcontainers.mongodb.MongoDBContainer
 
-import mongo4s.bson.direct.WireCodec
-import mongo4s.repositories.BaseMongoRepository
-import mongo4s.operations.{Update, WriteCommand}
+import mongo4s.bson.direct.{WireCodec, WireCodecConfig}
+import mongo4s.repositories.{BaseMongoRepository, Repository}
+import mongo4s.operations.{Projection, Update, WriteCommand}
 import mongo4s.{Effect, Field, MongoClient, PrimaryKey, RsBridge, Streamable}
 
 import mongo4s.bson.BsonInstances.given
@@ -18,6 +18,14 @@ object DirectRepositoryItSpec:
 
   object Person:
     given PrimaryKey[Person, String] = PrimaryKey.single("id")(_.id)
+
+  object Snake:
+    given WireCodecConfig = WireCodecConfig.SnakeCase
+
+    final case class Account(accountId: String, displayName: String) derives WireCodec
+
+    object Account:
+      given PrimaryKey[Account, String] = PrimaryKey.single("account_id")(_.accountId)
 
 trait DirectRepositoryItSpec[F[*], S[*]] extends AnyWordSpec, Matchers, BeforeAndAfterAll:
   import DirectRepositoryItSpec.Person
@@ -67,6 +75,28 @@ trait DirectRepositoryItSpec[F[*], S[*]] extends AnyWordSpec, Matchers, BeforeAn
       run(client.close)
 
       found shouldBe List(Person("1", "bob", 30))
+    }
+
+    "come out of direct typed as the Repository it is assigned to, spelled through the codec's naming, without _id when asked" in {
+      import DirectRepositoryItSpec.Snake.Account
+
+      type Accounts = Repository[F, S, Account, String]
+
+      given Effect[F]           = effectInstance
+      given RsBridge[F, S]      = rsBridge
+      val client                = run(MongoClient.fromConnectionString[F, S](container.getConnectionString))
+      val database              = run(client.getDatabase("direct_it_direct"))
+      val accounts: F[Accounts] = BaseMongoRepository.direct(database, "accounts", projection = Projection.excludeId[Account])
+      val repo                  = run(accounts)
+      run(repo.insertOne(Account("a1", "Ann")))
+      val found                 = run(repo.findByField(Field.of[Account, String](_.displayName), "Ann"))
+      val byKey                 = run(repo.findOne("a1"))
+      val stored                = run(RsBridge[F, S].list(run(database.getCollection[org.bson.BsonDocument]("accounts")).underlying.find()))
+      run(client.close)
+
+      found shouldBe List(Account("a1", "Ann"))
+      byKey shouldBe Some(Account("a1", "Ann"))
+      stored.map(_.keySet.toArray.toList.map(_.toString).filterNot(_ == "_id")) shouldBe List(List("account_id", "display_name"))
     }
 
     "insertMany / findMany / findByField / findByFilter batch and filter correctly" in {
