@@ -1578,8 +1578,9 @@ Contact("bob", None) // {"name": "bob"} — no "email" key at all</code></pre>
         includes those documents — <code>WireCodecConfig.Default.withOmitNoneFields(false)</code> restores the explicit
         <code>null</code> where either matters. The flag governs fields of a derived product only: a <code>None</code>
         inside an array is still written as <code>null</code>, because dropping an element would shift every position
-        after it, and <code>Update.set(field, None)</code> still writes <code>null</code> because
-        <code>$set: null</code> and <code>$unset</code> are different intents (<code>field.unset</code> is the latter).
+        after it. An update writes <code>None</code> the way the codec does: <code>field.set(None)</code> renders
+        <code>$unset</code>, <code>setOnInsert(None)</code> adds nothing, and <code>field.setNull</code> is the
+        explicit <code>null</code>.
     </p>
     <p class="muted">
         A nested <code>Option</code> does not survive a round-trip on either codec path, with or without the flag:

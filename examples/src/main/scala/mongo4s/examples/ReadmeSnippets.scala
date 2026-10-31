@@ -101,6 +101,10 @@ object ReadmeSnippets:
   val bestYet  = scoreField.max(100L) // an Option[Long] field takes a plain Long
   val tagged   = tagsField.push("vip")
 
+  // None is written the way the codec writes it: the field goes. setNull is the explicit null.
+  val scoreCleared = scoreField.set(None)
+  val scoreNulled  = scoreField.setNull
+
   // $each modifiers keep the array capped and ordered on the server rather than in the application.
   val recentTags = tagsField.pushAll(List("vip"), PushOptions.default[String].sortedAscending.withSlice(10))
   val combined   = Update.combine(setAge, tagged)

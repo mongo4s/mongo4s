@@ -122,7 +122,7 @@ open class BaseMongoRepository[F[*], S[*], E, K](
   )(using
       encoder: BsonEncoder[A]
   ): F[UpdateResult] =
-    collection.updateOne(pk.eqFilter(key), Update.Set(field.path, encoder.encode(value)))(using session)
+    collection.updateOne(pk.eqFilter(key), Update.set(field, value))(using session)
 
   def updateOne(key: K, update: Update[E], options: UpdateOptions)(using session: Option[ClientSession]): F[UpdateResult] =
     collection.updateOne(pk.eqFilter(key), update, options)(using session)

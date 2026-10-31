@@ -2,7 +2,7 @@ package mongo4s.operations
 
 import java.time.Instant
 
-import org.bson.{BsonArray, BsonBoolean, BsonDocument, BsonInt32, BsonString, BsonTimestamp, BsonValue}
+import org.bson.{BsonArray, BsonBoolean, BsonDocument, BsonInt32, BsonNull, BsonString, BsonTimestamp, BsonValue}
 
 import mongo4s.bson.{BsonEncoder, FieldNaming}
 import mongo4s.{BitwiseOf, ComparableOf, ElementOf, Field, FieldPath, NumericOf}
@@ -65,12 +65,18 @@ object Update:
   def set[E, A](field: Field[E, A], value: A)(using
       encoder: BsonEncoder[A],
   ): Update[E] =
-    Set(field.path, encoder.encode(value))
+    if value == None
+    then Unset(field.path)
+    else Set(field.path, encoder.encode(value))
+
+  def setNull[E, A](field: Field[E, Option[A]]): Update[E] = Set(field.path, BsonNull.VALUE)
 
   def setOnInsert[E, A](field: Field[E, A], value: A)(using
       encoder: BsonEncoder[A],
   ): Update[E] =
-    SetOnInsert(field.path, encoder.encode(value))
+    if value == None
+    then Combine(Nil)
+    else SetOnInsert(field.path, encoder.encode(value))
 
   def unset[E, A](field: Field[E, A]): Update[E] = Unset(field.path)
 

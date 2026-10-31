@@ -10,10 +10,12 @@ import cats.effect.IO
 import org.bson.{BsonDocument, BsonNull, BsonString}
 
 import mongo4s.cats.CatsStream
-import mongo4s.{MongoClient, RsBridge}
+import mongo4s.operations.Filter
+import mongo4s.{Field, MongoClient, RsBridge}
 import mongo4s.bson.direct.{WireCodec, WireCodecConfig}
 
 import mongo4s.cats.CatsInstances.given
+import mongo4s.bson.BsonInstances.given
 
 object OmitNoneFieldsItSpec:
 
@@ -50,6 +52,32 @@ final class OmitNoneFieldsItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, B
       program.asserting { (stored, read) =>
         stored.head.containsKey("name") shouldBe true
         stored.head.containsKey("email") shouldBe false
+        read shouldBe List(Contact("bob", None))
+      }
+    }
+
+    "remove the field on set(None), so an updated document has the shape an inserted one has" in {
+      val email = Field.of[Contact, Option[String]](_.email)
+
+      val program =
+        for
+          client     <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database   <- client.getDatabase("omit_none_it")
+          collection <- database.getDirectCollection[Contact]("set_none")
+          _          <- collection.insertOne(Contact("bob", Some("bob@example.com")))
+          _          <- collection.updateOne(Filter.all, email.set(None))
+          stored     <- RsBridge[IO, S].list(collection.underlying.find())
+          withEmail  <- collection.count(email.exists)
+          _          <- collection.updateOne(Filter.all, email.setNull)
+          nulled     <- RsBridge[IO, S].list(collection.underlying.find())
+          read       <- collection.find().all
+          _          <- client.close
+        yield (stored, withEmail, nulled, read)
+
+      program.asserting { (stored, withEmail, nulled, read) =>
+        stored.head.containsKey("email") shouldBe false
+        withEmail shouldBe 0L
+        nulled.head.get("email") shouldBe BsonNull.VALUE
         read shouldBe List(Contact("bob", None))
       }
     }

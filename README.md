@@ -277,6 +277,7 @@ on.
 ageField.set(31)                  // $set
 ageField.inc(1)                   // $inc — also $mul, $min, $max
 nameField.unset                   // $unset
+scoreField.set(None)              // $unset too, the way the codec leaves a None out; scoreField.setNull writes null
 tagsField.push("vip")             // $push — also $pull, $addToSet, and the $each variants
 itemsField.pullWhere(qtyField.lt(1))         // $pull by a condition on the elements
 scoresField.pullWhere(Field.self[Int].gte(6)) // ...or on a scalar element itself
@@ -1657,9 +1658,14 @@ back as `None`, because BSON has one null and both layers map onto it. This is t
 or a wrapper case class rather than `Option[Option[A]]`.
 
 The flag governs *fields of a derived product* only. A `None` inside an array is still written as `null` regardless,
-because dropping an element would shift every position after it. `Update.set(field, None)` also still writes `null` —
-that is `BsonEncoder`, not `WireCodec`, and `$set: null` and `$unset` are different intents; use `field.unset` for
-the latter. The AST bridges (`medeia`, `zio-bson`, `calypso`) follow their own library's rule here, not this flag.
+because dropping an element would shift every position after it. The AST bridges (`medeia`, `zio-bson`, `calypso`)
+follow their own library's rule here, not this flag.
+
+An update writes `None` the way the default codec does: `field.set(None)` renders `$unset`, so a document updated to
+`None` has the shape of one inserted with it, and `setOnInsert(None)` adds nothing to the update, leaving the field
+out of an inserted document. `field.setNull` is the explicit `null`, for a collection derived with
+`withOmitNoneFields(false)` or one that relies on `$exists` or a sparse index seeing the field. Both apply to
+`Repository.updateField` too.
 
 #### Missing fields and case-class defaults
 

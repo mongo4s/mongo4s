@@ -514,6 +514,16 @@ Numeric operators go through `NumericOf[C, A]`, mirroring `ElementOf[C, A]`, so 
 `Long`. There is deliberately **no** `NumericValue[Option[A]]`: `None` has no numeric encoding, and the obvious
 stand-in — `$inc` by zero — is a write that silently does nothing.
 
+**`set(None)` means what the codec means by `None`.** Up to `5.0`, `field.set(None)` encoded the `None` with
+`BsonEncoder[Option[A]]` and wrote `null`, while a derived `WireCodec` leaves a `None` out of the document. One
+entity had two stored shapes depending on which write touched it last, and `$exists`, sparse indexes and `$type`
+answered differently for each; a consumer wrote `null`s for months without knowing, with a codec spec asserting the
+opposite. The README called it a feature — `$set: null` and `$unset` are different intents — and that is true, but
+the intent behind `set(None)` on a field the codec omits is almost never "store a null". So `set(None)` is `$unset`
+now, and `setNull` is the spelling of the other intent, offered only on an `Option` field. `setOnInsert(None)` is
+*not* `$unset` — that would remove the field from a document the upsert matched, which `$setOnInsert` must never
+touch — it adds nothing, so the inserted document lacks the field the way an encoded `None` does.
+
 Symbolic aliases (`===`, `=!=`, `>`, `>=`) exist where they read better, each with a `@targetName`.
 
 ## Reads: strict by default, lenient on request

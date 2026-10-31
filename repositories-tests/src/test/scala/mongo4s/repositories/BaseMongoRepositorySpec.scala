@@ -182,6 +182,18 @@ final class BaseMongoRepositorySpec extends AsyncWordSpec, AsyncIOSpec, Matchers
         _ <- repository.updateField("1", Field.of[Person, Int](_.age), 31)
       yield repository.fake.snapshot shouldBe List(Person("1", "bob", 31))
     }
+
+    "remove an optional field set to None rather than storing null in it" in {
+      given PrimaryKey[BsonDocument, String] = PrimaryKey.storedId(_.getString("_id").getValue)
+
+      val repository = FakeRepository[IO, S, BsonDocument, String]()
+      val email      = Field.stored[BsonDocument, Option[String]]("email")
+
+      for
+        _ <- repository.fake.insertOne(BsonDocument("_id", BsonString("1")).append("email", BsonString("bob@example.com")))
+        _ <- repository.updateField("1", email, None)
+      yield repository.fake.snapshot shouldBe List(BsonDocument("_id", BsonString("1")))
+    }
   }
 
   "updateByFilter" should {

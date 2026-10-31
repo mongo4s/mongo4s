@@ -59,8 +59,10 @@ object Field:
     def notIn(values: Seq[A]): Filter[E] =
       if values.isEmpty then Filter.MatchAll() else Filter.Nin(field.path, values.toList.map(encoder.encode))
 
-    def set(value: A): Update[E]         = Update.Set(field.path, encoder.encode(value))
-    def setOnInsert(value: A): Update[E] = Update.SetOnInsert(field.path, encoder.encode(value))
+    def set(value: A): Update[E]         = Update.set(field, value)
+    def setOnInsert(value: A): Update[E] = Update.setOnInsert(field, value)
+
+  extension [E, A](field: Field[E, Option[A]]) def setNull: Update[E] = Update.setNull(field)
 
   extension [E, V](field: Field[E, Map[String, V]]) def at(key: String): Field[E, V] = Field(field.path.stored(key))
 

@@ -42,6 +42,31 @@ final class UpdateSpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "an optional field" should {
+    "remove the field on set(None), the way the codec leaves a None out of the document" in {
+      json(scoreField.set(None)) shouldBe """{"$unset": {"score": ""}}"""
+      json(Update.set(scoreField, None)) shouldBe """{"$unset": {"score": ""}}"""
+    }
+
+    "set a present value" in {
+      json(scoreField.set(Some(5L))) shouldBe """{"$set": {"score": 5}}"""
+    }
+
+    "write an explicit null only when asked to" in {
+      json(scoreField.setNull) shouldBe """{"$set": {"score": null}}"""
+      json(Update.setNull(scoreField)) shouldBe """{"$set": {"score": null}}"""
+    }
+
+    "leave the field out of an inserted document on setOnInsert(None), rather than unsetting it on a matched one" in {
+      json(scoreField.setOnInsert(None).and(nameField.set("bob"))) shouldBe """{"$set": {"name": "bob"}}"""
+      json(Update.setOnInsert(scoreField, Some(1L))) shouldBe """{"$setOnInsert": {"score": 1}}"""
+    }
+
+    "refuse setNull on a field that is not optional" in {
+      typeChecks("Field.of[UpdateSpec.Person, String](_.name).setNull") shouldBe false
+    }
+  }
+
   "Update.Raw" should {
     "merge into an operator that is already present rather than replacing it" in {
       val raw = Update.Raw[Person](BsonDocument("$set", BsonDocument("age", BsonInt32(1))))

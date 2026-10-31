@@ -16,6 +16,16 @@ Binary compatible with `5.0.0`, checked by MiMa.
 
 - `MongoError.writeConcernErrors`, with `MongoError.WriteConcernFailure`: what the write concern reported, on a single
   write, a bulk write and a client bulk write.
+- `field.setNull` and `Update.setNull(field)` on an `Option` field: the explicit `null` that `set(None)` no longer
+  writes.
+
+### Changed
+
+- **`field.set(None)` renders `$unset`, not `$set: null`**, so a document updated to `None` has the shape the default
+  codec gives one inserted with it — `$exists`, sparse indexes and `$type` no longer depend on which write touched it
+  last. `setOnInsert(None)` adds nothing to the update, and `Repository.updateField(key, field, None)` removes the
+  field. Where the `null` was wanted, `setNull` writes it. Documents already carrying a `null` read back as `None` as
+  before.
 
 ### Fixed
 
@@ -26,7 +36,6 @@ Binary compatible with `5.0.0`, checked by MiMa.
   cleared connection pool and a closed server were `Failed` and are `Unavailable`.
 - **A bulk write that failed only on its write concern raised a `BulkWriteFailed` with nothing in it.** `failures`
   is still empty — no document failed — and `writeConcernErrors` now says what did.
-
 - **A filter that matches nothing was planned as a collection scan.** `in(Nil)`, `containsAll(Nil)`, `Filter.none`
   and an empty `KeyRef.inFilter` rendered `{$nor: [{}]}`, which the server reads every document to answer. They render
   `{_id: {$in: []}}` now, answered from the `_id` index. `Filter.Or(Nil)`, which rendered an `$or` the server refuses,
