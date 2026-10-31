@@ -501,6 +501,10 @@ object ReadmeSnippets:
 
   val readOnlyCount: WireCodec[Int] = WireCodec.decodeOnly[Int](reader => reader.readInt32())
 
+  final case class Ledger(byProvider: Map[Provider, Int]) derives WireCodec
+
+  val stripeTotal = Field.of[Ledger, Map[Provider, Int]](_.byProvider).at(Provider.Stripe).gt(0)
+
   object storedOtherwise:
     given ScalarWireCodec[Instant]             = ScalarWireCodec.instantAsEpochSeconds
     given BsonEncoder[Instant]                 = ScalarWireCodec.instantAsEpochSeconds.toBsonEncoder

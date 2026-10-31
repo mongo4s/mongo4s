@@ -137,6 +137,22 @@ final class FilterSpec extends AnyWordSpec with Matchers:
     }
   }
 
+  "a field holding a Map keyed by an enum" should {
+    "reach one entry by the key's stored form" in {
+      import mongo4s.bson.direct.ScalarWireCodec
+
+      enum Tier(val value: String):
+        case Gold extends Tier("gold")
+
+      given ScalarWireCodec[Tier] = ScalarWireCodec.byValue(Tier.values)(_.value)
+
+      final case class Ledger(byTier: Map[Tier, Int], byName: Map[String, Int])
+
+      Field.of[Ledger, Map[Tier, Int]](_.byTier).at(Tier.Gold).equalTo(1).toBson(FieldNaming.snakeCase).toJson shouldBe """{"by_tier.gold": 1}"""
+      Field.of[Ledger, Map[String, Int]](_.byName).at("Gold").equalTo(1).toBson(FieldNaming.snakeCase).toJson shouldBe """{"by_name.Gold": 1}"""
+    }
+  }
+
   "stored segments under a field" should {
     "keep a map key verbatim while renaming the field that holds it" in {
       val filter = Field.of[User, Map[String, Int]](_.totalsByCurrency).at("EUR").equalTo(10)

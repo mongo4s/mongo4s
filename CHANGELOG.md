@@ -40,6 +40,9 @@ Binary compatible with `5.0.0`, checked by MiMa.
   refused by name.
 - `ScalarWireCodec.byValue(values)(_.value)`, the codec of an enum stored by a value of its own, and
   `WireCodec.decodeOnly(decoder)`, for a type that is only read.
+- **`Map` keyed by more than `String`.** A `KeyCodec[K]` writes each key as the field name it has to be — `Int`,
+  `Long` and `UUID` have one, and any type whose `ScalarWireCodec` writes a string gets one — so `Map[Provider, V]`
+  derives without a hand-written codec, and `field.at(key)` reaches an entry in a query.
 - `MongoError.writeConcernErrors`, with `MongoError.WriteConcernFailure`: what the write concern reported, on a single
   write, a bulk write and a client bulk write.
 - `field.setNull` and `Update.setNull(field)` on an `Option` field: the explicit `null` that `set(None)` no longer

@@ -1597,8 +1597,11 @@ date, before a `ScalarWireCodec` of yours, so without it a filter on such a fiel
 A type with no encoder of its own, like `LocalDate`, needs no second line.
 
 `List`/`Vector`/`Seq`/`Set`/`Array` write a real BSON array, and `Map[String, A]` a real `BSON` document keyed by its
-own keys — `String` being the key type isn't a limitation of the general mechanism, it's just what BSON's own field
-names are. Every *other* `Iterable` collection with a `scala.collection.Factory` (`Queue`, `ArraySeq`, `ListSet`,
+own keys. A map keyed by anything else is the same document with each key written as a string by its `KeyCodec`:
+`Int`, `Long` and `UUID` have one, and so does any type whose `ScalarWireCodec` writes a string — an enum stored by
+its value, say — so `Map[Provider, Score]` needs nothing of its own. A stored key that does not read back fails the
+decode under that key's name, and `field.at(key)` reaches one entry of such a map in a query the same way it does
+for a `String` key. Every *other* `Iterable` collection with a `scala.collection.Factory` (`Queue`, `ArraySeq`, `ListSet`,
 `LazyList`, `SortedSet`/`TreeSet` given an `Ordering`, …) gets an array-shaped `WireCodec` too, generically — no
 dedicated `given` needed per type.
 

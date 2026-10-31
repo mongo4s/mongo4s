@@ -3,6 +3,7 @@ package mongo4s
 import scala.annotation.unused
 import scala.annotation.targetName
 
+import mongo4s.bson.direct.KeyCodec
 import mongo4s.bson.{BsonEncoder, BsonTypeName, FieldNaming}
 import mongo4s.operations.geometry.{GeoShape, Geometry}
 import mongo4s.operations.{Computed, Expr, Filter, PushOptions, Sort, Update}
@@ -65,6 +66,10 @@ object Field:
   extension [E, A](field: Field[E, Option[A]]) def setNull: Update[E] = Update.setNull(field)
 
   extension [E, V](field: Field[E, Map[String, V]]) def at(key: String): Field[E, V] = Field(field.path.stored(key))
+
+  extension [E, K, V](field: Field[E, Map[K, V]])(using keys: KeyCodec[K])
+    @targetName("atKey")
+    def at(key: K): Field[E, V] = Field(field.path.stored(keys.encodeKey(key)))
 
   extension [E, C](field: Field[E, C])
     @targetName("child")
