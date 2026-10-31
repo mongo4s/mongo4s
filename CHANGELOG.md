@@ -14,6 +14,10 @@ Binary compatible with `5.0.0`, checked by MiMa.
 
 ### Added
 
+- **A `ScalarWireCodec` is the `BsonEncoder` and `BsonDecoder` of its type.** Filters, updates, keys, `selectAs` and
+  `distinct` find it in the type's companion or an import, so `given BsonEncoder[X] = codec.toBsonEncoder` is no longer
+  needed; one written by hand still wins. `ScalarWireCodec.toBsonDecoder`, and `toBsonCodec` on every `WireCodec`,
+  document-shaped ones included.
 - `MongoError.writeConcernErrors`, with `MongoError.WriteConcernFailure`: what the write concern reported, on a single
   write, a bulk write and a client bulk write.
 - `field.setNull` and `Update.setNull(field)` on an `Option` field: the explicit `null` that `set(None)` no longer

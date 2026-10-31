@@ -5,7 +5,7 @@ import scala.compiletime.uninitialized
 import org.bson.*
 import org.bson.types.{Decimal128, ObjectId}
 
-private[direct] final class BsonValueCapturingWriter extends AbstractBsonWriter(BsonWriterSettings()):
+private[direct] final class BsonValueCapturingWriter extends AbstractBsonWriter(BsonValueCapturingWriter.Settings):
   setContext(new Context(null, BsonContextType.TOP_LEVEL))
   setState(AbstractBsonWriter.State.VALUE)
 
@@ -20,8 +20,8 @@ private[direct] final class BsonValueCapturingWriter extends AbstractBsonWriter(
 
   private def unsupported(shape: String): Nothing =
     throw UnsupportedOperationException(
-      s"ScalarWireCodec.toBsonEncoder only supports a codec that writes a single scalar value directly " +
-        s"(no nested $shape) — this codec tried to write one, which should be impossible for a genuine ScalarWireCodec."
+      s"ScalarWireCodec.toBsonEncoder captures one scalar value, and this codec wrote a nested $shape — " +
+        "a codec that writes one is not scalar; bridge it with WireCodec#toBsonCodec instead."
     )
 
   protected def doWriteStartDocument(): Unit = unsupported("document")
@@ -48,3 +48,6 @@ private[direct] final class BsonValueCapturingWriter extends AbstractBsonWriter(
   protected def doWriteSymbol(value: String): Unit                           = capture(BsonSymbol(value))
   protected def doWriteTimestamp(value: BsonTimestamp): Unit                 = capture(value)
   protected def doWriteUndefined(): Unit                                     = capture(BsonUndefined())
+
+private[direct] object BsonValueCapturingWriter:
+  private val Settings = BsonWriterSettings()

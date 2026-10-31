@@ -11,7 +11,7 @@ import mongo4s.cats.{CatsStream, MongoClientResource}
 import mongo4s.results.{BulkWriteResult, ExplainSummary, UpdateResult}
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.repositories.{BaseMongoRepository, MongoCounters, Page}
-import mongo4s.bson.{BsonDocumentCodec, BsonTypeName, DecodeResult, FieldNaming}
+import mongo4s.bson.{BsonCodec, BsonDocumentCodec, BsonTypeName, DecodeResult, FieldNaming}
 import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec, WireCodecConfig}
 import mongo4s.operations.*
 import mongo4s.operations.geometry.Geometry
@@ -32,6 +32,9 @@ object ReadmeSnippets:
     given BsonDocumentCodec[User]  = DocumentCodecBridge.toDocumentCodec[User]
 
   final case class Address(city: String, zip: String) derives WireCodec
+
+  object Address:
+    given BsonCodec[Address] = WireCodec[Address].toBsonCodec
   final case class Item(sku: String, quantity: Int) derives WireCodec
 
   object Item:
@@ -93,6 +96,7 @@ object ReadmeSnippets:
   val eur                          = totals.at("EUR")
   val first: Field[Order, Item]    = itemsField / "0"
   val anySku: Field[Order, String] = itemsField / Field.of[Item, String](_.sku)
+  val inParis                      = Field.of[Order, Address](_.address).equalTo(Address("Paris", "75001"))
   val orderId                      = Field.stored[Order, ObjectId]("_id")
 
   // --- Updates ---

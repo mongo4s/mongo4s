@@ -9,6 +9,15 @@ import mongo4s.operations.Filter
 import mongo4s.bson.BsonInstances.given
 
 object FilterSpec:
+  opaque type AccountId = Long
+
+  object AccountId:
+    def apply(value: Long): AccountId = value
+
+    given mongo4s.bson.direct.ScalarWireCodec[AccountId] = mongo4s.bson.direct.ScalarWireCodec[Long].imap(AccountId.apply)(identity)
+
+  final case class Account(id: AccountId, owners: List[AccountId])
+
   final case class Address(city: String, zipCode: String)
   final case class User(
       firstName: String,
@@ -94,6 +103,19 @@ final class FilterSpec extends AnyWordSpec with Matchers:
 
     "still refuse an element of another type" in {
       "Field.of[FilterSpec.User, Option[List[String]]](_.nickNames).contains(1)" shouldNot typeCheck
+    }
+  }
+
+  "a field typed by an id that has only a ScalarWireCodec" should {
+    import FilterSpec.{Account, AccountId}
+
+    "filter, update and key on it with no BsonEncoder written for it" in {
+      val id     = Field.of[Account, AccountId](_.id)
+      val owners = Field.of[Account, List[AccountId]](_.owners)
+
+      id.in(List(AccountId(1L), AccountId(2L))).toBson(FieldNaming.identity).toJson shouldBe """{"id": {"$in": [1, 2]}}"""
+      owners.push(AccountId(3L)).toBson(FieldNaming.identity).toJson shouldBe """{"$push": {"owners": 3}}"""
+      PrimaryKey.single[Account, AccountId]("id")(_.id).eqFilter(AccountId(4L)).toBson(FieldNaming.identity).toJson shouldBe """{"id": 4}"""
     }
   }
 

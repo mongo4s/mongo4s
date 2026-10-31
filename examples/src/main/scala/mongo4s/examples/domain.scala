@@ -4,9 +4,6 @@ import java.time.Instant
 
 import mongo4s.PrimaryKey
 import mongo4s.bson.direct.ScalarWireCodec
-import mongo4s.bson.{BsonDecoder, BsonEncoder}
-
-import mongo4s.bson.BsonInstances.given
 
 opaque type UserId = String
 
@@ -16,8 +13,6 @@ object UserId:
   extension (id: UserId) def value: String = id
 
   given ScalarWireCodec[UserId] = ScalarWireCodec[String].imap(UserId.apply)(_.value)
-  given BsonEncoder[UserId]     = summon[ScalarWireCodec[UserId]].toBsonEncoder
-  given BsonDecoder[UserId]     = BsonDecoder[String].map(UserId.apply)
 
 enum Role:
   case Admin, Member, Guest
@@ -31,7 +26,6 @@ object UserRole:
   def from(value: String): Option[UserRole] = UserRole.values.find(_.value == value)
 
   given ScalarWireCodec[UserRole] = ScalarWireCodec[String].iemap(raw => from(raw).toRight(s"Unsupported role: $raw"))(_.value)
-  given BsonEncoder[UserRole]     = summon[ScalarWireCodec[UserRole]].toBsonEncoder
 
 final case class Address(city: String, zip: String)
 

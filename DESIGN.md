@@ -206,6 +206,21 @@ a native instance would cost allocations and nothing else — every round-trip a
 spec therefore asserts the *structure*, that the summoned `WireCodec` really is a `ScalarWireCodec`, because nothing
 observable distinguishes the two.
 
+**A `ScalarWireCodec` answers for its type in queries too.** Up to `5.0` a filter, an update, a key, `selectAs` or
+`distinct` needed a `BsonEncoder`/`BsonDecoder`, and nothing derived one from the `WireCodec` a type already had: the
+consumers carried fifty `given BsonEncoder[X] = xCodec.toBsonEncoder` lines next to seventy-four scalar codecs, and a
+type whose line was forgotten simply could not be filtered on. The bridge cannot sit in `bson-core`, which does not
+know `bson-direct`, and an import would be one more thing to forget, so `bson-core` declares `BsonCodecSource` —
+`toBsonEncoder`, `toBsonDecoder` — and `ScalarWireCodec` extends it; the given that turns a source into a
+`BsonEncoder` sits in `BsonEncoder`'s companion, where every search for one looks. Where it sits within the companion
+is the point. It is a parent of its own, unrelated to the default instances, so it is not in `BsonInstances.given`:
+imported lexically it would be searched before a type's companion and override a `BsonEncoder` written there by
+hand, and an encoder that differs from the wire codec would silently change. Only in implicit scope, it loses to that
+one and to every default. It is also not offered for document-shaped codecs: `WireCodec` already falls back to a
+`BsonEncoder`/`BsonDecoder` pair, and a pair that falls back to `WireCodec` would chase its tail; a product gets
+`toBsonCodec` on request. A probe confirmed the ordering before it went in — the bridge, a hand-written encoder in
+the companion, an imported codec, and the `WireCodec` fallback, each resolving to the intended instance.
+
 **It is strict by construction, and that is a trade, not an oversight.** Derivation requires every modelled field to
 be present unless its decoder supplies a default (`Option` does). So a projection that drops a modelled field cannot
 be read back through the entity's own codec. Strictness catches the far more common bug, which is a document that

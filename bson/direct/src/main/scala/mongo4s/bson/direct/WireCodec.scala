@@ -2,6 +2,8 @@ package mongo4s.bson.direct
 
 import org.bson.{BsonReader, BsonWriter}
 
+import mongo4s.bson.BsonCodec
+
 @annotation.implicitNotFound(
   "No WireCodec[${A}]. Give the type `derives WireCodec` if it is your own case class, enum or sealed trait; " +
     "an opaque type, or a type from elsewhere, needs a given written by hand — often " +
@@ -15,6 +17,8 @@ trait WireCodec[A] extends WireEncoder[A] with WireDecoder[A]:
 
   def iemap[B](f: A => Either[String, B])(g: B => A): WireCodec[B] =
     mapped(contramap(g), emap(f))
+
+  def toBsonCodec: BsonCodec[A] = BsonCodec.from(value => WireValues.encode(this, value), bson => WireValues.decode(this, bson))
 
   private def mapped[B](encoder: WireEncoder[B], decoder: WireDecoder[B]): WireCodec[B] =
     new WireCodec[B]:

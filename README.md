@@ -1746,21 +1746,19 @@ long as the validation accepts it. They keep the codec's naming as well, so a de
 validate what it reads still has its queries spelled the way it writes.
 
 Resolution order matters when a type qualifies for more than one instance. An existing `BsonEncoder`/`BsonDecoder`
-pair — hand-written, or coming from `mongo4s-bson-medeia`/`-zio`/`-calypso` — is bridged into a `WireCodec` and takes
-precedence over automatic `Mirror` derivation, so a case class carrying those instances resolves without needing
-`derives WireCodec`. Writing `derives WireCodec` on the type still wins over both: it puts a concrete instance in the
-companion, which is more specific than either generic given.
+pair — hand-written, or coming from `mongo4s-bson-medeia`/`-zio`/`-calypso` — is bridged into a `WireCodec`, so a
+type carrying those instances resolves without `derives WireCodec`. A `WireCodec` of the type's own — `derives
+WireCodec`, or a `ScalarWireCodec` in its companion — wins over that bridge.
 
-#### `ScalarWireCodec` — reusing a `WireCodec` as a `BsonEncoder`
+#### `ScalarWireCodec` — one codec for documents and for queries
 
-An opaque type over a primitive (`opaque type UserId = String`) typically needs a `WireCodec[UserId]` for
-`getDirectCollection` *and* a `BsonEncoder[UserId]` for `Field.of[...].equalTo`/`PrimaryKey.single` — two
-typeclasses, normally two independently hand-written codecs. `ScalarWireCodec[A]` — the type every primitive in
-`WirePrimitiveInstances` actually has — closes that gap:
+An opaque type over a primitive (`opaque type UserId = String`) needs a `WireCodec[UserId]` to be written into and
+read from documents, a `BsonEncoder[UserId]` for `Field.of[...].equalTo` and `PrimaryKey.single`, and a
+`BsonDecoder[UserId]` for `selectAs` and `distinct`. A `ScalarWireCodec[A]` — the type every primitive in
+`WirePrimitiveInstances` has — is all three:
 
 ```scala
 import mongo4s.bson.direct.ScalarWireCodec
-import mongo4s.bson.BsonEncoder
 
 opaque type UserId = String
 
@@ -1769,14 +1767,26 @@ object UserId:
   extension (id: UserId) def value: String = id
 
   given ScalarWireCodec[UserId] = ScalarWireCodec[String].imap(UserId.apply)(_.value)
-  given BsonEncoder[UserId]     = summon[ScalarWireCodec[UserId]].toBsonEncoder
 ```
 
-`toBsonEncoder` builds one `BsonValue` per call — cheap on the query-construction path `BsonEncoder` actually runs
-on, unlike materializing one for every field of every document, which is exactly what `WireCodec` exists to avoid
-in the first place. `ScalarWireCodec` is deliberately narrower than `WireCodec`: a derived case class or sum type
-(`derives WireCodec`) is genuinely document-shaped, so it's never typed as `ScalarWireCodec` — asking for one
+`BsonEncoder` and `BsonDecoder` take a `ScalarWireCodec` from the type's companion, or from an import, as their
+lowest-priority instance: a `BsonEncoder[UserId]` written by hand still wins, so the
+`given BsonEncoder[UserId] = summon[ScalarWireCodec[UserId]].toBsonEncoder` line earlier versions needed is now
+redundant and harmless. The decoder reads with the wire codec's own leniency — an `Int32` into a `Long` — and its
+errors. Encoding builds one `BsonValue` per value, which is cheap on the query-construction path `BsonEncoder` runs on.
+`ScalarWireCodec` is deliberately narrower than `WireCodec`: a derived case class or sum type (`derives WireCodec`)
+is genuinely document-shaped, so it's never typed as `ScalarWireCodec` — asking for one
 (`ScalarWireCodec[SomeCaseClass]`) fails to compile instead of misbehaving at runtime.
+
+A document-shaped codec is not bridged on its own, since a `BsonEncoder` built from a `WireCodec` that is itself
+built from a `BsonEncoder` would chase its own tail. `toBsonCodec` bridges it on request, for
+`Field.of(_.address).equalTo(address)`, a `push` into a `List[Address]`, or `selectAs`:
+
+```scala
+given BsonCodec[Address] = WireCodec[Address].toBsonCodec
+```
+
+`DocumentCodecBridge.toDocumentCodec[Address]` serves as well, and is the `BsonDocumentCodec` a `getCollection` asks for.
 
 #### `Either[A, B]`
 

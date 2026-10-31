@@ -2,9 +2,9 @@ package mongo4s.bson.direct
 
 import org.bson.{BsonReader, BsonWriter}
 
-import mongo4s.bson.BsonEncoder
+import mongo4s.bson.{BsonCodec, BsonCodecSource, BsonDecoder, BsonEncoder}
 
-trait ScalarWireCodec[A] extends WireCodec[A]:
+trait ScalarWireCodec[A] extends WireCodec[A], BsonCodecSource[A]:
   override def imap[B](f: A => B)(g: B => A): ScalarWireCodec[B] =
     ScalarWireCodec.from(contramap(g), map(f))
 
@@ -17,6 +17,10 @@ trait ScalarWireCodec[A] extends WireCodec[A]:
       encode(writer, value)
       writer.result
   end toBsonEncoder
+
+  def toBsonDecoder: BsonDecoder[A] = bson => WireValues.decode(this, bson)
+
+  override def toBsonCodec: BsonCodec[A] = BsonCodec.from(toBsonEncoder, toBsonDecoder)
 
 object ScalarWireCodec:
   inline def apply[A](using instance: ScalarWireCodec[A]): ScalarWireCodec[A] = instance

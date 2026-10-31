@@ -8,5 +8,8 @@ trait BsonEncoder[A]:
   final def contramap[B](f: B => A): BsonEncoder[B] =
     (value: B) => encode(f(value))
 
-object BsonEncoder extends DefaultBsonEncoderInstances:
+object BsonEncoder extends DefaultBsonEncoderInstances, BsonEncoderFromSource:
   inline def apply[A](using instance: BsonEncoder[A]): BsonEncoder[A] = instance
+
+private[bson] trait BsonEncoderFromSource:
+  given fromCodecSource: [A] => (source: BsonCodecSource[A]) => BsonEncoder[A] = source.toBsonEncoder

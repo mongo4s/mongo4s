@@ -1644,22 +1644,20 @@ object Provider:
         Resolution order matters when a type qualifies for more than one instance. An existing
         <code>BsonEncoder</code>/<code>BsonDecoder</code> pair — hand-written, or coming from
         <code>mongo4s-bson-medeia</code>/<code>-zio</code>/<code>-calypso</code> — is bridged into a
-        <code>WireCodec</code> and takes precedence over automatic <code>Mirror</code> derivation, so a case class
-        carrying those instances resolves without needing <code>derives WireCodec</code>. Writing
-        <code>derives WireCodec</code> on the type still wins over both: it puts a concrete instance in the companion,
-        which is more specific than either generic given.
+        <code>WireCodec</code>, so a type carrying those instances resolves without <code>derives WireCodec</code>. A
+        <code>WireCodec</code> of the type's own — <code>derives WireCodec</code>, or a <code>ScalarWireCodec</code>
+        in its companion — wins over that bridge.
     </p>
 
-    <h4>ScalarWireCodec — reusing a WireCodec as a BsonEncoder</h4>
+    <h4>ScalarWireCodec — one codec for documents and for queries</h4>
     <p>
-        An opaque type over a primitive (<code>opaque type UserId = String</code>) typically needs a
-        <code>WireCodec[UserId]</code> for <code>getDirectCollection</code> <em>and</em> a
-        <code>BsonEncoder[UserId]</code> for <code>Field.of[...].equalTo</code>/<code>PrimaryKey.single</code> — two
-        typeclasses, normally two independently hand-written codecs. <code>ScalarWireCodec[A]</code> — the type
-        every primitive in <code>WirePrimitiveInstances</code> actually has — closes that gap:
+        An opaque type over a primitive (<code>opaque type UserId = String</code>) needs a
+        <code>WireCodec[UserId]</code> for documents, a <code>BsonEncoder[UserId]</code> for
+        <code>Field.of[...].equalTo</code>/<code>PrimaryKey.single</code> and a <code>BsonDecoder[UserId]</code> for
+        <code>selectAs</code>/<code>distinct</code>. A <code>ScalarWireCodec[A]</code> — the type every primitive in
+        <code>WirePrimitiveInstances</code> has — is all three:
     </p>
     <pre><code>import mongo4s.bson.direct.ScalarWireCodec
-import mongo4s.bson.BsonEncoder
 
 opaque type UserId = String
 
@@ -1667,12 +1665,11 @@ object UserId:
   def apply(value: String): UserId = value
   extension (id: UserId) def value: String = id
 
-  given ScalarWireCodec[UserId] = ScalarWireCodec[String].imap(UserId.apply)(_.value)
-  given BsonEncoder[UserId]     = summon[ScalarWireCodec[UserId]].toBsonEncoder</code></pre>
+  given ScalarWireCodec[UserId] = ScalarWireCodec[String].imap(UserId.apply)(_.value)</code></pre>
     <p class="muted">
-        <code>toBsonEncoder</code> builds one <code>BsonValue</code> per call — cheap on the query-construction path
-        <code>BsonEncoder</code> actually runs on, unlike materializing one for every field of every document, which
-        is exactly what <code>WireCodec</code> exists to avoid in the first place. <code>ScalarWireCodec</code> is
+        <code>BsonEncoder</code> and <code>BsonDecoder</code> take it as their lowest-priority instance, so one written
+        by hand still wins and the old <code>toBsonEncoder</code> line is redundant. A document-shaped codec is bridged
+        on request: <code>given BsonCodec[Address] = WireCodec[Address].toBsonCodec</code>. <code>ScalarWireCodec</code> is
         deliberately narrower than <code>WireCodec</code>: a derived case class or sum type
         (<code>derives WireCodec</code>) is genuinely document-shaped, so it's never typed as
         <code>ScalarWireCodec</code> — asking for one (<code>ScalarWireCodec[SomeCaseClass]</code>) fails to compile

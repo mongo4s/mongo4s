@@ -11,5 +11,8 @@ trait BsonDecoder[A]:
   final def emap[B](f: A => Either[BsonError, B]): BsonDecoder[B] =
     (bson: BsonValue) => decode(bson).flatMap(f)
 
-object BsonDecoder extends DefaultBsonDecoderInstances:
+object BsonDecoder extends DefaultBsonDecoderInstances, BsonDecoderFromSource:
   inline def apply[A](using instance: BsonDecoder[A]): BsonDecoder[A] = instance
+
+private[bson] trait BsonDecoderFromSource:
+  given fromCodecSource: [A] => (source: BsonCodecSource[A]) => BsonDecoder[A] = source.toBsonDecoder
