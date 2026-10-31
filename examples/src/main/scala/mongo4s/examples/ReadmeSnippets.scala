@@ -497,6 +497,18 @@ object ReadmeSnippets:
 
     final case class Person(firstName: String, lastName: String) derives WireCodec
 
+  object shapedSums:
+    given WireCodecConfig = WireCodecConfig.Default
+      .withDiscriminatorField("kind")
+      .withWrappedCases(true)
+      .withFallbackCase("Unknown")
+
+    sealed trait Shape derives WireCodec
+
+    object Shape:
+      final case class Circle(radius: Double) extends Shape derives WireCodec
+      case object Unknown                     extends Shape
+
   // --- Absent Option fields ---
 
   final case class Contact(name: String, email: Option[String]) derives WireCodec

@@ -8,7 +8,12 @@ final class WireCodecConfig private (
     val encodeEmptyCasesAsString: Boolean,
     val omitNoneFields: Boolean,
     val decodeMissingAsDefault: Boolean,
+    val discriminatorField: String,
+    val wrappedCases: Boolean,
+    val fallbackCase: Option[String],
 ):
+  require(discriminatorField.nonEmpty, "the discriminator field needs a name")
+
   def withFieldNaming(value: FieldNaming): WireCodecConfig =
     copy(fieldNaming = value)
 
@@ -24,12 +29,24 @@ final class WireCodecConfig private (
   def withDecodeMissingAsDefault(value: Boolean): WireCodecConfig =
     copy(decodeMissingAsDefault = value)
 
+  def withDiscriminatorField(name: String): WireCodecConfig =
+    copy(discriminatorField = name)
+
+  def withWrappedCases(value: Boolean): WireCodecConfig =
+    copy(wrappedCases = value)
+
+  def withFallbackCase(discriminator: String): WireCodecConfig =
+    copy(fallbackCase = Some(discriminator))
+
   private def copy(
       fieldNaming: FieldNaming = fieldNaming,
       discriminatorNaming: FieldNaming = discriminatorNaming,
       encodeEmptyCasesAsString: Boolean = encodeEmptyCasesAsString,
       omitNoneFields: Boolean = omitNoneFields,
       decodeMissingAsDefault: Boolean = decodeMissingAsDefault,
+      discriminatorField: String = discriminatorField,
+      wrappedCases: Boolean = wrappedCases,
+      fallbackCase: Option[String] = fallbackCase,
   ): WireCodecConfig =
     new WireCodecConfig(
       fieldNaming = fieldNaming,
@@ -37,6 +54,9 @@ final class WireCodecConfig private (
       encodeEmptyCasesAsString = encodeEmptyCasesAsString,
       omitNoneFields = omitNoneFields,
       decodeMissingAsDefault = decodeMissingAsDefault,
+      discriminatorField = discriminatorField,
+      wrappedCases = wrappedCases,
+      fallbackCase = fallbackCase,
     )
 
 object WireCodecConfig:
@@ -46,6 +66,9 @@ object WireCodecConfig:
     encodeEmptyCasesAsString = false,
     omitNoneFields = true,
     decodeMissingAsDefault = false,
+    discriminatorField = WireDiscriminator.Field,
+    wrappedCases = false,
+    fallbackCase = None,
   )
 
   val SnakeCase: WireCodecConfig = Default.withFieldNaming(FieldNaming.snakeCase)

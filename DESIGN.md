@@ -194,6 +194,15 @@ library exists to prevent, so `Field.of` and `selectAs` read the same annotation
 segment, and a `@notStored` field cannot be selected or queried at all. The old `make` stays for code that inlined
 the `5.0` derivation; the new path goes through `build`.
 
+**A sum can take the shape a collection already has.** The discriminator was `_type`, always, and nested under
+`value` when a case was not a product; a consumer whose documents hold `{"StateItem": {…}}` modelled the ADT as a case
+class of four `Option`s and bridged it with `iemap`. `withDiscriminatorField`, `withWrappedCases` and
+`withFallbackCase` are options on the config rather than annotations on the sum, since a collection's convention is
+the same for every sum in it. The fallback has to be a `case object`: a document of a case the reader has never seen
+cannot be read as the fields of one it has. A case of a sum derived under a *different* config is not refused, though
+it writes a spelling queries will not find: the generated repositories of one consumer derive every case under a
+naming of its own, and refusing at first use would have failed them in production. `@stored` is the way out.
+
 **Mapping a derived product keeps it a product.** `imap` and `iemap` used to wrap any codec in a plain `WireCodec`,
 which a sum or an `Either` then nests under `value` — so the README's own advice, wrap a case class in `iemap` to
 validate what it reads, changed the stored shape of every case it was applied to. A mapped `FieldCodec` is a

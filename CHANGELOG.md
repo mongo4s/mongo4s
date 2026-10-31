@@ -29,6 +29,10 @@ Binary compatible with `5.0.0`, checked by MiMa.
   verbatim, the second keeps it out of the document, reading it back as its default or `None`, with no codec
   needed for its type. `Field.of`, `PrimaryKey.of` and `selectAs` spell a `@stored` field the same way, and refuse a
   `@notStored` one. A field with no codec is now reported by name when its class derives.
+- **Sums shaped for collections someone else defined.** `WireCodecConfig.withDiscriminatorField` names the field that
+  holds the case (`_type` by default); `withWrappedCases` writes each case as one field named after it,
+  `{"Circle": {"radius": 2.0}}`; `withFallbackCase` reads a case it does not know as a `case object` of that name, for
+  rolling deployments.
 - `MongoError.writeConcernErrors`, with `MongoError.WriteConcernFailure`: what the write concern reported, on a single
   write, a bulk write and a client bulk write.
 - `field.setNull` and `Update.setNull(field)` on an `Option` field: the explicit `null` that `set(None)` no longer

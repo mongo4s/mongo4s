@@ -1642,10 +1642,12 @@ given WireCodecConfig = WireCodecConfig.SnakeCase
 final case class Person(firstName: String, lastName: String) derives WireCodec // writes "first_name"/"last_name"
 ```
 
-Field naming and discriminator naming (the `_type` value for sealed traits/enums) are independently configurable.
-`WireCodecConfig` is built by starting from `Default` (or `SnakeCase`) and chaining `withFieldNaming`,
-`withDiscriminatorNaming`, `withEncodeEmptyCasesAsString`, `withOmitNoneFields`, `withDecodeMissingAsDefault` — the same shape `WatchOptions` uses,
-and the reason new derivation options can be added in a minor release without breaking binary compatibility:
+Field naming and discriminator naming (the `_type` *value* for sealed traits/enums — the case names, not the field
+that holds them) are independently configurable. `WireCodecConfig` is built by starting from `Default` (or
+`SnakeCase`) and chaining `withFieldNaming`, `withDiscriminatorNaming`, `withEncodeEmptyCasesAsString`,
+`withOmitNoneFields`, `withDecodeMissingAsDefault`, `withDiscriminatorField`, `withWrappedCases`,
+`withFallbackCase` — the same shape `WatchOptions` uses, and the reason new derivation options can be added in a minor
+release without breaking binary compatibility:
 
 ```scala
 given WireCodecConfig = WireCodecConfig.SnakeCase.withDiscriminatorNaming(FieldNaming.snakeCase)
@@ -1659,8 +1661,10 @@ so by overriding `fieldNaming`. `getCollection` still takes the parameter, becau
 still has to match the codec.
 
 A collection has one naming, so the entity and everything nested in it should be derived under the same
-`WireCodecConfig`. A nested type derived under a different one writes its own spelling, but `Field.of(_.nested.field)`
-renders every segment through the root's; reach such a field with `Field.stored` and its stored path.
+`WireCodecConfig`. A nested type derived under a different one — a case of a sealed trait included — writes its own
+spelling, but `Field.of(_.nested.field)` renders every segment through the root's, so a query on such a field matches
+nothing. To rename one field, use `@stored` below rather than a config of its own for the class: `Field.of` reads the
+annotation, and cannot read a config.
 
 `FieldNaming` applies per *derived* segment only. Stored names — `Field.stored`, a `PrimaryKey`'s field names, a
 `$lookup`'s foreign field given as a string, map keys — are used verbatim. `FieldNaming.snakeCase` splits on every capital, so
@@ -1685,6 +1689,20 @@ two, and its type needs no codec. Querying it does not compile.
 `encodeEmptyCasesAsString = true` writes a parameterless case (`case object`/empty `case class`) as a bare BSON
 string instead of a `{"_type": "..."}` document — only safe when that case is nested inside another document, not
 when it's the root type of a collection (BSON's root value must always be a document).
+
+Three more settings shape a sum, for collections another writer already defined:
+
+```scala
+given WireCodecConfig = WireCodecConfig.Default
+  .withDiscriminatorField("kind") // {"kind": "Circle", "radius": 2.0}
+  .withWrappedCases(true)         // {"Circle": {"radius": 2.0}} — the case is the one field, kind is not written
+  .withFallbackCase("Unknown")    // a case it does not know reads as the case object Unknown
+```
+
+`withWrappedCases` skips an `_id` the server stored first and reads the first field after it as the case.
+`withFallbackCase` is for rolling deployments, where a writer learns a new case before every reader does: it applies to
+each sum derived under the config that has a case of that name, which has to be a `case object`, and leaves the others
+failing on an unknown case as before.
 
 #### Absent `Option` fields
 
