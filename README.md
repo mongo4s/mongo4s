@@ -267,6 +267,10 @@ The empty lists answer what the server answers: `in(Nil)` matches nothing, `notI
 `containsAll(Nil)` matches nothing, the way `$all: []` does — no document is ever counted as containing all of an
 empty list.
 
+Matching nothing renders as `{"_id": {"$in": []}}`, and so do `Filter.Or(Nil)` and `!Filter.all`. Every collection
+has an index on `_id`, so the server answers it without scanning the collection, whichever field the empty `in` was
+on.
+
 ### Updates
 
 ```scala

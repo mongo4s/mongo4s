@@ -44,7 +44,7 @@ final class OperatorsSpec extends AnyWordSpec, Matchers:
     }
 
     "match nothing for containsAll of nothing, as the server answers $all: []" in {
-      json(labelsField.containsAll(Nil)) shouldBe """{"$nor": [{}]}"""
+      json(labelsField.containsAll(Nil)) shouldBe """{"_id": {"$in": []}}"""
     }
 
     "match by array length" in {

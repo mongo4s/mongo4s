@@ -14,6 +14,11 @@ Binary compatible with `5.0.0`, checked by MiMa.
 
 ### Fixed
 
+- **A filter that matches nothing was planned as a collection scan.** `in(Nil)`, `containsAll(Nil)`, `Filter.none`
+  and an empty `KeyRef.inFilter` rendered `{$nor: [{}]}`, which the server reads every document to answer. They render
+  `{_id: {$in: []}}` now, answered from the `_id` index. `Filter.Or(Nil)`, which rendered an `$or` the server refuses,
+  and `!Filter.all` render the same way, and `!Filter.none` renders `{}`. A partial index accepts all of them, in the
+  fake as on the server.
 - **`findMany` returned a document once per batch its key appeared in.** A key repeated further down the list than
   `batchSize` went out in a second `$in`, and the document came back twice. The keys are made distinct before they
   are batched, as the README already promised.

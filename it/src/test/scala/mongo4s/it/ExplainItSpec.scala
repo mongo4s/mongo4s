@@ -7,11 +7,12 @@ import cats.effect.testing.scalatest.AsyncIOSpec
 import org.testcontainers.mongodb.MongoDBContainer
 
 import cats.effect.IO
+import cats.syntax.all.*
 import com.mongodb.ExplainVerbosity
 import org.bson.{BsonDocument, BsonString}
 
 import mongo4s.cats.CatsStream
-import mongo4s.operations.{Index, Sort, Stage}
+import mongo4s.operations.{Filter, Index, Sort, Stage}
 import mongo4s.results.ExplainSummary
 import mongo4s.{Field, MongoClient, MongoCollection}
 
@@ -90,6 +91,24 @@ final class ExplainItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAn
         yield (planner.containsKey("executionStats"), stats.containsKey("executionStats"))
 
       program.timeout(30.seconds).asserting(_ shouldBe (false, true))
+    }
+  }
+
+  "a filter that matches nothing" should {
+
+    "be planned without a collection scan, on an indexed field, an unindexed one, or none at all" in {
+      val program =
+        for
+          collection <- seeded("match_nothing")
+          plans      <- List(email.in(Nil), city.in(Nil), Filter.none[BsonDocument], !Filter.all[BsonDocument])
+                          .traverse(filter => collection.find(filter).explain().map(ExplainSummary.of))
+          found      <- collection.find(city.in(Nil)).all
+        yield (plans.map(_.scannedCollection), found)
+
+      program.timeout(30.seconds).asserting { (scanned, found) =>
+        scanned shouldBe List(false, false, false, false)
+        found shouldBe empty
+      }
     }
   }
 

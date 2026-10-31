@@ -4,7 +4,7 @@ import scala.annotation.targetName
 import org.bson.*
 import mongo4s.FieldPath
 import mongo4s.operations.Expr as Expression
-import mongo4s.bson.{BsonTypeName, FieldNaming}
+import mongo4s.bson.{BsonField, BsonTypeName, FieldNaming}
 import mongo4s.operations.geometry.{GeoShape, Geometry}
 
 import scala.jdk.CollectionConverters.given
@@ -108,16 +108,21 @@ enum Filter[E](val key: String):
       if filters.forall(Filter.onSelf) && rendered.flatMap(_.keySet.asScala).distinct.size == rendered.map(_.size).sum
       then rendered.foldLeft(BsonDocument())((merged, conjunct) => merged.append(conjunct.getFirstKey, conjunct.get(conjunct.getFirstKey)))
       else BsonDocument(key, BsonArray(rendered.asJava))
+    case Or(Nil)                       => Filter.nothing
     case Or(filters)                   => BsonDocument(key, BsonArray(filters.map(_.toBson(naming)).asJava))
+    case Not(MatchAll())               => Filter.nothing
+    case Not(MatchNone())              => BsonDocument()
     case Not(filter)                   => BsonDocument(key, BsonArray(List(filter.toBson(naming)).asJava))
     case MatchAll()                    => BsonDocument()
-    case MatchNone()                   => BsonDocument(key, BsonArray(List(BsonDocument()).asJava))
+    case MatchNone()                   => Filter.nothing
     case Raw(document)                 => document
 
 object Filter:
 
   private val MinDistance = "$minDistance"
   private val MaxDistance = "$maxDistance"
+
+  private def nothing: BsonDocument = BsonDocument(BsonField.Id, BsonDocument("$in", BsonArray()))
 
   private def proximity(geometry: Geometry, min: Option[Double], max: Option[Double]): BsonDocument =
     val near = BsonDocument(Geometry.key, geometry.toBson)

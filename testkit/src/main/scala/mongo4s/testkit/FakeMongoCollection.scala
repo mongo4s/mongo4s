@@ -461,6 +461,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     filter match
       case Filter.Eq(_, _) | Filter.Gt(_, _) | Filter.Gte(_, _) | Filter.Lt(_, _) | Filter.Lte(_, _)  => None
       case Filter.In(_, _) | Filter.All(_, _) | Filter.Type(_, _) | Filter.MatchAll() | Filter.Raw(_) => None
+      case Filter.MatchNone() | Filter.Not(Filter.MatchAll()) | Filter.Not(Filter.MatchNone())        => None
       case Filter.Exists(_, true)                                                                     => None
       case Filter.Exists(_, false)                                                                    => Some("$exists")
       case Filter.Regex(_, _, _)                                                                      => Some("$regex")

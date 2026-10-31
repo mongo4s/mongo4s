@@ -439,6 +439,14 @@ it is what makes `field.in(Nil)` produce `Filter.none` rather than an empty pred
 no-op instead of deleting the collection. An empty list is the most dangerous input a query builder takes, and it
 gets a defined answer here rather than an emergent one.
 
+**What `none` renders as matters as much as when it is produced.** Up to `5.0` it was `{$nor: [{}]}`: correct, and
+planned by the server as a collection scan, so an `in` over an empty list read every document to return none — a
+consumer carried a guard at the call site and an integration test to keep the query from being sent at all. It is
+`{_id: {$in: []}}` now. Every collection indexes `_id`, so the plan never scans, whatever field the empty `in` was
+on; and the same shape stays correct inside `$elemMatch` and `$pull`, where an element without an `_id` simply does
+not match. `Or(Nil)` and the negations of `all` and `none` are normalised at render time to the same two shapes,
+since the enum cases are public and get built directly.
+
 **`Update` merges operators of the same name into one sub-document.** `{$set: {a: 1}}` combined with `{$set: {b: 2}}`
 is `{$set: {a: 1, b: 2}}`, not two `$set` keys the server would reject. `Update.Raw` merges the same way — but it
 must **clone** the caller's document first. Not cloning meant a rendered update wrote into the caller's own

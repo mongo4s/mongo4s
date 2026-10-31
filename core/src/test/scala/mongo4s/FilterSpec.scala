@@ -69,7 +69,18 @@ final class FilterSpec extends AnyWordSpec with Matchers:
     "treat an empty in-clause as matching nothing" in {
       val filter = Field.of[User, Int](_.age).in(Nil)
       filter shouldBe Filter.MatchNone[User]()
-      filter.toBson(FieldNaming.identity).toJson shouldBe """{"$nor": [{}]}"""
+      filter.toBson(FieldNaming.identity).toJson shouldBe """{"_id": {"$in": []}}"""
+    }
+
+    "render matching nothing on _id, which every collection indexes, rather than as a $nor the planner scans for" in {
+      Filter.none[User].toBson(FieldNaming.snakeCase).toJson shouldBe """{"_id": {"$in": []}}"""
+    }
+
+    "render the empty disjunction and the negations of all and none as what they mean" in {
+      Filter.Or[User](Nil).toBson(FieldNaming.identity).toJson shouldBe """{"_id": {"$in": []}}"""
+      Filter.And[User](Nil).toBson(FieldNaming.identity).toJson shouldBe "{}"
+      (!Filter.all[User]).toBson(FieldNaming.identity).toJson shouldBe """{"_id": {"$in": []}}"""
+      (!Filter.none[User]).toBson(FieldNaming.identity).toJson shouldBe "{}"
     }
 
     "combine conditions" in {
