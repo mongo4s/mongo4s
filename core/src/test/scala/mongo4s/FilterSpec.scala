@@ -9,6 +9,10 @@ import mongo4s.operations.Filter
 import mongo4s.bson.BsonInstances.given
 
 object FilterSpec:
+  object Stored:
+    final case class Window(@mongo4s.bson.direct.stored("from_") from: Long, untilTime: Long, @mongo4s.bson.direct.notStored note: Option[String])
+    final case class Slot(window: Window, label: String)
+
   opaque type AccountId = Long
 
   object AccountId:
@@ -116,6 +120,20 @@ final class FilterSpec extends AnyWordSpec with Matchers:
       id.in(List(AccountId(1L), AccountId(2L))).toBson(FieldNaming.identity).toJson shouldBe """{"id": {"$in": [1, 2]}}"""
       owners.push(AccountId(3L)).toBson(FieldNaming.identity).toJson shouldBe """{"$push": {"owners": 3}}"""
       PrimaryKey.single[Account, AccountId]("id")(_.id).eqFilter(AccountId(4L)).toBson(FieldNaming.identity).toJson shouldBe """{"id": 4}"""
+    }
+  }
+
+  "a field the codec stores under a name of its own" should {
+    import FilterSpec.Stored.{Slot, Window}
+
+    "be spelled as stored, while the rest of the path follows the naming" in {
+      Field.of[Slot, Long](_.window.from).equalTo(1L).toBson(FieldNaming.snakeCase).toJson shouldBe """{"window.from_": 1}"""
+      Field.of[Slot, Long](_.window.untilTime).equalTo(1L).toBson(FieldNaming.snakeCase).toJson shouldBe """{"window.until_time": 1}"""
+      PrimaryKey.of[Window, Long](_.from).eqFilter(2L).toBson(FieldNaming.snakeCase).toJson shouldBe """{"from_": 2}"""
+    }
+
+    "not be reachable at all when it is never stored" in {
+      "Field.of[FilterSpec.Stored.Window, Option[String]](_.note)" shouldNot typeCheck
     }
   }
 

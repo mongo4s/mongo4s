@@ -5,6 +5,7 @@ import scala.NamedTuple.AnyNamedTuple
 import scala.annotation.publicInBinary
 
 import mongo4s.operations.Projection
+import mongo4s.bson.direct.WireFields
 import mongo4s.queries.{FindQuery, SelectQuery}
 import mongo4s.bson.{BsonDecoder, BsonDocumentDecoder, FieldNaming}
 
@@ -52,7 +53,18 @@ private[mongo4s] object SelectMacro:
           then fail(s"'$label' is ${declared.show} on ${entity.typeSymbol.name}, but selectAs asks for ${requested.show}")
     }
 
-    val paths = Expr.ofList(labels.map(label => '{ FieldPath.derived(List(${ Expr(label) })) }))
+    val params = WireFields.params(entity.typeSymbol)
+
+    val paths = Expr.ofList(labels.map { label =>
+      val param = params.find(_.name == label)
+
+      if param.exists(WireFields.isNotStored)
+      then fail(s"'$label' of ${entity.typeSymbol.name} is @notStored, so no document holds it to select")
+
+      param.flatMap(WireFields.storedName) match
+        case Some(stored) => '{ FieldPath(List(FieldPath.Segment.Stored(${ Expr(stored) }))) }
+        case None         => '{ FieldPath.derived(List(${ Expr(label) })) }
+    })
 
     val instances = Expr.ofList(valueTypes.zip(labels).map { (tpe, label) =>
       tpe.asType match

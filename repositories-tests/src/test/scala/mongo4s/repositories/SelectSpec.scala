@@ -17,6 +17,12 @@ import mongo4s.cats.CatsInstances.given
 object SelectSpec:
   final case class Person(id: String, name: String, age: Int)
 
+  final case class Renamed(id: String, @mongo4s.bson.direct.stored("age_in_years") years: Int, @mongo4s.bson.direct.notStored secret: String = "")
+      derives mongo4s.bson.direct.WireCodec
+
+  object Renamed:
+    given BsonDocumentCodec[Renamed] = mongo4s.bson.direct.DocumentCodecBridge.toDocumentCodec[Renamed]
+
   final case class Contact(id: String, nick: Option[String])
 
   object Contact:
@@ -63,6 +69,18 @@ final class SelectSpec extends AnyWordSpec, Matchers:
     collection
 
   private def seeded = collectionOf.find()
+
+  "selectAs over a field stored under a name of its own" should {
+    "project and read it by that name" in {
+      import SelectSpec.Renamed
+
+      val collection = FakeMongoCollection[IO, S, Renamed](summon[BsonDocumentCodec[Renamed]], naming = FieldNaming.snakeCase)
+      collection.insertOne(Renamed("1", 30, "x")).unsafeRunSync()
+
+      collection.find().selectAs[(years: Int)].all.unsafeRunSync() shouldBe List((years = 30))
+      "collection.find().selectAs[(secret: String)]" shouldNot typeCheck
+    }
+  }
 
   "selectAs" should {
 

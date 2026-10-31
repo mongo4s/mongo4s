@@ -1667,6 +1667,21 @@ renders every segment through the root's; reach such a field with `Field.stored`
 `userID` becomes `user_i_d`; `FieldNaming.overrides(Map("userID" -> "userId"), fallback = snakeCase)` is the way out
 of that.
 
+One field of one class is renamed with `@stored`, and kept out of the document with `@notStored`:
+
+```scala
+import mongo4s.bson.direct.{notStored, stored}
+
+final case class Period(@stored("from_") from: Instant, @stored("to_") to: Instant, totalDays: Int) derives WireCodec
+
+final case class Runner(name: String, @notStored trainer: Option[Trainer], @notStored attempts: Int = 0) derives WireCodec
+```
+
+A `@stored` name is used verbatim — the naming does not touch it — and `Field.of`, `PrimaryKey.of` and `selectAs`
+spell the field the same way, so `Field.of[Period, Instant](_.from)` filters on `from_`. A `@notStored` field is
+neither written nor read: it comes back as its default, or `None`, whatever the document holds, so it needs one of the
+two, and its type needs no codec. Querying it does not compile.
+
 `encodeEmptyCasesAsString = true` writes a parameterless case (`case object`/empty `case class`) as a bare BSON
 string instead of a `{"_type": "..."}` document — only safe when that case is nested inside another document, not
 when it's the root type of a collection (BSON's root value must always be a document).

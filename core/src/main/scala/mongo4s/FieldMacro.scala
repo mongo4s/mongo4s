@@ -3,6 +3,8 @@ package mongo4s
 import scala.quoted.*
 import scala.annotation.publicInBinary
 
+import mongo4s.bson.direct.WireFields
+
 @publicInBinary private[mongo4s] object FieldMacro:
 
   def impl[E: Type, A: Type](selector: Expr[E => A])(using Quotes): Expr[Field[E, A]] =
@@ -10,12 +12,21 @@ import scala.annotation.publicInBinary
 
     def fail(message: String): Nothing = report.errorAndAbort(message)
 
-    def verifyField(owner: TypeRepr, name: String, whole: Term): TypeRepr =
+    def verifyField(owner: TypeRepr, name: String, whole: Term): (TypeRepr, Expr[FieldPath.Segment]) =
       val symbol = owner.typeSymbol
       val field  = symbol.caseFields.find(_.name == name)
+      val param  = WireFields.params(symbol).find(_.name == name)
 
       field match
-        case Some(member) => owner.memberType(member)
+        case Some(member) =>
+          if param.exists(WireFields.isNotStored)
+          then fail(s"'$name' of ${symbol.name} is @notStored, so no document holds it to query; got: ${whole.show}")
+
+          val segment = param.flatMap(WireFields.storedName) match
+            case Some(stored) => '{ FieldPath.Segment.Stored(${ Expr(stored) }) }
+            case None         => '{ FieldPath.Segment.Derived(${ Expr(name) }) }
+
+          (owner.memberType(member), segment)
         case None         =>
           val known =
             if symbol.caseFields.isEmpty then "it is not a case class"
@@ -49,7 +60,10 @@ import scala.annotation.publicInBinary
     if segments.isEmpty
     then fail("Field selector must reference at least one field")
 
-    segments.foldLeft(root)((owner, name) => verifyField(owner.widen, name, selector.asTerm))
+    val (_, rendered) = segments.foldLeft((root, List.empty[Expr[FieldPath.Segment]])) { case ((owner, done), name) =>
+      val (next, segment) = verifyField(owner.widen, name, selector.asTerm)
+      (next, done :+ segment)
+    }
 
-    '{ Field[E, A](FieldPath.derived(${ Expr(segments) })) }
+    '{ Field[E, A](FieldPath(${ Expr.ofList(rendered) })) }
   end impl

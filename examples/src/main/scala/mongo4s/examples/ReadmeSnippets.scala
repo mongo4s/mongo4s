@@ -1,5 +1,7 @@
 package mongo4s.examples
 
+import java.time.Instant
+
 import cats.effect.IO
 import org.bson.types.ObjectId
 import org.bson.{BsonArray, BsonDocument, BsonInt32, BsonString, BsonTimestamp}
@@ -12,7 +14,7 @@ import mongo4s.results.{BulkWriteResult, ExplainSummary, UpdateResult}
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.repositories.{BaseMongoRepository, MongoCounters, Page}
 import mongo4s.bson.{BsonCodec, BsonDocumentCodec, BsonTypeName, DecodeResult, FieldNaming}
-import mongo4s.bson.direct.{DocumentCodecBridge, WireCodec, WireCodecConfig}
+import mongo4s.bson.direct.{notStored, stored, DocumentCodecBridge, WireCodec, WireCodecConfig}
 import mongo4s.operations.*
 import mongo4s.operations.geometry.Geometry
 import mongo4s.{Field, MongoClient, MongoCollection, MongoDatabase, MongoError, PrimaryKey, RsBridgeConfig, WithId, withTransaction}
@@ -35,6 +37,14 @@ object ReadmeSnippets:
 
   object Address:
     given BsonCodec[Address] = WireCodec[Address].toBsonCodec
+
+  final case class Period(@stored("from_") from: Instant, @stored("to_") to: Instant, totalDays: Int) derives WireCodec
+
+  final case class Trainer(name: String)
+
+  final case class Runner(name: String, @notStored trainer: Option[Trainer], @notStored attempts: Int = 0) derives WireCodec
+
+  val periodsFrom = Field.of[Period, Instant](_.from).gte(Instant.EPOCH)
   final case class Item(sku: String, quantity: Int) derives WireCodec
 
   object Item:

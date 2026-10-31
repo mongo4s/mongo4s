@@ -25,6 +25,10 @@ Binary compatible with `5.0.0`, checked by MiMa.
   — as a plain tuple, each field spelled through the collection's naming wherever the key renders, `ensureKeyIndex`
   included. `KeyRef.keyPaths` is what the key's filters, sort and index are now built from; for a key over stored
   names it is those names, so existing keys render as before.
+- **`@stored` and `@notStored`** on a field of a derived case class: the first stores it under the name given,
+  verbatim, the second keeps it out of the document, reading it back as its default or `None`, with no codec
+  needed for its type. `Field.of`, `PrimaryKey.of` and `selectAs` spell a `@stored` field the same way, and refuse a
+  `@notStored` one. A field with no codec is now reported by name when its class derives.
 - `MongoError.writeConcernErrors`, with `MongoError.WriteConcernFailure`: what the write concern reported, on a single
   write, a bulk write and a client bulk write.
 - `field.setNull` and `Update.setNull(field)` on an `Option` field: the explicit `null` that `set(None)` no longer

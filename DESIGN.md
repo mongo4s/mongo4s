@@ -184,6 +184,16 @@ What still resolves without `derives` is the `BsonEncoder`/`BsonDecoder` bridge 
 wrote rather than inventing one, and it is how a `medeia` or `zio-bson` model reaches the direct path at all. Its
 cost is the one `BsonValue` per field it has always cost.
 
+**A field can be renamed or left out on its own, and queries follow it.** The only rename was
+`FieldNaming.overrides`, keyed by Scala name and applied to every class derived under the config, so the generated
+code wrapped each class in a block with its own `given WireCodecConfig` to rename `from` to `from_`; leaving a field
+out took a hand-written codec that wrote `null`. `@stored` and `@notStored` are read off the constructor parameters
+by a macro, the same one that now summons the field codecs — per field, so a `@notStored` field's type needs none,
+and a stored field without one is named in the error. A rename only the codec knew would be the silent mismatch this
+library exists to prevent, so `Field.of` and `selectAs` read the same annotations: a `@stored` segment is a stored
+segment, and a `@notStored` field cannot be selected or queried at all. The old `make` stays for code that inlined
+the `5.0` derivation; the new path goes through `build`.
+
 **Mapping a derived product keeps it a product.** `imap` and `iemap` used to wrap any codec in a plain `WireCodec`,
 which a sum or an `Either` then nests under `value` — so the README's own advice, wrap a case class in `iemap` to
 validate what it reads, changed the stored shape of every case it was applied to. A mapped `FieldCodec` is a
