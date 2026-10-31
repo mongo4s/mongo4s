@@ -21,6 +21,10 @@ Binary compatible with `5.0.0`, checked by MiMa.
 - **`BaseMongoRepository.direct`** builds a repository over `getDirectCollection` and answers it as a
   `Repository[F, S, E, K]`, so the type it is assigned to fixes `E` and `K` — no type arguments, no `.widen` — and the
   codec's naming applies without a `FieldNaming` argument. A `projection` argument does what `withoutId` does.
+- **`PrimaryKey.of`** keys an entity on one, two or three of its own fields — `PrimaryKey.of(_.provider, _.providerId)`
+  — as a plain tuple, each field spelled through the collection's naming wherever the key renders, `ensureKeyIndex`
+  included. `KeyRef.keyPaths` is what the key's filters, sort and index are now built from; for a key over stored
+  names it is those names, so existing keys render as before.
 - `MongoError.writeConcernErrors`, with `MongoError.WriteConcernFailure`: what the write concern reported, on a single
   write, a bulk write and a client bulk write.
 - `field.setNull` and `Update.setNull(field)` on an `Option` field: the explicit `null` that `set(None)` no longer

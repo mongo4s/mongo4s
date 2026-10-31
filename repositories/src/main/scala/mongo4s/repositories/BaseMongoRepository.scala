@@ -172,9 +172,9 @@ open class BaseMongoRepository[F[*], S[*], E, K](
     collection.deleteMany(filter)(using session)
 
   def ensureKeyIndex(using session: Option[ClientSession]): F[String] =
-    if pk.fieldNames == List(BsonField.Id)
+    if pk.keyPaths.map(_.render(collection.naming)) == List(BsonField.Id)
     then F.pure(BaseMongoRepository.IdIndex)
-    else collection.createIndex(Index.forKeyFields[E](pk.fieldNames))(using session)
+    else collection.createIndex(pk.keyPaths.foldLeft(Index.empty[E])((index, path) => index.ascending(Field[E, Any](path))).withUnique)(using session)
 
   def createIndex(index: Index[E])(using session: Option[ClientSession]): F[String] =
     collection.createIndex(index)(using session)

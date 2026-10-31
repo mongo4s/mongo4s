@@ -784,6 +784,19 @@ given PrimaryKey[Order, (userId: String, seq: Int)] =
 
 `PrimaryKey.id(_.id)` is `single("id")` spelled short, for the common case.
 
+`PrimaryKey.of` names the key by the entity's own fields instead of by stored strings. Each selector is checked the
+way `Field.of` checks it, and the field is spelled through the collection's naming when the key renders — so a key on
+`userId` matches the `user_id` a `snakeCase` codec writes, with nothing to keep in step. Two or three selectors make
+a compound key whose type is a plain tuple:
+
+```scala
+given PrimaryKey[User, String]                       = PrimaryKey.of(_.id)
+given PrimaryKey[Link, (Provider, ProviderId)]       = PrimaryKey.of(_.provider, _.providerId)
+given PrimaryKey[Link, (Provider, ProviderId, Kind)] = PrimaryKey.of(_.provider, _.providerId, _.kind)
+```
+
+Filters, keyset paging and `ensureKeyIndex` all spell such a key through the naming.
+
 A compound key is a **named tuple**, so its labels are the field names — there is no second list of strings to keep
 in step with the extractors, and no arity ceiling. The labels are Scala identifiers; the optional `FieldNaming`
 spells them the way the collection stores them, so `userId` above is written as `user_id` while the key still reads
@@ -801,8 +814,9 @@ Field names are known without a key value — that is what lets
 on the same key can both miss and both insert.
 
 `storedId` keys on `_id` whatever the key's type; the entity's codec has to actually write it there, so an entity
-whose codec writes `id` will never match. Note that these are **stored** names, used verbatim: the collection's
-`FieldNaming` is not applied to them, so under `snakeCase` write `"user_id"`, not `"userId"`.
+whose codec writes `id` will never match. Note that the names `single`, `id`, `storedId` and `make` take are
+**stored** names, used verbatim: the collection's `FieldNaming` is not applied to them, so under `snakeCase` write
+`"user_id"`, not `"userId"` — or use `PrimaryKey.of`.
 
 For entities that don't carry their own id field, `WithId[ObjectId, E]` ships a ready-made `PrimaryKey` — no `given`
 needed.

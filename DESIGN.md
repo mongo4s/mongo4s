@@ -694,6 +694,16 @@ write one.
 Batching is empty-list-safe throughout, which follows from `Filter`'s folding: `inFilter(Nil)` is `Filter.none`, so
 `deleteMany(Nil)` deletes nothing.
 
+**A key can be named by fields rather than by strings.** A `PrimaryKey` was a list of stored names plus a function
+from key to values, so a consumer wrote every compound key three times — the extractor, the names, and a
+`KeyFields.of("provider_id" -> BsonEncoder[ProviderId].encode(key._2), …)` — and `single("userId")` under `snakeCase`
+silently matched nothing. `PrimaryKey.of(_.provider, _.providerId)` reads the paths off the selectors with the same
+macro as `Field.of` and keeps them as derived segments, so the naming applies when the key renders. That needed the
+key's filters to be built from paths, not names: `KeyRef` gained `keyPaths`, concrete and defaulting to the stored
+names, and `eqFilter`, `inFilter`, `afterFilter`, `keyOrder` and `ensureKeyIndex` are built from it. A key that
+`KeyRef` users wrote by hand keeps compiling and rendering as before; `fieldNames` of a key built by `of` holds the
+unrenamed names, since there is no collection to rename them against yet.
+
 **`direct` answers a `Repository`, not a `BaseMongoRepository`.** The consumers built every repository over a
 `WireCodec` through `withoutId`, which takes a `BsonDocumentCodec`: they bridged the codec by hand, passed
 `FieldNaming.snakeCase` again although the codec already said it, spelled all four type arguments because nothing

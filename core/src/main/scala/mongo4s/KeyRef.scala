@@ -1,6 +1,6 @@
 package mongo4s
 
-import org.bson.BsonObjectId
+import org.bson.{BsonObjectId, BsonValue}
 import org.bson.types.ObjectId
 
 import mongo4s.bson.{BsonEncoder, BsonField}
@@ -11,32 +11,36 @@ trait KeyRef[E, K]:
 
   def fields(key: K): KeyFields
 
+  def keyPaths: List[FieldPath] = fieldNames.map(FieldPath.literal)
+
+  private def located(key: K): List[(FieldPath, BsonValue)] = keyPaths.zip(fields(key).toList.map(_._2))
+
   def eqFilter(key: K): Filter[E] =
     Filter.and(
-      fields(key).toList.map { (name, value) =>
-        Filter.Eq[E](FieldPath.literal(name), value)
+      located(key).map { (path, value) =>
+        Filter.Eq[E](path, value)
       }*
     )
 
   def keyOrder: Sort[E] = keyOrder(descending = false)
 
   def keyOrder(descending: Boolean): Sort[E] =
-    fieldNames.foldLeft(Sort.empty[E]) { (sort, name) =>
+    keyPaths.foldLeft(Sort.empty[E]) { (sort, path) =>
       if descending
-      then sort.desc(Field.stored[E, Any](name))
-      else sort.asc(Field.stored[E, Any](name))
+      then sort.desc(Field[E, Any](path))
+      else sort.asc(Field[E, Any](path))
     }
 
   def afterFilter(key: K): Filter[E] = afterFilter(key, descending = false)
 
   def afterFilter(key: K, descending: Boolean): Filter[E] =
-    val entries = fields(key).toList
+    val entries = located(key)
 
     Filter.or(
       entries.indices.toList.map { position =>
-        val settled       = entries.take(position).map((name, value) => Filter.Eq[E](FieldPath.literal(name), value))
-        val (name, value) = entries(position)
-        val beyond        = if descending then Filter.Lt[E](FieldPath.literal(name), value) else Filter.Gt[E](FieldPath.literal(name), value)
+        val settled       = entries.take(position).map((path, value) => Filter.Eq[E](path, value))
+        val (path, value) = entries(position)
+        val beyond        = if descending then Filter.Lt[E](path, value) else Filter.Gt[E](path, value)
 
         Filter.and((settled :+ beyond)*)
       }*
@@ -48,20 +52,20 @@ trait KeyRef[E, K]:
       case Nil           => Filter.none
       case single :: Nil => eqFilter(single)
       case many          =>
-        val encoded = many.map(fields)
+        val encoded = many.map(located)
 
         if encoded.head.size == 1
         then
           Filter.In(
-            FieldPath.literal(encoded.head.head._1),
+            encoded.head.head._1,
             encoded.map(_.head._2),
           )
         else
           Filter.or(
             encoded.map { entry =>
               Filter.and(
-                entry.toList.map { (n, v) =>
-                  Filter.Eq[E](FieldPath.literal(n), v)
+                entry.map { (path, value) =>
+                  Filter.Eq[E](path, value)
                 }*
               )
             }*

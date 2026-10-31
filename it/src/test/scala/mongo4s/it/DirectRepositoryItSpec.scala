@@ -25,7 +25,7 @@ object DirectRepositoryItSpec:
     final case class Account(accountId: String, displayName: String) derives WireCodec
 
     object Account:
-      given PrimaryKey[Account, String] = PrimaryKey.single("account_id")(_.accountId)
+      given PrimaryKey[Account, String] = PrimaryKey.of(_.accountId)
 
 trait DirectRepositoryItSpec[F[*], S[*]] extends AnyWordSpec, Matchers, BeforeAndAfterAll:
   import DirectRepositoryItSpec.Person
@@ -91,11 +91,13 @@ trait DirectRepositoryItSpec[F[*], S[*]] extends AnyWordSpec, Matchers, BeforeAn
       run(repo.insertOne(Account("a1", "Ann")))
       val found                 = run(repo.findByField(Field.of[Account, String](_.displayName), "Ann"))
       val byKey                 = run(repo.findOne("a1"))
+      val keyIndex              = run(repo.ensureKeyIndex)
       val stored                = run(RsBridge[F, S].list(run(database.getCollection[org.bson.BsonDocument]("accounts")).underlying.find()))
       run(client.close)
 
       found shouldBe List(Account("a1", "Ann"))
       byKey shouldBe Some(Account("a1", "Ann"))
+      keyIndex shouldBe "account_id_1"
       stored.map(_.keySet.toArray.toList.map(_.toString).filterNot(_ == "_id")) shouldBe List(List("account_id", "display_name"))
     }
 

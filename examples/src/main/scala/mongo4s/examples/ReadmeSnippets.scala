@@ -92,12 +92,13 @@ object ReadmeSnippets:
 
   // --- Stored paths: map keys, array positions, _id ---
 
-  val totals                       = Field.of[Order, Map[String, Int]](_.totals)
-  val eur                          = totals.at("EUR")
-  val first: Field[Order, Item]    = itemsField / "0"
-  val anySku: Field[Order, String] = itemsField / Field.of[Item, String](_.sku)
-  val inParis                      = Field.of[Order, Address](_.address).equalTo(Address("Paris", "75001"))
-  val orderId                      = Field.stored[Order, ObjectId]("_id")
+  val totals                                   = Field.of[Order, Map[String, Int]](_.totals)
+  val eur                                      = totals.at("EUR")
+  val first: Field[Order, Item]                = itemsField / "0"
+  val anySku: Field[Order, String]             = itemsField / Field.of[Item, String](_.sku)
+  val itemKey: PrimaryKey[Item, (String, Int)] = PrimaryKey.of(_.sku, _.quantity)
+  val inParis                                  = Field.of[Order, Address](_.address).equalTo(Address("Paris", "75001"))
+  val orderId                                  = Field.stored[Order, ObjectId]("_id")
 
   // --- Updates ---
 

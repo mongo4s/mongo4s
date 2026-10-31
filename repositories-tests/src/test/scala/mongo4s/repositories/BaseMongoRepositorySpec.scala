@@ -18,6 +18,15 @@ import mongo4s.cats.CatsInstances.given
 
 object BaseMongoRepositorySpec:
 
+  object Snake:
+    given mongo4s.bson.direct.WireCodecConfig = mongo4s.bson.direct.WireCodecConfig.SnakeCase
+
+    final case class Holder(holderId: String, holderLabel: String) derives mongo4s.bson.direct.WireCodec
+
+    object Holder:
+      given BsonDocumentCodec[Holder]  = mongo4s.bson.direct.DocumentCodecBridge.toDocumentCodec[Holder]
+      given PrimaryKey[Holder, String] = PrimaryKey.of(_.holderId)
+
   final case class Person(id: String, name: String, age: Int)
 
   object Person:
@@ -193,6 +202,27 @@ final class BaseMongoRepositorySpec extends AsyncWordSpec, AsyncIOSpec, Matchers
         _ <- repository.fake.insertOne(BsonDocument("_id", BsonString("1")).append("email", BsonString("bob@example.com")))
         _ <- repository.updateField("1", email, None)
       yield repository.fake.snapshot shouldBe List(BsonDocument("_id", BsonString("1")))
+    }
+  }
+
+  "a key built from the entity's own fields" should {
+    "find, delete and index by the names the codec writes" in {
+      import BaseMongoRepositorySpec.Snake.Holder
+
+      val fake       = mongo4s.testkit.FakeMongoCollection[IO, S, Holder](summon[BsonDocumentCodec[Holder]], naming = FieldNaming.snakeCase)
+      val repository = new FakeRepository[IO, S, Holder, String](fake)
+
+      for
+        _       <- repository.insertMany(List(Holder("1", "a"), Holder("2", "b"), Holder("3", "c")))
+        one     <- repository.findOne("2")
+        many    <- repository.findMany(List("1", "3"))
+        deleted <- repository.deleteMany(List("1"))
+        index   <- repository.ensureKeyIndex
+      yield
+        one shouldBe Some(Holder("2", "b"))
+        many.map(_.holderId) should contain theSameElementsAs List("1", "3")
+        deleted.deletedCount shouldBe 1L
+        index shouldBe "holder_id_1"
     }
   }
 
