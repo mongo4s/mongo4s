@@ -113,6 +113,16 @@ Already have a `MongoClientSettings` built elsewhere (connection pool tuning, re
 …)? Use `MongoClientResource.fromSettings` instead of `fromConnectionString`. `MongoClient.fromClient`/`fromSettings`/
 `fromConnectionString` give you the same thing unwrapped, if you'd rather own `.close` yourself.
 
+`client.ping(timeout)` asks the server for `{ping: 1}` and answers whether it replied in time — `false` rather than a
+failure when it did not, the timeout applied by the driver itself. For a readiness check that should not wait on the
+network, `MongoClientResource.reachability(client, interval)` pings in the background and hands back the last answer:
+
+```scala
+MongoClientResource.reachability(client, 5.seconds).use { reachable =>
+  reachable.flatMap(up => IO.println(s"mongo reachable: $up"))
+}
+```
+
 `MongoClientSettings` sets read/write concerns for the whole client. To narrow them, `MongoDatabase` and
 `MongoCollection` both carry `withReadConcern`/`withWriteConcern`/`withReadPreference`, each returning a **new**
 handle rather than mutating the one you have:

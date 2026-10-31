@@ -1,6 +1,10 @@
 package mongo4s
 
-import org.bson.BsonDocument
+import java.util.concurrent.TimeUnit
+
+import scala.concurrent.duration.FiniteDuration
+
+import org.bson.{BsonDocument, BsonInt32}
 import com.mongodb.MongoClientSettings
 import com.mongodb.reactivestreams.client.{ClientSession, MongoClient as RSMongoClient, MongoClients}
 
@@ -56,11 +60,19 @@ trait MongoClient[F[*], S[*]]:
       F.delay(session.close())
     }
 
+  def ping(timeout: FiniteDuration)(using F: Effect[F], rs: RsBridge[F, S]): F[Boolean] =
+    F.handleErrorWith(
+      F.map(rs.one(underlying.getDatabase(MongoClient.Admin).withTimeout(timeout.toMillis, TimeUnit.MILLISECONDS).runCommand(MongoClient.Ping)))(_ => true)
+    )(_ => F.pure(false))
+
   def close: F[Unit]
 
   def underlying: RSMongoClient
 
 object MongoClient:
+
+  private val Admin = "admin"
+  private val Ping  = BsonDocument("ping", BsonInt32(1))
 
   def fromClient[F[*], S[*]](client: RSMongoClient)(using F: Effect[F], rs: RsBridge[F, S]): F[MongoClient[F, S]] =
     F.pure {

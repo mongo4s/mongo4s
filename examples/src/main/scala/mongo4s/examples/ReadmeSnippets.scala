@@ -70,6 +70,11 @@ object ReadmeSnippets:
       yield println(s"$alice, ${adults.size} adults")
     }
 
+  def readiness(client: MongoClient[IO, S]): IO[Unit] =
+    MongoClientResource.reachability(client, 5.seconds).use { reachable =>
+      reachable.flatMap(up => IO.println(s"mongo reachable: $up"))
+    }
+
   // --- Field selectors ---
 
   val adults = Field.of[User, Int](_.age).gte(18)
