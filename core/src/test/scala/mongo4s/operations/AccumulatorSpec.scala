@@ -7,7 +7,14 @@ import mongo4s.Field
 import mongo4s.bson.FieldNaming
 
 object AccumulatorSpec:
-  final case class Order(userId: String, itemCount: Int, total: Double, placedBy: String, details: Map[String, String])
+  final case class Order(
+      userId: String,
+      itemCount: Int,
+      total: Double,
+      placedBy: String,
+      details: Map[String, String],
+      discount: Option[Long],
+  )
 
 final class AccumulatorSpec extends AnyWordSpec, Matchers:
   import AccumulatorSpec.Order
@@ -76,6 +83,20 @@ final class AccumulatorSpec extends AnyWordSpec, Matchers:
       "Accumulator.median(Field.of[AccumulatorSpec.Order, String](_.userId))" shouldNot typeCheck
       "Accumulator.percentile(Field.of[AccumulatorSpec.Order, String](_.userId), 0.5)" shouldNot typeCheck
       "Accumulator.stdDevPop(Field.of[AccumulatorSpec.Order, String](_.userId))" shouldNot typeCheck
+    }
+  }
+
+  "$sum and $avg over a field" should {
+    "render the field, numeric or optionally numeric" in {
+      json(Accumulator.sum(itemCount)) shouldBe """{"$sum": "$item_count"}"""
+      json(Accumulator.avg(total)) shouldBe """{"$avg": "$total"}"""
+      json(Accumulator.sum(Field.of[AccumulatorSpec.Order, Option[Long]](_.discount))) shouldBe """{"$sum": "$discount"}"""
+    }
+
+    "compile only on a numeric field, which the server would otherwise count as 0" in {
+      "Accumulator.sum(Field.of[AccumulatorSpec.Order, String](_.userId))" shouldNot typeCheck
+      "Accumulator.avg(Field.of[AccumulatorSpec.Order, String](_.userId))" shouldNot typeCheck
+      "Accumulator.sum(Field.of[AccumulatorSpec.Order, Map[String, String]](_.details))" shouldNot typeCheck
     }
   }
 

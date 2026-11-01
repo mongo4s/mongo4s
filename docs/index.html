@@ -1110,9 +1110,10 @@ val byAge = Seq(
 )</code></pre>
     <p class="muted">
         The ranking accumulators rank by the <code>Sort</code> they are given; <code>firstN</code>/<code>lastN</code>
-        follow arrival order, so sort before the group if it matters. <code>median</code>, <code>percentile</code> and
-        the standard deviations compile only on a numeric field, and the first two always use the server's only method,
-        <code>approximate</code>.
+        follow arrival order, so sort before the group if it matters. <code>sum</code>, <code>avg</code>,
+        <code>median</code>, <code>percentile</code> and the standard deviations compile only on a numeric field or an
+        <code>Option</code> of one, and <code>median</code> and <code>percentile</code> always use the server's only
+        method, <code>approximate</code>.
     </p>
     <p class="muted">
         <code>Stage</code> covers

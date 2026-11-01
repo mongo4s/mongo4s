@@ -1,6 +1,6 @@
 package mongo4s.operations
 
-import scala.annotation.unused
+import scala.annotation.{targetName, unused}
 
 import org.bson.{BsonArray, BsonDocument, BsonDouble, BsonInt32, BsonString, BsonValue}
 
@@ -80,8 +80,14 @@ object Accumulator:
 
   def of[E, A](field: Field[E, A]): Expression[E] = Expression.FieldRef(field.path)
 
-  def sum[E, A](field: Field[E, A]): Accumulator[E]      = Sum(of(field))
-  def avg[E, A](field: Field[E, A]): Accumulator[E]      = Avg(of(field))
+  @targetName("sumOf")
+  def sum[E, A](field: Field[E, A])(using @unused numeric: NumericOf[A, ?]): Accumulator[E] = Sum(of(field))
+  @targetName("avgOf")
+  def avg[E, A](field: Field[E, A])(using @unused numeric: NumericOf[A, ?]): Accumulator[E] = Avg(of(field))
+
+  private[Accumulator] def sum[E, A](field: Field[E, A]): Accumulator[E] = Sum(of(field))
+  private[Accumulator] def avg[E, A](field: Field[E, A]): Accumulator[E] = Avg(of(field))
+
   def min[E, A](field: Field[E, A]): Accumulator[E]      = Min(of(field))
   def max[E, A](field: Field[E, A]): Accumulator[E]      = Max(of(field))
   def first[E, A](field: Field[E, A]): Accumulator[E]    = First(of(field))

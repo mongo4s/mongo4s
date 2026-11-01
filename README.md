@@ -1004,9 +1004,9 @@ Stage.groupBy(cityField)(
 `Stage.groupAll(accumulators*)` is the same stage over the whole input as one group, `_id: null`. `top`/`bottom` and
 their `N` forms rank by the `Sort` they are given and output one field; `firstN`/`lastN` follow
 the order the documents arrive in, so sort before the group if that order matters. `firstN`, `lastN` and the ranking
-forms keep a missing value as `null`, while `maxN`/`minN` skip it. `median`, `percentile` and the standard
-deviations compile only on a numeric field, and the first two always ask for the server's only method,
-`approximate`. An `n` below one, an empty sort and a percentile outside `0..1` are refused where they are written.
+forms keep a missing value as `null`, while `maxN`/`minN` skip it. `sum`, `avg`, `median`, `percentile` and the
+standard deviations compile only on a numeric field, or an `Option` of one — the server counts anything else as `0`
+or `null` without saying so — and `median` and `percentile` always ask for the server's only method, `approximate`. An `n` below one, an empty sort and a percentile outside `0..1` are refused where they are written.
 
 `Stage` covers `$match`/`$project`/`$sort`/`$limit`/`$skip`/`$count`/`$unwind`/`$lookup`/`$graphLookup`/`$group`/
 `$addFields`/`$unset`/`$replaceRoot`/`$replaceWith`/`$facet`/`$sample`/`$sortByCount`/`$unionWith`/`$bucket`/
