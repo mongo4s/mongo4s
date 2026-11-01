@@ -293,10 +293,10 @@ object Expr:
     def formatAs(pattern: String, timezone: Option[String] = None): Expr[E, String] =
       Named("$dateToString", List("date" -> self, "format" -> Literal(BsonString(pattern))) ++ timezone.map(zone => "timezone" -> Literal(BsonString(zone))))
 
-    def plus[E2 <: E](unit: DateUnit, amount: Expr[E2, Long]): Expr[E2, Instant] =
+    def plus[E2 <: E](unit: DateUnit, amount: Expr[E2, Int | Long]): Expr[E2, Instant] =
       Named("$dateAdd", List("startDate" -> self, "unit" -> Literal(BsonString(unit.wireName)), "amount" -> amount))
 
-    def minus[E2 <: E](unit: DateUnit, amount: Expr[E2, Long]): Expr[E2, Instant] =
+    def minus[E2 <: E](unit: DateUnit, amount: Expr[E2, Int | Long]): Expr[E2, Instant] =
       Named("$dateSubtract", List("startDate" -> self, "unit" -> Literal(BsonString(unit.wireName)), "amount" -> amount))
 
     def until[E2 <: E, B](other: Expr[E2, B], unit: DateUnit)(using @unused otherDate: Temporal[B]): Expr[E2, Long] =

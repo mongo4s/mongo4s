@@ -119,6 +119,16 @@ final class ExprSpec extends AnyWordSpec, Matchers:
       snake(createdAt.expr.until(Expr.now, DateUnit.Day)) shouldBe """{"e": {"$dateDiff": {"startDate": "$created_at", "endDate": "$$NOW", "unit": "day"}}}"""
     }
 
+    "add and subtract an amount that is an int or a long, and nothing else" in {
+      snake(createdAt.expr.plus(DateUnit.Day, Expr.lit(1))) shouldBe
+        """{"e": {"$dateAdd": {"startDate": "$created_at", "unit": "day", "amount": 1}}}"""
+      snake(createdAt.expr.minus(DateUnit.Hour, qty.expr)) shouldBe
+        """{"e": {"$dateSubtract": {"startDate": "$created_at", "unit": "hour", "amount": "$qty"}}}"""
+      typeChecks("createdAt.expr.plus(DateUnit.Day, Expr.lit(1L))") shouldBe true
+      typeChecks("createdAt.expr.plus(DateUnit.Day, Expr.lit(1.5))") shouldBe false
+      typeChecks("createdAt.expr.minus(DateUnit.Day, remark.expr)") shouldBe false
+    }
+
     "compile only on a date" in {
       typeChecks("qty.expr.year") shouldBe false
     }

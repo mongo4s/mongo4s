@@ -143,6 +143,7 @@ final class ExprItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAf
         "month" := createdAt.expr.truncated(DateUnit.Month),
         "label" := createdAt.expr.formatAs("%Y-%m-%d"),
         "later" := createdAt.expr.plus(DateUnit.Day, Expr.lit(1L)),
+        "early" := createdAt.expr.minus(DateUnit.Hour, Expr.lit(2)),
         "days"  := createdAt.expr.until(Expr.lit(Instant.parse("2026-04-01T00:00:00Z")), DateUnit.Day),
       )
 
@@ -151,6 +152,7 @@ final class ExprItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, BeforeAndAf
         result("a").getDateTime("month").getValue shouldBe Instant.parse("2026-03-01T00:00:00Z").toEpochMilli
         result("a").getString("label").getValue shouldBe "2026-03-14"
         result("a").getDateTime("later").getValue shouldBe Instant.parse("2026-03-15T10:15:00Z").toEpochMilli
+        result("a").getDateTime("early").getValue shouldBe Instant.parse("2026-03-14T08:15:00Z").toEpochMilli
         result("b").getInt64("days").getValue shouldBe 12L
       }
     }

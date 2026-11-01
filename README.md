@@ -1128,6 +1128,8 @@ or two numbers. The string operators compile on text, the array ones on a collec
 | documents | `Expr.document`, `Expr.mergeObjects`, `Expr.root` |
 | variables | `Expr.variable` for `let`, `Expr.now`, `Expr.searchScore` / `vectorSearchScore` / `textScore` |
 
+`plus` and `minus` move a date by an `Int` or a `Long` amount of a `DateUnit`, `until` counts the units between two.
+
 `filter` and `map` hand you the element as an expression, and `get` reads a field of it:
 
 ```scala

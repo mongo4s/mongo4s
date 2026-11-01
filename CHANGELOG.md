@@ -129,6 +129,8 @@ Binary compatible with `5.0.0`, checked by MiMa.
 - **`where(Field.self)` rendered `$[]`**, updating every element instead of the ones an array filter selects. `where`
   takes only an array filter identifier now, as `Field.element` builds it, and refuses anything else when the path
   is built.
+- **A date's `plus` and `minus` took only a `Long` amount**, so `Expr.lit(1)` or an `Int` field did not compile; the
+  server takes either, and so do they.
 - **`findMany` returned a document once per batch its key appeared in.** A key repeated further down the list than
   `batchSize` went out in a second `$in`, and the document came back twice. The keys are made distinct before they
   are batched, as the README already promised.
