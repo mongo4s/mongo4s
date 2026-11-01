@@ -85,6 +85,10 @@ Binary compatible with `5.0.0`, checked by MiMa.
   int` instead of the leaf alone; code matching a field's `TypeMismatch` directly now finds it inside a `Nested`. A
   reader exception for a value of the wrong shape is reported the same way, as a `DecodingFailure`, rather than as the
   driver's `BsonInvalidOperationException`.
+- **A `BsonDecoder` collection names the element that failed.** `List`, `Vector`, `Seq` and `Set` stop at the first
+  element that does not decode and report it under its position, `Map` under its key — they reported the last
+  failure, and a list's without saying where. `Vector`, `Seq` and `Set` no longer build a `List` decoder for every
+  value they read, nor a `List` on the way to their own collection.
 
 ### Fixed
 

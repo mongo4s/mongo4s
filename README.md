@@ -777,7 +777,8 @@ the only failure, a `BulkWriteFailed` whose `failures` is empty. Errors `mongo4s
 A `DecodingFailure` from a `WireCodec` names where in the document it happened, as `BsonError.Nested` segments —
 the field, then the array position or map key under it — so a forty-field entity fails with
 `address -> lines -> 2 -> zip -> Expected string but got int`, not with the last line alone. A field missing at the
-top level is a plain `MissingField`, since it already names itself.
+top level is a plain `MissingField`, since it already names itself. The `BsonDecoder` collections read the same way:
+a `List`, `Vector`, `Seq` or `Set` stops at the first element that fails and names its position, a `Map` its key.
 
 Translation happens on the `Publisher` before any runtime sees it, so `IO`, `Task`, `KIO`, `rapid.Task` and every
 stream get the same type for the same failure. What `MongoError.DuplicateKey` deliberately does *not* carry is the

@@ -3,10 +3,11 @@ package mongo4s.bson
 import java.util.UUID
 import java.time.Instant
 
+import scala.annotation.tailrec
+import scala.collection.mutable
+
 import org.bson.*
 import org.bson.types.{Decimal128, ObjectId}
-
-import scala.jdk.CollectionConverters.given
 
 trait DefaultBsonDecoderInstances:
 
@@ -119,35 +120,49 @@ trait DefaultBsonDecoderInstances:
     then Right(None)
     else decoder.decode(value).map(Some(_))
 
-  given [A] => (decoder: BsonDecoder[A]) => BsonDecoder[List[A]] = value =>
-    if value.isArray
-    then
-      value.asArray.getValues.asScala.toList
-        .foldRight[Either[BsonError, List[A]]](Right(Nil)) { (element, acc) =>
-          for
-            tail <- acc
-            head <- decoder.decode(element)
-          yield head :: tail
-        }
-    else Left(BsonError.typeMismatch(BsonTypeName.Array, value))
+  given [A] => (decoder: BsonDecoder[A]) => BsonDecoder[List[A]] = elements(_, decoder, List.newBuilder[A])
 
-  given [A] => (decoder: BsonDecoder[A]) => BsonDecoder[Vector[A]] =
-    value => summon[BsonDecoder[List[A]]].decode(value).map(_.toVector)
+  given [A] => (decoder: BsonDecoder[A]) => BsonDecoder[Vector[A]] = elements(_, decoder, Vector.newBuilder[A])
 
-  given [A] => (decoder: BsonDecoder[A]) => BsonDecoder[Seq[A]] =
-    value => summon[BsonDecoder[List[A]]].decode(value)
+  given [A] => (decoder: BsonDecoder[A]) => BsonDecoder[Seq[A]] = elements(_, decoder, List.newBuilder[A])
 
-  given [A] => (decoder: BsonDecoder[A]) => BsonDecoder[Set[A]] =
-    value => summon[BsonDecoder[List[A]]].decode(value).map(_.toSet)
+  given [A] => (decoder: BsonDecoder[A]) => BsonDecoder[Set[A]] = elements(_, decoder, Set.newBuilder[A])
 
   given [A] => (decoder: BsonDecoder[A]) => BsonDecoder[Map[String, A]] = value =>
     if value.isDocument
     then
-      value.asDocument.entrySet.asScala.toList
-        .foldRight[Either[BsonError, Map[String, A]]](Right(Map.empty)) { (entry, acc) =>
-          for
-            tail    <- acc
-            decoded <- decoder.decode(entry.getValue).left.map(BsonError.Nested(entry.getKey, _))
-          yield tail.updated(entry.getKey, decoded)
-        }
+      val entries = value.asDocument.entrySet.iterator
+      val decoded = Map.newBuilder[String, A]
+
+      @tailrec def loop(): Either[BsonError, Map[String, A]] =
+        if !entries.hasNext
+        then Right(decoded.result())
+        else
+          val entry = entries.next()
+          decoder.decode(entry.getValue) match
+            case Right(element) =>
+              decoded.addOne((entry.getKey, element)): Unit
+              loop()
+            case Left(error)    => Left(BsonError.Nested(entry.getKey, error))
+
+      loop()
     else Left(BsonError.typeMismatch(BsonTypeName.Object, value))
+
+  private def elements[A, C](value: BsonValue, decoder: BsonDecoder[A], decoded: mutable.Builder[A, C]): Either[BsonError, C] =
+    if value.isArray
+    then
+      val values = value.asArray.getValues
+      decoded.sizeHint(values.size)
+
+      @tailrec def loop(index: Int): Either[BsonError, C] =
+        if index == values.size
+        then Right(decoded.result())
+        else
+          decoder.decode(values.get(index)) match
+            case Right(element) =>
+              decoded.addOne(element): Unit
+              loop(index + 1)
+            case Left(error)    => Left(BsonError.Nested(index.toString, error))
+
+      loop(0)
+    else Left(BsonError.typeMismatch(BsonTypeName.Array, value))
