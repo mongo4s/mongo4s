@@ -2225,17 +2225,17 @@ an array by its smallest element ascending and its largest descending; `$min`/`$
 group's `$min`/`$max` skip `null`. A field holding `null` — which every codec but the direct one writes for a
 `None` — sorts and filters as it does on the server rather than failing the test.
 
-A few rare shapes it still answers differently, and a test that leans on one needs the server: `$pull` by a document
-compares for equality, where the server reads the document as a query on each element; a negative `$position`
-prepends; and a projection or `distinct` over a dotted path through an array drops the field. A duplicate in `insertMany` or a
+A few rare shapes it still answers differently, and a test that leans on one needs the server: a projection or
+`distinct` over a dotted path through an array drops the field. A duplicate in `insertMany` or a
 `bulkWrite` is a `BulkWriteFailed` naming the command, after the writes before it — and, unordered, the writes after
 it too. A unique index is enforced, sparse and partial ones included, and is named as the server names it
 (`email_1`), so `dropIndex` finds it. `listIndexes` describes each index as the server does — `v`, `key`, `name` and
 its options, after the `_id_` index — creating one that already exists changes nothing, one that clashes with an
 existing index's name or keys fails with the server's code, `createIndexes` builds all or none, and `dropIndex`
 refuses an index that is not there, and `_id_`. A `unique` index on `_id` alone is refused with the server's code too, and
-so is a partial index whose filter holds an operator the server does not accept there. A replacement keeps the `_id` of the document it replaces, an update that
-changes nothing counts as matched but not modified, and a `findOneAnd*` whose projection leaves a document the codec
+so is a partial index whose filter holds an operator the server does not accept there. An insert stores the `_id` first, as the server does. A replacement keeps the `_id` of the document it
+replaces, an update that changes nothing counts as matched but not modified, and so does a replacement identical to
+the stored document, `_id` included, and a `findOneAnd*` whose projection leaves a document the codec
 cannot read fails, as the real collection does, rather than answering `None`.
 
 The fake streams through the same `RsBridge` the real collection does, and reads the collection when the stream
@@ -2250,7 +2250,12 @@ give, but a race across documents that the server could expose will not show her
 
 Every update operator is simulated — `$set`, `$unset`, `$inc`, `$mul`, `$min`, `$max`, `$rename`, `$currentDate` (a date or a
 timestamp), `$push` with its `$each`/`$position`/`$slice`/`$sort` modifiers, `$pull` by value or by condition, `$pullAll`,
-`$pop`, `$addToSet` and `$bit` — and `$setOnInsert` correctly does nothing on an update that matches. The positional
+`$pop`, `$addToSet` and `$bit` — and `$setOnInsert` correctly does nothing on an update that matches. A path reaches
+an element by its position (`items.0.qty`), padding the array with `null`s to a position past its end, and a path
+that runs into a value that is neither a document nor an array is refused with the server's code 28; `$inc` and
+`$mul` of a value that is not a number are refused with its code 14. A negative `$position` counts from the end,
+`$pull` reads a document as a query on each element, extra fields and all, and `$pull`, `$pullAll` and `$addToSet`
+compare numbers across widths. The positional
 operators are not: `each`, `matched` and `where` paths are refused by name, rather than written to a field called
 `$[]`.
 

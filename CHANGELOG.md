@@ -160,6 +160,13 @@ Binary compatible with `5.0.0`, checked by MiMa.
   nested in an array, which the server does not; `$all` did not match a scalar field; a regular expression inside
   `$in` never matched; and strings sorted by UTF-16 rather than by their UTF-8 bytes. Each is checked against
   MongoDB 8.2 now.
+- **The fake answered several updates differently from the server.** A path through an array position
+  (`items.0.qty`) failed with the driver's own exception; one running into a value that is neither a document nor an
+  array, and `$inc`/`$mul` of a non-number, failed the same way rather than with the server's codes 28 and 14; a
+  negative `$position` prepended instead of counting from the end; `$pull` compared a document for equality instead
+  of reading it as a query on each element; `$pull`, `$pullAll` and `$addToSet` told `1` from `1L`; an insert stored
+  a generated `_id` last; and a replacement identical to the stored document counted as modified. Each is checked
+  against MongoDB 8.2 now.
 - **`findMany` returned a document once per batch its key appeared in.** A key repeated further down the list than
   `batchSize` went out in a second `$in`, and the document came back twice. The keys are made distinct before they
   are batched, as the README already promised.

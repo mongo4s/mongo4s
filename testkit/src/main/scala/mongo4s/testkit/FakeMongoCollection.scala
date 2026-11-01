@@ -98,6 +98,9 @@ final class FakeMongoCollection[F[*], S[*], E](
   private def modifiedBy(before: BsonDocument, after: BsonDocument): Long =
     if before == after then 0L else 1L
 
+  private def replacedBy(stored: BsonDocument, replacement: BsonDocument): Long =
+    if stored.toJson(FakeMongoCollection.Exact) == replacement.toJson(FakeMongoCollection.Exact) then 0L else 1L
+
   private def replacing(existing: BsonDocument, replacement: BsonDocument): BsonDocument =
     (Option(existing.get(BsonField.Id)), Option(replacement.get(BsonField.Id))) match
       case (Some(id), None)                       =>
@@ -198,10 +201,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     MongoError.bulkWriteFailed(MongoBulkWriteException(written.toDriver, failures.asJava, null, ServerAddress(), java.util.Set.of()))
 
   private def identified(document: BsonDocument): BsonDocument =
-    val stamped =
-      if document.containsKey(BsonField.Id)
-      then document
-      else copyOf(document).append(BsonField.Id, BsonObjectId(org.bson.types.ObjectId.get()))
+    val stamped = stampedFirst(document)
 
     val id = stamped.get(BsonField.Id)
 
@@ -221,9 +221,9 @@ final class FakeMongoCollection[F[*], S[*], E](
 
       firstMatching(filter, sortedBy(options.sort)) match
         case Some(existing)         =>
-          val replaced = replacing(existing, codec.encodeDocument(replacement))
-          storage(storage.indexOf(existing)) = checked(replaced, Some(existing))
-          UpdateResult(matchedCount = 1, modifiedCount = 1, upsertedId = None)
+          val incoming = codec.encodeDocument(replacement)
+          storage(storage.indexOf(existing)) = checked(replacing(existing, incoming), Some(existing))
+          UpdateResult(matchedCount = 1, modifiedCount = replacedBy(existing, incoming), upsertedId = None)
         case None if options.upsert =>
           val inserted = upsertedAs(filter, replacement)
           UpdateResult(matchedCount = 0, modifiedCount = 0, upsertedId = Option(inserted.get(BsonField.Id)))
@@ -357,10 +357,10 @@ final class FakeMongoCollection[F[*], S[*], E](
           requireNoCollation(options.collation, "bulkWrite ReplaceOne")
           firstMatching(filter, sortedBy(options.sort)) match
             case Some(existing)         =>
-              val replaced = replacing(existing, codec.encodeDocument(value))
-              storage(storage.indexOf(existing)) = checked(replaced, Some(existing))
+              val incoming = codec.encodeDocument(value)
+              storage(storage.indexOf(existing)) = checked(replacing(existing, incoming), Some(existing))
               matched += 1
-              modified += 1
+              modified += replacedBy(existing, incoming)
             case None if options.upsert =>
               Option(upsertedAs(filter, value).get(BsonField.Id)).foreach(id => upserted.update(i, id))
             case None                   => ()
@@ -766,13 +766,13 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Update.SetOnInsert(_, _) => document
 
     case Update.Inc(path, amount) =>
-      setAt(document, storedSegments(path), BsonOrdering.increment(at(document, path), amount))
+      setAt(document, storedSegments(path), BsonOrdering.increment(reached(document, path), amount, "$inc"))
 
     case Update.Bit(path, operation, mask) =>
-      setAt(document, storedSegments(path), bitwise(at(document, path), operation, mask))
+      setAt(document, storedSegments(path), bitwise(reached(document, path), operation, mask))
 
     case Update.Mul(path, factor) =>
-      setAt(document, storedSegments(path), BsonOrdering.multiply(at(document, path), factor))
+      setAt(document, storedSegments(path), BsonOrdering.multiply(reached(document, path), factor, "$mul"))
 
     case Update.Min(path, value) => keepExtreme(document, path, value, _ < 0)
     case Update.Max(path, value) => keepExtreme(document, path, value, _ > 0)
@@ -787,7 +787,7 @@ final class FakeMongoCollection[F[*], S[*], E](
         case Some(value) => setAt(unsetAt(document, storedSegments(path)), storedSegments(to), value)
 
     case Update.Push(path, value) => withArray(document, path)(_ :+ value)
-    case Update.Pull(path, value) => withArray(document, path)(_.filterNot(_ == value))
+    case Update.Pull(path, value) => withArray(document, path)(_.filterNot(pulledBy(_, value)))
     case Update.Pop(path, first)  =>
       withArray(document, path)(elements => if elements.isEmpty then elements else if first then elements.tail else elements.init)
 
@@ -796,14 +796,14 @@ final class FakeMongoCollection[F[*], S[*], E](
 
     case Update.PullAll(path, values) =>
       val removed = values.getValues.asScala.toList
-      withArray(document, path)(_.filterNot(removed.contains))
+      withArray(document, path)(_.filterNot(element => removed.exists(BsonOrdering.same(element, _))))
 
     case Update.AddToSet(path, value) =>
-      withArray(document, path)(elements => if elements.contains(value) then elements else elements :+ value)
+      withArray(document, path)(elements => if elements.exists(BsonOrdering.same(_, value)) then elements else elements :+ value)
 
     case Update.AddToSetEach(path, values) =>
       withArray(document, path) { elements =>
-        values.getValues.asScala.foldLeft(elements)((acc, value) => if acc.contains(value) then acc else acc :+ value)
+        values.getValues.asScala.foldLeft(elements)((acc, value) => if acc.exists(BsonOrdering.same(_, value)) then acc else acc :+ value)
       }
 
     case Update.PushEach(path, values, options) =>
@@ -815,8 +815,14 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Update.Pipeline(_) =>
       throw UnsupportedOperationException("FakeMongoCollection: a pipeline update computes from the document on the server, so it is not simulated")
 
+  private def pulledBy(element: BsonValue, value: BsonValue): Boolean =
+    value match
+      case query: BsonDocument =>
+        element.isDocument && query.entrySet.asScala.forall(entry => equals(element.asDocument, mongo4s.FieldPath.literal(entry.getKey), entry.getValue))
+      case _                   => BsonOrdering.same(element, value)
+
   private def withArray(document: BsonDocument, path: mongo4s.FieldPath)(f: List[BsonValue] => List[BsonValue]): BsonDocument =
-    val current = at(document, path) match
+    val current = reached(document, path) match
       case Some(array) if array.isArray => array.asArray.getValues.asScala.toList
       case Some(other)                  =>
         throw UnsupportedOperationException(s"FakeMongoCollection: an array operator was applied to $other")
@@ -826,13 +832,15 @@ final class FakeMongoCollection[F[*], S[*], E](
   end withArray
 
   private def keepExtreme(document: BsonDocument, path: mongo4s.FieldPath, value: BsonValue, keep: Int => Boolean): BsonDocument =
-    at(document, path) match
+    reached(document, path) match
       case Some(current) if !keep(BsonOrdering.compare(value, current)) => document
       case _                                                            => setAt(document, storedSegments(path), value)
 
   private def pushed(elements: List[BsonValue], added: List[BsonValue], options: PushOptions[?]): List[BsonValue] =
     val placed = options.position match
-      case Some(at) => elements.take(at) ++ added ++ elements.drop(at)
+      case Some(at) =>
+        val from = if at < 0 then math.max(elements.size + at, 0) else at
+        elements.take(from) ++ added ++ elements.drop(from)
       case None     => elements ++ added
 
     val ordered = options.sortScalars match
@@ -906,22 +914,68 @@ final class FakeMongoCollection[F[*], S[*], E](
       acc.append(e.getKey, e.getValue)
     }
 
+  private def position(segment: String): Option[Int] =
+    if segment.nonEmpty && segment.forall(_.isDigit) then segment.toIntOption else None
+
+  private def reached(document: BsonDocument, path: mongo4s.FieldPath): Option[BsonValue] =
+    storedSegments(path).foldLeft(Option[BsonValue](document)) { (current, segment) =>
+      current.flatMap {
+        case nested: BsonDocument => Option(nested.get(segment))
+        case array: BsonArray     => position(segment).filter(_ < array.size).map(array.get)
+        case _                    => None
+      }
+    }
+
   private def setAt(document: BsonDocument, segments: List[String], value: BsonValue): BsonDocument =
+    if segments.isEmpty then document else setIn(document, segments, value).asDocument
+
+  private def setIn(container: BsonValue, segments: List[String], value: BsonValue): BsonValue =
     segments match
-      case Nil         => document
-      case seg :: Nil  => copyOf(document).append(seg, value)
+      case Nil         => value
       case seg :: rest =>
-        val nested = Option(document.getDocument(seg, null)).getOrElse(BsonDocument())
-        copyOf(document).append(seg, setAt(nested, rest, value))
+        container match
+          case document: BsonDocument                      => copyOf(document).append(seg, placedIn(Option(document.get(seg)), seg, rest, value))
+          case array: BsonArray if position(seg).isDefined =>
+            val index    = position(seg).get
+            val existing = Option.when(index < array.size)(array.get(index))
+            val elements = array.getValues.asScala.toList.padTo(index + 1, BsonNull.VALUE)
+            BsonArray(elements.updated(index, placedIn(existing, seg, rest, value)).asJava)
+          case other                                       => throw FakeWriteError(28, s"Cannot create field '$seg' in element $other")
+
+  private def placedIn(existing: Option[BsonValue], segment: String, rest: List[String], value: BsonValue): BsonValue =
+    rest match
+      case Nil => value
+      case _   =>
+        existing match
+          case Some(nested) if nested.isDocument || nested.isArray => setIn(nested, rest, value)
+          case Some(other)                                         =>
+            throw FakeWriteError(28, s"Cannot create field '${rest.head}' in element {$segment: $other}")
+          case None                                                => setIn(BsonDocument(), rest, value)
 
   private def unsetAt(document: BsonDocument, segments: List[String]): BsonDocument =
-    segments match
-      case Nil         => document
-      case seg :: Nil  => val copy = copyOf(document); copy.remove(seg); copy
-      case seg :: rest =>
-        Option(document.getDocument(seg, null)) match
-          case None         => document
-          case Some(nested) => copyOf(document).append(seg, unsetAt(nested, rest))
+    unsetIn(document, segments).asDocument
+
+  private def unsetIn(container: BsonValue, segments: List[String]): BsonValue =
+    (container, segments) match
+      case (document: BsonDocument, seg :: Nil)  =>
+        val copy = copyOf(document)
+        copy.remove(seg): Unit
+        copy
+      case (document: BsonDocument, seg :: rest) =>
+        Option(document.get(seg)) match
+          case Some(nested) if nested.isDocument || nested.isArray => copyOf(document).append(seg, unsetIn(nested, rest))
+          case _                                                   => document
+      case (array: BsonArray, seg :: rest)       =>
+        position(seg).filter(_ < array.size) match
+          case Some(index) =>
+            val element = array.get(index)
+            val updated =
+              if rest.isEmpty then BsonNull.VALUE
+              else if element.isDocument || element.isArray then unsetIn(element, rest)
+              else element
+            BsonArray(array.getValues.asScala.toList.updated(index, updated).asJava)
+          case None        => array
+      case _                                     => container
 
   private def orderedBy(sort: Sort[E]): (BsonDocument, BsonDocument) => Boolean =
     if sort.fields.exists(_._2 == SortOrder.TextScore)
@@ -1278,6 +1332,13 @@ object FakeMongoCollection:
   def direct[F[*], S[*], E](name: String = "fake")(using Effect[F], RsBridge[F, S], WireCodec[E]): FakeMongoCollection[F, S, E] =
     new FakeMongoCollection(DocumentCodecBridge.toDocumentCodec[E], name, WireCodec[E].fieldNaming)
 
+  private[testkit] val Exact: org.bson.json.JsonWriterSettings =
+    org.bson.json.JsonWriterSettings.builder().outputMode(org.bson.json.JsonMode.EXTENDED).build()
+
+private object FakeWriteError:
+  def apply(code: Int, message: String): Throwable =
+    MongoError.translate(MongoWriteException(WriteError(code, message, BsonDocument()), ServerAddress(), java.util.Collections.emptyList()))
+
 private object BsonOrdering:
   def same(a: BsonValue, b: BsonValue): Boolean =
     if a.isNumber && b.isNumber then compareNumbers(a, b) == 0 else a == b
@@ -1395,8 +1456,8 @@ private object BsonOrdering:
     java.util.regex.Pattern.compile(pattern, flags)
   end regex
 
-  def multiply(current: Option[BsonValue], factor: BsonValue): BsonValue =
-    val base = current.getOrElse(BsonInt32(0))
+  def multiply(current: Option[BsonValue], factor: BsonValue, operator: String): BsonValue =
+    val base = numeric(current, operator)
 
     if base.isDecimal128 || factor.isDecimal128
     then throw UnsupportedOperationException("FakeMongoCollection: $mul over a Decimal128 is not simulated")
@@ -1407,8 +1468,8 @@ private object BsonOrdering:
       if base.isInt32 && factor.isInt32 && total.isValidInt then BsonInt32(total.toInt) else BsonInt64(total)
   end multiply
 
-  def increment(current: Option[BsonValue], amount: BsonValue): BsonValue =
-    val base = current.getOrElse(BsonInt32(0))
+  def increment(current: Option[BsonValue], amount: BsonValue, operator: String): BsonValue =
+    val base = numeric(current, operator)
 
     if base.isDecimal128 || amount.isDecimal128
     then throw UnsupportedOperationException("FakeMongoCollection: $inc over a Decimal128 is not simulated")
@@ -1418,3 +1479,10 @@ private object BsonOrdering:
       val total = base.asNumber.longValue + amount.asNumber.longValue
       if base.isInt32 && amount.isInt32 && total.isValidInt then BsonInt32(total.toInt) else BsonInt64(total)
   end increment
+
+  private def numeric(current: Option[BsonValue], operator: String): BsonValue =
+    current match
+      case Some(value) if value.isNumber || value.isDecimal128 => value
+      case Some(value)                                         =>
+        throw FakeWriteError(14, s"Cannot apply $operator to a value of non-numeric type ${value.getBsonType}")
+      case None                                                => BsonInt32(0)
