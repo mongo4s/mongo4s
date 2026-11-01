@@ -80,6 +80,14 @@ trait EffectBackendSpec[F[*]] extends AnyWordSpec, Matchers:
       val thrown: F[Int] = F.map(F.pure(()))(_ => throw Boom("mapped"))
       run(F.handleErrorWith(thrown)(_ => F.pure(7))) shouldBe 7
     }
+
+    "recover from an exception thrown by flatMap's function or suspend's body" in {
+      val flattened = Boom("flattened")
+      val suspended = Boom("suspended")
+
+      runAttempt(F.flatMap(F.pure(()))(_ => throw flattened)) shouldBe Left(flattened)
+      runAttempt(F.suspend[Int](throw suspended)) shouldBe Left(suspended)
+    }
   }
 
   "attempt" should {

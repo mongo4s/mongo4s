@@ -1979,6 +1979,12 @@ yield number</code></pre>
         the runtime's clock for <code>monotonic</code>, while <code>kyo</code> and <code>rapid</code> keep
         <code>System.nanoTime</code>.
     </p>
+    <p class="muted">
+        The four agree on what an error is: a function passed to <code>map</code> or <code>flatMap</code> that throws,
+        and a <code>suspend</code> whose body throws, fail the effect, so <code>attempt</code> sees it. On
+        <code>zio</code> a defect of your own is never recovered by <code>attempt</code> or
+        <code>handleErrorWith</code>; it rolls a transaction back on its way out and stays a defect.
+    </p>
     <p>
         <code>MongoClient.fromClient</code>/<code>fromSettings</code>/<code>fromConnectionString</code> return a bare
         <code>F[MongoClient[F, S]]</code> — you own calling <code>.close</code>. Every runtime module also ships

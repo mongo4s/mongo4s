@@ -12,11 +12,11 @@ trait TaskToEffectInstance:
   given taskEffect: Effect[Task] = new Effect[Task]:
     def pure[A](a: A): Task[A]                               = ZIO.succeed(a)
     def delay[A](a: => A): Task[A]                           = ZIO.attempt(a)
-    def map[A, B](fa: Task[A])(f: A => B): Task[B]           = fa.map(f)
-    def flatMap[A, B](fa: Task[A])(f: A => Task[B]): Task[B] = fa.flatMap(f)
+    def map[A, B](fa: Task[A])(f: A => B): Task[B]           = fa.mapAttempt(f)
+    def flatMap[A, B](fa: Task[A])(f: A => Task[B]): Task[B] = fa.flatMap(a => ZIO.suspend(f(a)))
     def raiseError[A](error: Throwable): Task[A]             = ZIO.fail(error)
 
-    override def suspend[A](fa: => Task[A]): Task[A] = ZIO.suspendSucceed(fa)
+    override def suspend[A](fa: => Task[A]): Task[A] = ZIO.suspend(fa)
 
     override def monotonic: Task[FiniteDuration] = Clock.nanoTime.map(FiniteDuration(_, TimeUnit.NANOSECONDS))
 
@@ -24,9 +24,12 @@ trait TaskToEffectInstance:
 
     def handleErrorWith[A](fa: Task[A])(f: Throwable => Task[A]): Task[A] =
       fa.catchAllCause: cause =>
-        TaskToEffectInstance.errorOf(cause) match
-          case Some(error) => f(error)
-          case None        => ZIO.refailCause(cause)
+        if cause.isInterrupted
+        then ZIO.refailCause(cause)
+        else
+          cause.failureOption match
+            case Some(error) => f(error)
+            case None        => ZIO.refailCause(cause)
 
     def guaranteeCase[A](fa: Task[A])(finalizer: ExitCase => Task[Unit]): Task[A] =
       ZIO.uninterruptibleMask { restore =>
@@ -44,7 +47,7 @@ trait TaskToEffectInstance:
     override def bracketCase[A, B](acquire: Task[A])(use: A => Task[B])(release: (A, ExitCase) => Task[Unit]): Task[B] =
       ZIO.uninterruptibleMask { restore =>
         acquire.flatMap { a =>
-          restore(use(a)).exit.flatMap { exit =>
+          restore(ZIO.suspend(use(a))).exit.flatMap { exit =>
             runFinalizer(
               TaskToEffectInstance.exitCaseOf(exit),
               exitCase => release(a, exitCase),

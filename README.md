@@ -2316,6 +2316,11 @@ Beyond the members a runtime has to supply, `Effect` carries defaults it may ove
 blocked thread; `cats` and `zio` also read the runtime's clock for `monotonic`, while `kyo` and `rapid` keep the
 default, `System.nanoTime`, which a test clock of theirs does not move.
 
+The four agree on what an error is. A function passed to `map` or `flatMap` that throws, and a `suspend` whose body
+throws, fail the effect, so `attempt` sees it. On `zio` that means a throw is a failure rather than a defect, and a
+defect — a `ZIO.die` of your own — is never recovered by `attempt` or `handleErrorWith`: it rolls back a transaction
+on its way out, since a finalizer sees it as `Errored`, and leaves `withTransaction` a defect still.
+
 `MongoClient.fromClient`/`fromSettings`/`fromConnectionString` return a bare `F[MongoClient[F, S]]` — you own calling
 `.close`. Every runtime module also ships `MongoClientResource` with the same three constructor names, wrapped in
 that runtime's own resource-safety idiom rather than one type copy-pasted across all four:

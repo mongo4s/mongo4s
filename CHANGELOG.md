@@ -143,6 +143,10 @@ Binary compatible with `5.0.0`, checked by MiMa.
 - **`Accumulator.sum` and `avg` over a field took any field**, and the server answers `0` for a sum of strings. They
   compile only on a numeric field or an `Option` of one now, as `median` and the standard deviations already did;
   code compiled against `5.0` keeps linking, since the unconstrained methods are still in the bytecode.
+- **On `zio`, `attempt` and `handleErrorWith` recovered a defect as an error**, so a `ZIO.die` in a transaction body
+  left `withTransaction` as a typed failure. Only failures are recovered now; a defect still rolls the transaction
+  back and then stays a defect. A function given to `map` or `flatMap` that throws, and a `suspend` whose body throws,
+  fail the effect rather than die, as they do on the other three runtimes — each runtime's spec checks it.
 - **`findMany` returned a document once per batch its key appeared in.** A key repeated further down the list than
   `batchSize` went out in a second `$in`, and the document came back twice. The keys are made distinct before they
   are batched, as the README already promised.

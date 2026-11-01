@@ -3,10 +3,10 @@ package mongo4s.zio
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
-import zio.{Runtime, Task, Unsafe}
+import zio.{Exit, Runtime, Task, Unsafe, ZIO}
 import org.reactivestreams.{Publisher, Subscriber, Subscription}
 
-import mongo4s.{Effect, RsBridge, RsBridgeConfig, RsBridgeError}
+import mongo4s.{Effect, ExitCase, RsBridge, RsBridgeConfig, RsBridgeError}
 
 import scala.concurrent.duration.given
 import mongo4s.zio.ZioInstances.given
@@ -106,5 +106,30 @@ final class ZioBridgeSpec extends AnyWordSpec, Matchers:
     }
     "raise and surface errors" in {
       run(effect.raiseError[Int](new RuntimeException("boom")).either).isLeft shouldBe true
+    }
+
+    "fail, not die, when a function given to flatMap or suspend throws, so ZIO's own either sees it" in {
+      val boom = IllegalStateException("boom")
+
+      run(effect.map(effect.pure(1))(_ => throw boom).either) shouldBe Left(boom)
+      run(effect.flatMap(effect.pure(1))(_ => throw boom).either) shouldBe Left(boom)
+      run(effect.suspend[Int](throw boom).either) shouldBe Left(boom)
+    }
+
+    "leave a defect a defect, rather than recover it as an error" in {
+      val boom = IllegalStateException("boom")
+
+      run(effect.attempt(ZIO.die(boom)).exit) match
+        case Exit.Failure(cause) => cause.dieOption shouldBe Some(boom)
+        case other               => fail(s"expected the defect to pass through attempt, got $other")
+    }
+
+    "still show a finalizer the defect, so a transaction rolls back on it" in {
+      val boom = IllegalStateException("boom")
+      var seen = Option.empty[ExitCase]
+
+      run(effect.guaranteeCase(ZIO.die(boom))(exitCase => ZIO.succeed { seen = Some(exitCase) }).exit)
+
+      seen shouldBe Some(ExitCase.Errored(boom))
     }
   }
