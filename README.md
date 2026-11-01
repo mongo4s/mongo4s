@@ -1326,10 +1326,12 @@ collection.createIndexes(List(Index.ascending(nameField), Index.descending(ageFi
 collection.dropIndexes // every index but the one on _id
 ```
 
-Keys are ordered — a compound index is only usable by queries that respect that order. `createIndex` returns the
-name the server gave it, and is idempotent, so it's safe on every start. `createIndexes` builds several in one
-command and returns their names in the order given; the server builds them together, so if one cannot be built, none
-is.
+Keys are ordered — a compound index is only usable by queries that respect that order. A key named a second time
+replaces the first in direction *and* position, so it moves to the end:
+`Index.ascending(a).ascending(b).descending(a)` is `{b: 1, a: -1}`, which serves queries on `b`, not on `a`. A `Sort`
+reads its fields the same way. `createIndex` returns the name the server gave it, and is idempotent, so it's safe on
+every start. `createIndexes` builds several in one command and returns their names in the order given; the server
+builds them together, so if one cannot be built, none is.
 
 A wildcard index needs no API of its own: `$**` is an ordinary stored path, so `Field.stored` builds it and the
 collection's `FieldNaming` leaves it alone. `withWildcardProjection` narrows which fields such an index covers, and

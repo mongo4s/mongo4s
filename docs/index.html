@@ -1278,8 +1278,10 @@ collection.createIndexes(List(Index.ascending(nameField), Index.descending(ageFi
 collection.dropIndexes                                                                // all but _id's
 collection.renameCollection("people_archive", dropTarget = true)</code></pre>
     <p class="muted">
-        Keys are ordered — a compound index is only usable by queries that respect that order.
-        <code>createIndex</code> returns the name the server gave it, and is idempotent, so it's safe on every start.
+        Keys are ordered — a compound index is only usable by queries that respect that order. A key named a second
+        time replaces the first in direction and position, so it moves to the end:
+        <code>Index.ascending(a).ascending(b).descending(a)</code> is <code>{b: 1, a: -1}</code>, and a
+        <code>Sort</code> reads its fields the same way. <code>createIndex</code> returns the name the server gave it, and is idempotent, so it's safe on every start.
         <code>createIndexes</code> returns the names in the order given, and the server builds them together, so if one
         cannot be built, none is. <code>renameCollection</code> refuses to replace an existing collection unless
         <code>dropTarget</code> says to, and leaves the handle it was called on pointing at the old, now empty, name.
