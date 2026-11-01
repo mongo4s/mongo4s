@@ -69,6 +69,9 @@ Binary compatible with `5.0.0`, checked by MiMa.
 - **`Float`, `Short`, `Byte`, `Char` and `Array[Byte]`** on both codec paths, stored as the Java driver stores them —
   double, int, int, one-character string and binary — with range checks on the way in, and the numeric and
   comparison operators on such fields.
+- **`withTimeout(duration)` on `MongoDatabase` and `MongoCollection`**, the driver's client-side operation timeout for
+  one handle rather than the whole client; an operation that runs out fails as `MongoError.ExecutionTimeout`. A
+  `MongoCollection` or `MongoDatabase` of your own inherits a default that refuses it by name.
 - **`$text` with its language and sensitivities**: `Filter.text(search, TextSearchOptions.default.withCaseSensitive(true))`,
   with `withLanguage` and `withDiacriticSensitive` beside it. The filter is a new `Filter.TextSearch` case; the
   `Filter.text(search, language)` that exists builds the `Text` case it always did.

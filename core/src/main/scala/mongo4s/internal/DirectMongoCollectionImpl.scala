@@ -1,6 +1,9 @@
 package mongo4s.internal
 
+import java.util.concurrent.TimeUnit
+
 import scala.annotation.unused
+import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.reflect.ClassTag
 
 import org.bson.BsonDocument
@@ -48,6 +51,10 @@ private[mongo4s] final class DirectMongoCollectionImpl[F[*], S[*], A](
 
   def withReadPreference(preference: ReadPreference): MongoCollection[F, S, A] =
     DirectMongoCollectionImpl(underlying.withReadPreference(preference), naming)
+
+  override def withTimeout(timeout: FiniteDuration): MongoCollection[F, S, A] =
+    require(timeout >= Duration.Zero, s"a timeout cannot be negative, got $timeout")
+    DirectMongoCollectionImpl(underlying.withTimeout(timeout.toMillis, TimeUnit.MILLISECONDS), naming)
 
   def insertOne(document: A, options: InsertOneOptions)(using session: Option[ClientSession]): F[InsertOneResult] =
     F.suspend {

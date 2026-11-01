@@ -1,6 +1,9 @@
 package mongo4s.internal
 
+import java.util.concurrent.TimeUnit
+
 import scala.reflect.ClassTag
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 import org.bson.BsonDocument
 import com.mongodb.{ReadConcern, ReadPreference, WriteConcern}
@@ -29,6 +32,10 @@ private[mongo4s] final class MongoDatabaseImpl[F[*], S[*]](
 
   def withReadPreference(preference: ReadPreference): MongoDatabase[F, S] =
     MongoDatabaseImpl(underlying.withReadPreference(preference))
+
+  override def withTimeout(timeout: FiniteDuration): MongoDatabase[F, S] =
+    require(timeout >= Duration.Zero, s"a timeout cannot be negative, got $timeout")
+    MongoDatabaseImpl(underlying.withTimeout(timeout.toMillis, TimeUnit.MILLISECONDS))
 
   def getCollection[A](
       collectionName: String,

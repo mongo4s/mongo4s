@@ -62,6 +62,8 @@ final class FakeMongoCollection[F[*], S[*], E](
   def withWriteConcern(concern: WriteConcern): MongoCollection[F, S, E]        = this
   def withReadPreference(preference: ReadPreference): MongoCollection[F, S, E] = this
 
+  override def withTimeout(timeout: scala.concurrent.duration.FiniteDuration): MongoCollection[F, S, E] = this
+
   def snapshot: List[E] = locked(storage.flatMap(codec.decodeDocument(_).toOption).toList)
 
   def indexes: List[Index[E]] = locked(createdIndexes.toList)

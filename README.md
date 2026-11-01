@@ -140,6 +140,16 @@ Because the derived handle is an ordinary `MongoCollection`, per-operation contr
 a collection derived this way keeps the codec it was opened with — including the `WireCodec` that
 `getDirectCollection` registers.
 
+`withTimeout(duration)` does the same for the driver's client-side operation timeout (`timeoutMS`): every operation
+through the handle — server selection, the command and reading its cursor — has that long in all, and one that runs
+out fails as `MongoError.ExecutionTimeout`. `Duration.Zero` means no limit; set on a database, it is inherited by the
+collections opened from it. The fake accepts it and ignores it, as it ignores `maxTime`.
+
+```scala
+val bounded = collection.withTimeout(500.millis)
+bounded.find(adults).all          // fails as ExecutionTimeout after half a second in all
+```
+
 A driver `CodecRegistry` is not how you plug a codec into `mongo4s`, though — see
 [Codecs and the driver's registry](#codecs-and-the-drivers-registry).
 

@@ -9,6 +9,7 @@ import mongo4s.operations.CreateCollectionOptions
 import mongo4s.changestream.{ChangeEvent, WatchOptions}
 import mongo4s.bson.{BsonDocumentCodec, BsonDocumentDecoder, DecodeResult, FieldNaming}
 
+import scala.concurrent.duration.FiniteDuration
 import scala.reflect.ClassTag
 
 trait MongoDatabase[F[*], S[*]]:
@@ -61,5 +62,8 @@ trait MongoDatabase[F[*], S[*]]:
   def withReadConcern(concern: ReadConcern): MongoDatabase[F, S]
   def withWriteConcern(concern: WriteConcern): MongoDatabase[F, S]
   def withReadPreference(preference: ReadPreference): MongoDatabase[F, S]
+
+  def withTimeout(timeout: FiniteDuration): MongoDatabase[F, S] =
+    throw UnsupportedOperationException(s"${getClass.getName} does not implement withTimeout; the databases mongo4s opens do")
 
   def underlying: RSMongoDatabase

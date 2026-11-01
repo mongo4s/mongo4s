@@ -127,6 +127,27 @@ final class MongoErrorItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befor
         case other                                    => fail(s"expected an ExecutionTimeout, got $other")
       }
     }
+
+    "arrive the same way from a timeout set on the database or the collection alone" in {
+      val slow = Filter.Raw[BsonDocument](BsonDocument("$where", BsonString("sleep(2000) || true")))
+
+      val program =
+        for
+          client        <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database      <- client.getDatabase("mongo_error_it")
+          collection    <- database.getCollection[BsonDocument]("csot_scoped")
+          _             <- collection.insertOne(person("a@b.c"))
+          viaDatabase   <- database.withTimeout(500.millis).getCollection[BsonDocument]("csot_scoped").flatMap(_.find(slow).all.attempt)
+          viaCollection <- collection.withTimeout(500.millis).find(slow).all.attempt
+          unbounded     <- collection.find(Filter.all).all
+          _             <- client.close
+        yield (viaDatabase, viaCollection, unbounded.size)
+
+      program.timeout(30.seconds).asserting {
+        case (Left(_: MongoError.ExecutionTimeout), Left(_: MongoError.ExecutionTimeout), 1) => succeed
+        case other                                                                           => fail(s"expected two ExecutionTimeouts, got $other")
+      }
+    }
   }
 
   "a command the server rejects" should {

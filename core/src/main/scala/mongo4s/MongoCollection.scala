@@ -1,6 +1,7 @@
 package mongo4s
 
 import scala.annotation.unused
+import scala.concurrent.duration.FiniteDuration
 import scala.reflect.ClassTag
 
 import org.bson.BsonDocument
@@ -132,6 +133,9 @@ trait MongoCollection[F[*], S[*], A]:
   def withReadConcern(concern: ReadConcern): MongoCollection[F, S, A]
   def withWriteConcern(concern: WriteConcern): MongoCollection[F, S, A]
   def withReadPreference(preference: ReadPreference): MongoCollection[F, S, A]
+
+  def withTimeout(timeout: FiniteDuration): MongoCollection[F, S, A] =
+    throw UnsupportedOperationException(s"${getClass.getName} does not implement withTimeout; the collections mongo4s opens do")
 
   def underlying: RSMongoCollection[BsonDocument]
 

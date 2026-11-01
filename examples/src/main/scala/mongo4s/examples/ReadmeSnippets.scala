@@ -176,6 +176,9 @@ object ReadmeSnippets:
     val durable = collection.withWriteConcern(WriteConcern.MAJORITY)
     durable.insertOne(user) *> collection.insertOne(other).void
 
+  def boundedRead(collection: MongoCollection[IO, S, User], adults: Filter[User]): IO[List[User]] =
+    collection.withTimeout(500.millis).find(adults).all
+
   // --- Results ---
 
   def upsertedId(collection: MongoCollection[IO, S, User]): IO[Option[org.bson.BsonValue]] =
