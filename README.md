@@ -1619,8 +1619,14 @@ natively, in the same BSON representation the `BsonEncoder`/`BsonDecoder` path u
 `Date` for `Instant`, `ObjectId` for `ObjectId`, a string for `UUID` — so the server indexes and range-compares them
 exactly as it would on a collection opened with `getCollection`. A BSON date holds milliseconds, so an `Instant`
 loses anything finer on the way in. A `UUID` is also read from the binary subtype 4 other drivers write; a legacy
-subtype 3 is refused, since nothing in it says which byte order wrote it. Any *other* type with an existing
-`BsonEncoder`/`BsonDecoder` bridges automatically, at the cost of one `BsonValue` per field instead of zero.
+subtype 3 is refused, since nothing in it says which byte order wrote it. `Float`, `Short`, `Byte`, `Char` and
+`Array[Byte]` are native too, as the Java driver writes them — a double, an int, an int, a one-character string and a
+binary of subtype 0 — and read every width the others read, refusing a value outside their range (`40000` into a
+`Short`) or a string that is not one character. `Array[Byte]` is a binary, not an array of numbers, and any binary
+subtype reads as its bytes. Any *other* type with an existing `BsonEncoder`/`BsonDecoder` bridges automatically, at
+the cost of one `BsonValue` per field instead of zero. `BigInt`, `LocalDateTime`, `OffsetDateTime`, `ZonedDateTime`
+and `Duration` have no default, for the reason `LocalDate` has none below: BSON has several ways to hold each, and
+picking one for you would be a guess.
 
 Where a collection already stores one of these another way, `ScalarWireCodec` has the common alternatives ready to
 be made the given — `instantAsEpochMillis`, `instantAsEpochSeconds`, `instantAsIsoString`, `uuidAsBinary` — and two

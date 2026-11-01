@@ -79,6 +79,48 @@ trait DefaultBsonDecoderInstances:
     then Right(value.asNumber.doubleValue)
     else Left(BsonError.typeMismatch(BsonTypeName.Double, value))
 
+  given BsonDecoder[Float] = value =>
+    val double =
+      if value.isNumber then Right(value.asNumber.doubleValue)
+      else if value.isDecimal128 then Right(value.asDecimal128.doubleValue)
+      else Left(BsonError.typeMismatch(BsonTypeName.Double, value))
+
+    double.flatMap { read =>
+      if !read.isInfinite && !read.isNaN && math.abs(read) > Float.MaxValue
+      then Left(BsonError.InvalidValue(s"$read is out of range for Float"))
+      else Right(read.toFloat)
+    }
+
+  given BsonDecoder[Short] = value => smallNumber(value, "Short", BsonTypeName.Int, Short.MinValue, Short.MaxValue).map(_.toShort)
+
+  given BsonDecoder[Byte] = value => smallNumber(value, "Byte", BsonTypeName.Int, Byte.MinValue, Byte.MaxValue).map(_.toByte)
+
+  given BsonDecoder[Char] = value =>
+    if !value.isString
+    then Left(BsonError.typeMismatch(BsonTypeName.String, value))
+    else
+      val text = value.asString.getValue
+      if text.length == 1
+      then Right(text.charAt(0))
+      else Left(BsonError.InvalidValue(s"\"$text\" is not a single character"))
+
+  given BsonDecoder[Array[Byte]] = value =>
+    if value.isBinary
+    then Right(value.asBinary.getData)
+    else Left(BsonError.typeMismatch(BsonTypeName.BinData, value))
+
+  private def smallNumber(value: BsonValue, target: String, typeName: BsonTypeName, min: Int, max: Int): Either[BsonError, Int] =
+    if !value.isNumber && !value.isDecimal128
+    then Left(BsonError.typeMismatch(typeName, value))
+    else if value.isInt32
+    then within(value.asInt32.getValue.toLong, target, min, max)
+    else longNumber(value, target).flatMap(within(_, target, min, max))
+
+  private def within(whole: Long, target: String, min: Int, max: Int): Either[BsonError, Int] =
+    if whole < min || whole > max
+    then Left(BsonError.InvalidValue(s"$whole is out of range for $target"))
+    else Right(whole.toInt)
+
   given BsonDecoder[BigDecimal] = value =>
     if value.isDecimal128
     then bigDecimalOf(value.asDecimal128.decimal128Value, "BigDecimal")

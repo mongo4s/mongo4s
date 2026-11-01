@@ -14,6 +14,9 @@ object NumericValue:
   given long: NumericValue[Long]             = value => BsonInt64(value)
   given double: NumericValue[Double]         = value => BsonDouble(value)
   given bigDecimal: NumericValue[BigDecimal] = value => BsonDecimal128(Decimal128(value.bigDecimal))
+  given float: NumericValue[Float]           = value => BsonDouble(value.toDouble)
+  given short: NumericValue[Short]           = value => BsonInt32(value.toInt)
+  given byte: NumericValue[Byte]             = value => BsonInt32(value.toInt)
 
 @annotation.implicitNotFound("${C} is not a numeric field type holding ${A}, so this operator does not apply to it")
 trait NumericOf[C, A]:

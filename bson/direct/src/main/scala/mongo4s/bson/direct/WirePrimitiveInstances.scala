@@ -5,7 +5,7 @@ import java.time.Instant
 
 import scala.util.control.NonFatal
 
-import org.bson.{BsonDecimal128, BsonReader, BsonString, BsonType, BsonValue}
+import org.bson.{BsonDecimal128, BsonDouble, BsonInt32, BsonReader, BsonString, BsonType, BsonValue}
 import org.bson.codecs.{BsonValueCodec, DecoderContext}
 import org.bson.types.{Decimal128, ObjectId}
 
@@ -44,6 +44,46 @@ trait WirePrimitiveInstances extends WireFallbackInstances:
       if r.getCurrentBsonType == BsonType.DOUBLE
       then r.readDouble()
       else relaxed(r, doubleDecoder),
+  )
+
+  given ScalarWireCodec[Float] = ScalarWireCodec.instance(
+    (w, v) => w.writeDouble(v.toDouble),
+    r =>
+      if r.getCurrentBsonType == BsonType.DOUBLE
+      then
+        val read = r.readDouble()
+        if read.isInfinite || read.isNaN || math.abs(read) <= Float.MaxValue then read.toFloat else decode(BsonDouble(read), floatDecoder)
+      else relaxed(r, floatDecoder),
+  )
+
+  given ScalarWireCodec[Short] = ScalarWireCodec.instance(
+    (w, v) => w.writeInt32(v.toInt),
+    r =>
+      if r.getCurrentBsonType == BsonType.INT32
+      then
+        val read = r.readInt32()
+        if read.isValidShort then read.toShort else decode(BsonInt32(read), shortDecoder)
+      else relaxed(r, shortDecoder),
+  )
+
+  given ScalarWireCodec[Byte] = ScalarWireCodec.instance(
+    (w, v) => w.writeInt32(v.toInt),
+    r =>
+      if r.getCurrentBsonType == BsonType.INT32
+      then
+        val read = r.readInt32()
+        if read.isValidByte then read.toByte else decode(BsonInt32(read), byteDecoder)
+      else relaxed(r, byteDecoder),
+  )
+
+  given ScalarWireCodec[Char] = ScalarWireCodec.instance(
+    (w, v) => w.writeString(v.toString),
+    r =>
+      if r.getCurrentBsonType == BsonType.STRING
+      then
+        val read = r.readString()
+        if read.length == 1 then read.charAt(0) else decode(BsonString(read), charDecoder)
+      else relaxed(r, charDecoder),
   )
 
   given ScalarWireCodec[Boolean] = ScalarWireCodec.instance(
@@ -100,6 +140,11 @@ object WirePrimitiveInstances:
   private[direct] val intDecoder: BsonDecoder[Int]               = BsonDecoder[Int]
   private[direct] val longDecoder: BsonDecoder[Long]             = BsonDecoder[Long]
   private[direct] val doubleDecoder: BsonDecoder[Double]         = BsonDecoder[Double]
+  private[direct] val floatDecoder: BsonDecoder[Float]           = BsonDecoder[Float]
+  private[direct] val shortDecoder: BsonDecoder[Short]           = BsonDecoder[Short]
+  private[direct] val byteDecoder: BsonDecoder[Byte]             = BsonDecoder[Byte]
+  private[direct] val charDecoder: BsonDecoder[Char]             = BsonDecoder[Char]
+  private[direct] val bytesDecoder: BsonDecoder[Array[Byte]]     = BsonDecoder[Array[Byte]]
   private[direct] val booleanDecoder: BsonDecoder[Boolean]       = BsonDecoder[Boolean]
   private[direct] val instantDecoder: BsonDecoder[Instant]       = BsonDecoder[Instant]
   private[direct] val objectIdDecoder: BsonDecoder[ObjectId]     = BsonDecoder[ObjectId]

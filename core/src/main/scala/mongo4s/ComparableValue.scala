@@ -28,6 +28,10 @@ object ComparableValue:
   given instant: ComparableValue[Instant]       = of
   given objectId: ComparableValue[ObjectId]     = of
   given uuid: ComparableValue[UUID]             = of
+  given float: ComparableValue[Float]           = of
+  given short: ComparableValue[Short]           = of
+  given byte: ComparableValue[Byte]             = of
+  given char: ComparableValue[Char]             = of
 
 @annotation.implicitNotFound("${C} is not a field MongoDB orders against ${A}, so this operator does not apply to it")
 trait ComparableOf[C, A]:

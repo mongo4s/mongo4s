@@ -66,6 +66,9 @@ Binary compatible with `5.0.0`, checked by MiMa.
   the foreign `MongoCollection` in place of its name, and render its fields, sub-pipeline and `restrictSearchWithMatch`
   through that collection's `FieldNaming` rather than the one running the aggregation, so collections with different
   namings join on the right fields. The string forms are unchanged.
+- **`Float`, `Short`, `Byte`, `Char` and `Array[Byte]`** on both codec paths, stored as the Java driver stores them —
+  double, int, int, one-character string and binary — with range checks on the way in, and the numeric and
+  comparison operators on such fields.
 - **`$text` with its language and sensitivities**: `Filter.text(search, TextSearchOptions.default.withCaseSensitive(true))`,
   with `withLanguage` and `withDiacriticSensitive` beside it. The filter is a new `Filter.TextSearch` case; the
   `Filter.text(search, language)` that exists builds the `Text` case it always did.

@@ -22,6 +22,16 @@ trait DefaultBsonEncoderInstances:
 
   given BsonEncoder[Double] = value => BsonDouble(value)
 
+  given BsonEncoder[Float] = value => BsonDouble(value.toDouble)
+
+  given BsonEncoder[Short] = value => BsonInt32(value.toInt)
+
+  given BsonEncoder[Byte] = value => BsonInt32(value.toInt)
+
+  given BsonEncoder[Char] = value => BsonString(value.toString)
+
+  given BsonEncoder[Array[Byte]] = value => BsonBinary(value)
+
   given BsonEncoder[BigDecimal] = value => BsonDecimal128(Decimal128(value.bigDecimal))
 
   given BsonEncoder[Instant] = value => BsonDateTime(value.toEpochMilli)

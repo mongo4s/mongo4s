@@ -2,7 +2,7 @@ package mongo4s.bson.direct
 
 import scala.reflect.ClassTag
 
-import org.bson.{BsonReader, BsonType, BsonWriter}
+import org.bson.{BsonBinary, BsonReader, BsonType, BsonWriter}
 
 import mongo4s.bson.BsonError
 
@@ -142,6 +142,14 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
       builder.result()
     end decode
   end mapWireCodec
+
+  given bytesWireCodec: ScalarWireCodec[Array[Byte]] = ScalarWireCodec.instance(
+    (w, v) => w.writeBinaryData(BsonBinary(v)),
+    r =>
+      if r.getCurrentBsonType == BsonType.BINARY
+      then r.readBinaryData().getData
+      else WirePrimitiveInstances.relaxed(r, WirePrimitiveInstances.bytesDecoder),
+  )
 
   given arrayWireCodec: [A: ClassTag] => (inner: WireCodec[A]) => WireCodec[Array[A]]:
     def encode(writer: BsonWriter, values: Array[A]): Unit =
