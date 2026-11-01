@@ -13,6 +13,41 @@
   `build.sbt`, so nothing is waived silently. A major release — `3.0.0`, `4.0.0`, `5.0.0` — has no such exceptions: its
   migration guide below is what the major version covers.
 
+## Upgrading from 5.0.x to 5.1.0
+
+Binary compatible: MiMa checks `5.1.0` against `5.0.0` and finds nothing, and no exclusion was needed — a library
+compiled against `5.0` links against `5.1` unchanged. New members of `Repository`, `MongoCollection` and
+`MongoDatabase` carry bodies, so an implementation of your own keeps compiling; the ones it cannot implement for you
+refuse by name until you override them. What a recompile or a run can show:
+
+* **`field.set(None)` renders `$unset`** rather than `$set: null`, and `setOnInsert(None)` adds nothing. A query
+  matching `{field: null}` still finds the unset field; one asking `$type: "null"` no longer does. `setNull` writes the
+  `null` where it is wanted.
+* **A filter that matches nothing renders `{_id: {$in: []}}`** rather than `{$nor: [{}]}` — `in(Nil)`,
+  `containsAll(Nil)`, `Filter.none`, an empty `KeyRef.inFilter`, `Filter.Or(Nil)` and `!Filter.all`. A test that
+  compared the rendered document needs the new one.
+* **`MongoError` files more failures where operations teams look for them**: a client `timeoutMS` that ran out is
+  `ExecutionTimeout`, not `Unavailable`; refused credentials `Unauthorized`; a stepped-down primary, a recovering
+  node, a cleared pool and a closed server `Unavailable`. A match that relied on the old case moves.
+* **Decoding failures carry their path.** A `WireCodec` failure, and a `BsonDecoder` collection's, is wrapped in
+  `BsonError.Nested` segments naming the field, position or key; a match on a bare `TypeMismatch` finds it inside.
+* **`Filter` has a new case, `TextSearch`**, which an exhaustive match over `Filter` has to handle.
+* **`Accumulator.sum` and `avg` over a field compile only on a number** or an `Option` of one. Code compiled against
+  `5.0` keeps linking; code that summed a non-numeric field — which the server answers with `0` — no longer compiles.
+* **`where` takes only an array filter identifier**, and refuses `Field.self`, which used to render `$[]`.
+* **Refusals that were thrown where an operation was built are raised in `F`** — an aggregation or `distinct` whose
+  filter does not render, contradictory create options, a page of no entities, a counter step below one, and the
+  driver's argument checks on the index, drop and listing operations. A `try` around building the call no longer
+  sees them; `attempt` on the effect does.
+* **On `zio`, a defect stays a defect.** `attempt` and `handleErrorWith` recover failures only, and a throw inside
+  `map`, `flatMap` or `suspend` is a failure rather than a defect.
+* **The fake answers more like the server**, which a test pinned to its old answers notices: array paths and
+  numeric segments, operators through arrays, `$all` on a scalar, a regular expression in `$in`, UTF-8 string order,
+  updates through array positions and the server's codes 28 and 14, a negative `$position`, `$pull` by a document,
+  number widths in the array operators, `distinct` and `$group`, projections through arrays, an `_id` stored first,
+  `modifiedCount` of an identical replacement, every bulk write error as a `BulkWriteFailed`, and `explain` and
+  `watch` refused in the effect or the stream.
+
 ## Upgrading from 5.0.0 to 5.0.1
 
 Binary compatible: MiMa checks `5.0.1` against `5.0.0` and finds nothing. Nothing to change in calling code. A module
