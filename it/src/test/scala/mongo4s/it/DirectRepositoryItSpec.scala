@@ -140,6 +140,17 @@ trait DirectRepositoryItSpec[F[*], S[*]] extends AnyWordSpec, Matchers, BeforeAn
       found should contain theSameElementsAs List(Profile("a1", "Annie", Some(5)), Profile("a2", "Bob", None))
     }
 
+    "replace and delete an entity by its key, answering what was stored" in {
+      val (client, repo) = repository("direct_it_find_one_and")
+      run(repo.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 25))))
+      val replaced       = run(repo.findOneAndReplace(Person("1", "bob", 31)))
+      val deleted        = run(repo.findOneAndDelete("2"))
+      val remaining      = run(repo.findMany(List("1", "2")))
+      run(client.close)
+
+      (replaced, deleted, remaining) shouldBe (Some(Person("1", "bob", 31)), Some(Person("2", "alice", 25)), List(Person("1", "bob", 31)))
+    }
+
     "insertMany / findMany / findByField / findByFilter batch and filter correctly" in {
       val (client, repo) = repository("direct_it_find_many")
       run(repo.insertMany(List(Person("1", "bob", 30), Person("2", "alice", 25), Person("3", "eve", 40))))

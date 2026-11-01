@@ -134,6 +134,16 @@ trait Repository[F[*], S[*], E, K]:
   def upsertKeeping(entities: List[E], keep: List[FieldPath])(using session: Option[ClientSession] = None): F[BulkWriteResult] =
     throw Repository.notImplemented(this, "upsertKeeping")
 
+  def findOneAndReplace(entity: E, options: FindOneAndReplaceOptions[E] = FindOneAndReplaceOptions.default[E])(using
+      session: Option[ClientSession] = None
+  ): F[Option[E]] =
+    throw Repository.notImplemented(this, "findOneAndReplace")
+
+  def findOneAndDelete(key: K, options: FindOneAndDeleteOptions[E] = FindOneAndDeleteOptions.default[E])(using
+      session: Option[ClientSession] = None
+  ): F[Option[E]] =
+    throw Repository.notImplemented(this, "findOneAndDelete")
+
 object Repository:
   private def notImplemented(repository: Repository[?, ?, ?, ?], method: String): UnsupportedOperationException =
     UnsupportedOperationException(s"${repository.getClass.getName} does not implement $method; BaseMongoRepository does")

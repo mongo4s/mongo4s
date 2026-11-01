@@ -359,6 +359,8 @@ object ReadmeSnippets:
       _ <- users.updateByKeys(List("1", "2"), ageOf.inc(1))
       _ <- users.updateEach(List("1" -> Field.of[User](_.name).set("al"), "2" -> ageOf.inc(1)))
       _ <- users.upsertKeeping(fresh, List(Field.of[User](_.score).path))
+      _ <- users.findOneAndReplace(fresh.head)
+      _ <- users.findOneAndDelete("1")
     yield ()
   end handRolledNoMore
 

@@ -9,7 +9,7 @@ import org.bson.{BsonDocument, BsonInt32, BsonString}
 
 import mongo4s.cats.CatsStream
 import mongo4s.testkit.FakeRepository
-import mongo4s.operations.Update
+import mongo4s.operations.{FindOneAndReplaceOptions, Update}
 import mongo4s.{Field, PrimaryKey}
 
 import mongo4s.bson.BsonInstances.given
@@ -111,5 +111,34 @@ final class RepositoryAdditionsSpec extends AsyncWordSpec, AsyncIOSpec, Matchers
         BsonDocument("_id", BsonString("1")).append("name", BsonString("bob")),
         BsonDocument("_id", BsonString("2")),
       )
+    }
+  }
+
+  "findOneAndReplace" should {
+    "replace the entity keyed as the given one, answering the stored document before or after" in {
+      val repository = people()
+
+      for
+        _      <- repository.fake.insertMany(List(Person("1", "ann", 20), Person("2", "bob", 30)))
+        before <- repository.findOneAndReplace(Person("1", "ann", 21), FindOneAndReplaceOptions.default[Person].returningPrevious)
+        after  <- repository.findOneAndReplace(Person("2", "bob", 31))
+        absent <- repository.findOneAndReplace(Person("3", "cid", 40))
+      yield
+        (before, after, absent) shouldBe (Some(Person("1", "ann", 20)), Some(Person("2", "bob", 31)), None)
+        repository.fake.snapshot.sortBy(_.id) shouldBe List(Person("1", "ann", 21), Person("2", "bob", 31))
+    }
+  }
+
+  "findOneAndDelete" should {
+    "delete the entity under a key and answer it" in {
+      val repository = people()
+
+      for
+        _       <- repository.fake.insertMany(List(Person("1", "ann", 20), Person("2", "bob", 30)))
+        deleted <- repository.findOneAndDelete("1")
+        missing <- repository.findOneAndDelete("9")
+      yield
+        (deleted, missing) shouldBe (Some(Person("1", "ann", 20)), None)
+        repository.fake.snapshot.map(_.id) shouldBe List("2")
     }
   }

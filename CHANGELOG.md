@@ -46,8 +46,8 @@ Binary compatible with `5.0.0`, checked by MiMa.
 - **`Field.of[E](_.field)`** names only the entity and takes the field's type from the selector.
 - **Repository methods services were writing by hand**: `findOneByFilter`, `estimatedCount`, `updateByKeys` (one
   update for every listed key, batched), `updateEach` (each key its own update, one bulk write) and `upsertKeeping`
-  (an upsert that leaves the fields another writer owns as stored). Each has a body on `Repository`, so a hand-written
-  implementation keeps compiling.
+  (an upsert that leaves the fields another writer owns as stored), and `findOneAndReplace(entity)` and
+  `findOneAndDelete(key)`. Each has a body on `Repository`, so a hand-written implementation keeps compiling.
 - **`FakeRepository.direct` and `FakeMongoCollection.direct`** build a fake from a `WireCodec`, its naming included,
   and `FakeRepository` is `open`, so a service's own repository trait can mix into it.
 - **`MongoClient.ping(timeout)`**, `false` when the server does not answer in time, and in `mongo4s-cats`

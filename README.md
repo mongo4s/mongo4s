@@ -2050,14 +2050,18 @@ users.estimatedCount                                           // the collection
 users.updateByKeys(List("1", "2"), birthday)                   // one update, every listed key, batched
 users.updateEach(List("1" -> nameField.set("al"), "2" -> birthday)) // each key its own update, one bulk write
 users.upsertKeeping(fresh, List(Field.of[User](_.score).path))      // upsert, leaving score as stored
+users.findOneAndReplace(user)                                  // replace under user's key, F[Option[User]] after
+users.findOneAndDelete("1")                                    // delete under a key, F[Option[User]] it was
 ```
 
 `upsertKeeping` is for an entity some of whose fields another writer owns. Each entity is upserted with `$set` on
 every field the codec writes except the kept ones, the key and `_id`, so an existing document keeps those fields as
 they were, and a new one is inserted without them. A field the codec leaves out — a `None` — is left as stored too,
 not removed. A `Repository` written by hand rather than through `BaseMongoRepository` inherits `findOneByFilter`
-and `estimatedCount` built from its own methods; the other three need a key and a codec the trait does not have, and
-throw until it implements them.
+and `estimatedCount` built from its own methods; the others need a key and a codec the trait does not have, and
+throw until it implements them. `findOneAndReplace` answers the document after the replacement unless its options say
+`returningPrevious`, and both take the projection and sort options the collection's own do, the repository's
+`defaultProjection` applying when you give none.
 
 `bulkWrite` takes the same `BulkWriteOptions` the collection does, and `insertMany` the same `InsertManyOptions`. An
 ordered write is sent in batches, which keeps its meaning — it stops at the first failure and what came before it

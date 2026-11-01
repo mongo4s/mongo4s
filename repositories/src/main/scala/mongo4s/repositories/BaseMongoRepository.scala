@@ -166,6 +166,14 @@ open class BaseMongoRepository[F[*], S[*], E, K](
   override def updateEach(updates: Seq[(K, Update[E])])(using session: Option[ClientSession]): F[BulkWriteResult] =
     batchedResults(updates.toList)(chunk => collection.bulkWrite(chunk.map((key, update) => WriteCommand.updateOne(pk.eqFilter(key), update)))(using session))
 
+  override def findOneAndReplace(entity: E, options: FindOneAndReplaceOptions[E])(using session: Option[ClientSession]): F[Option[E]] =
+    val projected = if options.projection.isEmpty then options.withProjection(defaultProjection) else options
+    collection.findOneAndReplace(pk.eqFilter(pk.key(entity)), entity, projected)(using session)
+
+  override def findOneAndDelete(key: K, options: FindOneAndDeleteOptions[E])(using session: Option[ClientSession]): F[Option[E]] =
+    val projected = if options.projection.isEmpty then options.withProjection(defaultProjection) else options
+    collection.findOneAndDelete(pk.eqFilter(key), projected)(using session)
+
   override def upsertKeeping(entities: List[E], keep: List[FieldPath])(using session: Option[ClientSession]): F[BulkWriteResult] =
     val kept = (keep ++ pk.keyPaths).map(_.render(collection.naming)).toSet + BsonField.Id
 
