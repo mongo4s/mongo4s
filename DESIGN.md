@@ -63,7 +63,8 @@ Two type parameters, not one: `F[*]` is the effect and `S[*]` is the stream. The
 system bundles them — `cats-effect` pairs with `fs2`, ZIO ships its own `ZStream`, and the pairing is a user
 decision, not ours.
 
-Every method that reaches the server takes `(using session: Option[ClientSession] = None)`. Sessions are therefore
+Every method that reaches the server takes `(using session: Option[ClientSession] = None)` — every one, that is,
+the driver has a session overload for; `estimatedCount` and the search-index methods have none to take. Sessions are therefore
 invisible until you opt in, and *joining* a transaction requires no change at the call site — the session is given
 implicitly by `withTransaction` and picked up by every call inside the block, including repository calls that know
 nothing about transactions. The alternative — a second overload of every method taking an explicit session, which
@@ -704,7 +705,8 @@ client.withTransaction {
 ```
 
 It commits on success and rolls back on failure **and on cancellation**. The cancellation half is the whole reason
-`Effect.guaranteeCase` has the shape it does. A rollback that itself fails is attached as a suppressed exception
+`Effect.guaranteeCase` has the shape it does — and three backends keep it: the `rapid` one builds `guaranteeCase` from `attempt`, which
+sees success and failure only, so a cancelled `rapid` transaction is not rolled back. A rollback that itself fails is attached as a suppressed exception
 rather than replacing the original error.
 
 **Retries follow the driver, including which failure means what.** A `TransientTransactionError` says nothing was

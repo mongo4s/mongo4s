@@ -457,8 +457,8 @@ Binary compatible with `4.0.0`, checked by MiMa.
 - **`JDK 25` is now required to build**, and the build says so before compiling anything instead of failing on the
   fifth module with `UnsupportedClassVersionError: class file version 69.0`. `mongo4s-kyo` sets the floor — kyo's
   `Frame` macro runs inside the compiler and emits Java 25 class files — and the whole build follows it rather than
-  publishing artifacts compiled against different JDKs. This is a build-time requirement; the published artifacts
-  themselves are unaffected.
+  publishing artifacts compiled against different JDKs. The published class files still target Java 17, except that
+  `mongo4s-kyo`, like kyo itself, needs Java 25 at runtime.
 - **`Scala 3.9 LTS` is now required**, and it is the only Scala version the build uses. `mongo4s-bson-calypso`,
   `mongo4s-kyo` and `mongo4s-rapid` were pinned to a fast-release `3.8` because their dependencies needed a
   compiler newer than `3.3 LTS`; they are now on the LTS line with every other module. It takes a major version

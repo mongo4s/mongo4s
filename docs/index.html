@@ -1006,8 +1006,9 @@ given PrimaryKey[Order, (userId: String, seq: Int)] =
     <p class="muted">
         It commits on success and rolls back on failure <strong>and on cancellation</strong>: <code>Effect[F]</code>
         carries a <code>guaranteeCase</code> that sees how the action ended, so an interrupted transaction does not
-        linger on the server until it is reaped. A rollback that itself fails is attached as a suppressed exception
-        rather than replacing the error that caused it.
+        linger on the server until it is reaped — on cats, zio and kyo; the rapid backend's <code>guaranteeCase</code>
+        sees success and failure only. A rollback that itself fails is attached as a suppressed exception rather than replacing
+        the error that caused it.
     </p>
     <p>
         Reusing one already-open session across more than one transaction? The same behaviour is on the session
@@ -2730,7 +2731,8 @@ findOne     0.129 ms/op → ~7,750 ops/s</code></pre>
         user decision.
     </p>
     <p class="muted">
-        Every method that reaches the server takes <code>(using session: Option[ClientSession] = None)</code>.
+        Every method that reaches the server and has a driver session overload takes
+        <code>(using session: Option[ClientSession] = None)</code>.
         Sessions are invisible until you opt in, and joining a transaction requires no change at the call site — the
         session is given implicitly by <code>withTransaction</code> and picked up by every call inside the block,
         including repository calls that know nothing about transactions. The alternative — a second overload of every

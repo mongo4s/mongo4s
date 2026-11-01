@@ -15,6 +15,10 @@ measured on 2026-11-01 on the `5.1.0` build, on the same machine:
 | Docker | Docker Desktop, engine 29.8.2, Linux VM kernel `7.0.14-linuxkit` |
 | Server | `mongo:8.2` (`8.2.12`) in Docker, `localhost:27018`, single node; `mongo:7` (`7.0.40`) where stated |
 
+A run command's `-f` overrides the harness's own fork count; warmup and measurement come from its annotations unless
+the command says otherwise — five one-second warmups and ten one-second measurements for the codec, scalar and
+error-translation harnesses, three and five of two seconds for the ones that talk to a server.
+
 These are directional ballparks from one laptop, not hardware-independent authorities — an M4 Max has no
 hyper-threading and a memory system unlike a typical server's, and the MongoDB numbers cross a loopback socket
 rather than a network. Run them on your own hardware before making decisions on the numbers alone.
@@ -185,7 +189,7 @@ straight to the wire, and the same codec bridged through a `BsonDocument`, which
 `create` or `withoutId` over `DocumentCodecBridge` runs.
 
 ```bash
-sbt "benchmarks/Jmh/run -f 2 -prof gc WideEntityBenchmark"
+sbt "benchmarks/Jmh/run -f 2 -i 5 -wi 3 -r 2 -w 1 -prof gc WideEntityBenchmark"
 ```
 
 | Direction | `WireCodec`, direct | `WireCodec` through a `BsonDocument` |
@@ -215,7 +219,8 @@ the control, its code untouched, and moved by less than 1%.
 
 A `Filter` or an `Update` is rendered once per query, not once per document, so it rarely shows; it does on a bulk
 write, where every model renders its own. [`RenderBenchmark`](benchmarks/src/main/scala/mongo4s/benchmarks/RenderBenchmark.scala)
-renders a five-condition filter and a ten-operator update, every field renamed by `snakeCase`. The two columns are
+renders a five-condition filter and a ten-operator update, every field renamed by `snakeCase`, run with
+`sbt "benchmarks/Jmh/run -f 2 -i 5 -wi 3 -r 2 -w 1 -prof gc RenderBenchmark"`. The two columns are
 `5.0.1` and `5.1.0`, which renames without boxing a `Char` per letter and checks an update's paths for overlap without
 splitting every path into arrays:
 
@@ -344,7 +349,8 @@ docker run -d --name mongo4s-bench -p 27018:27017 mongo:8.2
 sbt "benchmarks/Jmh/run -tu s -f 3 .*RuntimeBenchmark.*"
 ```
 
-**Throughput — operations per second, higher is better**
+**Throughput — operations per second, higher is better.** The `mongo4s` columns read through `getCollection` with
+the `medeia` bridge, the `mongo4cats` columns through its circe codec; the workload is otherwise the same.
 
 | Operation | mongo4s-cats | mongo4s-zio | mongo4s-rapid | mongo4s-kyo | mongo4cats-cats | mongo4cats-zio |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |

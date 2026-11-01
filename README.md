@@ -52,7 +52,7 @@ flowchart LR
 ## Quick start
 
 Pick a runtime. The default codec (`bson-direct`) derives straight from your case class — AST-free, no
-third-party codec library, no extra dependency beyond `mongo4s-core` itself:
+third-party codec library, nothing beyond `mongo4s-core`, which brings it in:
 
 ```scala
 libraryDependencies ++= Seq(
@@ -179,7 +179,8 @@ trait MongoCollection[F[*], S[*], A]:
 // dropIndexes, renameCollection, drop, ...
 ```
 
-Every method that reaches the server takes an optional `ClientSession` and defaults to `None`, so none of that is
+Every method that reaches the server takes an optional `ClientSession` and defaults to `None` — every one the driver
+has a session overload for, which leaves out `estimatedCount` and the search-index methods — so none of that is
 visible until you opt into [a transaction](#sessions--transactions).
 
 ### Field selectors
@@ -877,7 +878,9 @@ is written, not when it runs, so `val write = users.insertOne(user)` outside the
 `write` runs inside it. Write the call inside the body, or build it in a function that takes the session.
 
 It commits on success and rolls back on failure **and on cancellation**: `Effect[F]` carries a `guaranteeCase` that
-sees how the action ended, so an interrupted transaction does not linger on the server until it is reaped. A
+sees how the action ended, so an interrupted transaction does not linger on the server until it is reaped. That holds
+on `cats`, `zio` and `kyo`. The `rapid` backend builds `guaranteeCase` from `attempt`, which sees success and failure
+only, so a cancelled `rapid` transaction is left to the server's timeout rather than rolled back. A
 rollback that itself fails is attached as a suppressed exception rather than replacing the error that caused it.
 
 It also **retries**, the way the driver's own `withTransaction` does. A `TransientTransactionError` means nothing
