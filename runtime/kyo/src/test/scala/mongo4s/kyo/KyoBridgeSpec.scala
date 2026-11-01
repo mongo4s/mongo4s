@@ -105,9 +105,10 @@ final class KyoBridgeSpec extends AnyWordSpec, Matchers:
       val program = effect.flatMap(effect.pure(2))(a => effect.map(effect.pure(3))(_ * a))
       run(program) shouldBe 6
     }
-    "evaluate delay's thunk (eagerly - see the KNOWN LIMITATION note on KyoEffectInstance)" in {
+    "defer delay's thunk until the program runs" in {
       var evaluated = false
       val io        = effect.delay { evaluated = true; 42 }
+      evaluated shouldBe false
       run(io) shouldBe 42
       evaluated shouldBe true
     }

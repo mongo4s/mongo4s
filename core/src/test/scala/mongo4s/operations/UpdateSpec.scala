@@ -239,8 +239,11 @@ final class UpdateSpec extends AnyWordSpec, Matchers:
 
   "naming" should {
     "apply to derived field names" in {
-      Update.set(nameField, "bob").toBson(FieldNaming.snakeCase).toJson shouldBe """{"$set": {"name": "bob"}}"""
-      Update.inc(ageField, 1).toBson(FieldNaming.snakeCase).toJson shouldBe """{"$inc": {"age": 1}}"""
+      val lastSeen = Field.of[Person](_.lastSeen)
+
+      Update.unset(lastSeen).toBson(FieldNaming.snakeCase).toJson shouldBe """{"$unset": {"last_seen": ""}}"""
+      Update.set(nameField, "bob").and(Update.unset(lastSeen)).toBson(FieldNaming.snakeCase).toJson shouldBe
+        """{"$set": {"name": "bob"}, "$unset": {"last_seen": ""}}"""
     }
   }
 

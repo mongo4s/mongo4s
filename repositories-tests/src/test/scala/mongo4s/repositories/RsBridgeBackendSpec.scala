@@ -274,6 +274,16 @@ trait RsBridgeBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers, TimeLimits:
       attempt(timed.unit(publisher)).isLeft shouldBe true
       eventuallyCancelled(publisher.cancelled) shouldBe true
     }
+
+    "release the subscription of a single-result call when it times out" in {
+      val one    = NeverPublisher()
+      val option = NeverPublisher()
+
+      attempt(timed.one(one)).isLeft shouldBe true
+      attempt(timed.option(option)).isLeft shouldBe true
+      eventuallyCancelled(one.cancelled) shouldBe true
+      eventuallyCancelled(option.cancelled) shouldBe true
+    }
   }
 
   private def eventuallyCancelled(flag: AtomicBoolean): Boolean =

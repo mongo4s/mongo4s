@@ -536,6 +536,16 @@ object ReadmeSnippets:
 
     final case class Person(firstName: String, lastName: String) derives WireCodec
 
+  object catsData:
+    import cats.data.NonEmptyList
+
+    import mongo4s.bson.catsdata.CatsDataWireInstances.given
+    import mongo4s.bson.catsdata.CatsDataBsonInstances.given
+
+    final case class Team(members: NonEmptyList[String]) derives WireCodec
+
+    val alone = Field.of[Team](_.members).equalTo(NonEmptyList.one("ann"))
+
   object shapedSums:
     given WireCodecConfig = WireCodecConfig.Default
       .withDiscriminatorField("kind")

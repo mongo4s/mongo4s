@@ -95,9 +95,11 @@ final class OperatorsSpec extends AnyWordSpec, Matchers:
     }
 
     "route field references through the naming policy" in {
-      val stage = Stage.groupAll[Order]("total" -> Accumulator.sum(totalField))
+      final case class Invoice(grandTotal: Int)
 
-      stage.toBson(FieldNaming.snakeCase).toJson shouldBe """{"$group": {"_id": null, "total": {"$sum": "$total"}}}"""
+      val stage = Stage.groupAll[Invoice]("total" -> Accumulator.sum(Field.of[Invoice](_.grandTotal)))
+
+      stage.toBson(FieldNaming.snakeCase).toJson shouldBe """{"$group": {"_id": null, "total": {"$sum": "$grand_total"}}}"""
     }
   }
 

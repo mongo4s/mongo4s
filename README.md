@@ -112,6 +112,8 @@ arguments, so they have to be written out) — see [BSON codecs](#bson-codecs) b
 Already have a `MongoClientSettings` built elsewhere (connection pool tuning, read/write concerns, TLS, credentials,
 …)? Use `MongoClientResource.fromSettings` instead of `fromConnectionString`. `MongoClient.fromClient`/`fromSettings`/
 `fromConnectionString` give you the same thing unwrapped, if you'd rather own `.close` yourself.
+`MongoClientResource.fromClient(client)` takes the driver client over: releasing the resource closes it, so hand it
+a client nothing else is still using.
 
 `client.ping(timeout)` asks the server for `{ping: 1}` and answers whether it replied in time — `false` rather than a
 failure when it did not, the timeout applied by the driver itself. For a readiness check that should not wait on the
@@ -156,7 +158,7 @@ your effect `F[_]` and stream type `S[_]`:
 
 ```scala
 trait MongoCollection[F[*], S[*], A]:
-  def insertOne(document: A)(using session: Option[ClientSession] = None): F[InsertOneResult]
+  def insertOne(document: A, options: InsertOneOptions = InsertOneOptions.default)(using session: Option[ClientSession] = None): F[InsertOneResult]
 
   def find(filter: Filter[A] = Filter.all)(using session: Option[ClientSession] = None): FindQuery[F, S, A]
 
@@ -168,7 +170,7 @@ trait MongoCollection[F[*], S[*], A]:
 
   def aggregate[B](pipeline: Seq[Stage[A]])(using session: Option[ClientSession] = None)(using BsonDocumentDecoder[B]): AggregateQuery[F, S, B]
 
-  def distinct[B](field: Field[A, B], filter: Filter[A] = Filter.all)(using session: Option[ClientSession] = None)(using BsonDecoder[B]): DistinctQuery[F, S, B]
+  def distinct[C, B](field: Field[A, C], filter: Filter[A] = Filter.all)(using session: Option[ClientSession] = None)(using DistinctOf[C, B], BsonDecoder[B]): DistinctQuery[F, S, B]
 
   def createIndex(index: Index[A])(using session: Option[ClientSession] = None): F[String]
 
@@ -309,6 +311,7 @@ itemsField.pullWhere(qtyField.lt(1))         // $pull by a condition on the elem
 scoresField.pullWhere(Field.self[Int].gte(6)) // ...or on a scalar element itself
 Update.setOnInsert(nameField, "") // $setOnInsert, for merge-style upserts
 Update.rename(oldField, newField) // $rename — also currentDate, popFirst/popLast
+Update.pullAll(tagsField, List("a", "b"))     // $pullAll; Update.addAllToSet is $addToSet with $each
 Update.currentTimestamp(syncedField) // $currentDate as a BSON timestamp, on a Field[E, BsonTimestamp]
 flagsField.bitOr(4)               // $bit — also bitAnd, bitXor
 ```
@@ -807,7 +810,10 @@ given PrimaryKey[Link, (Provider, ProviderId)]       = PrimaryKey.of(_.provider,
 given PrimaryKey[Link, (Provider, ProviderId, Kind)] = PrimaryKey.of(_.provider, _.providerId, _.kind)
 ```
 
-Filters, keyset paging and `ensureKeyIndex` all spell such a key through the naming.
+Filters, keyset paging and `ensureKeyIndex` all spell such a key through the naming. Given a key in scope,
+`entity.primaryKeyFilter` and `entities.primaryKeysFilter` (from `PrimaryKey.primaryKeyFilter`/`primaryKeysFilter`)
+are the filters on one entity's key and on several; `PrimaryKey` is a `KeyRef`, the part of a key that knows only
+names and values, which is what `eqFilter`, `inFilter`, `afterFilter` and `keyOrder` are built on.
 
 A compound key is a **named tuple**, so its labels are the field names — there is no second list of strings to keep
 in step with the extractors, and no arity ceiling. The labels are Scala identifiers; the optional `FieldNaming`
@@ -985,7 +991,8 @@ Stage.groupBy(cityField)(
 )
 ```
 
-`top`/`bottom` and their `N` forms rank by the `Sort` they are given and output one field; `firstN`/`lastN` follow
+`Stage.groupAll(accumulators*)` is the same stage over the whole input as one group, `_id: null`. `top`/`bottom` and
+their `N` forms rank by the `Sort` they are given and output one field; `firstN`/`lastN` follow
 the order the documents arrive in, so sort before the group if that order matters. `firstN`, `lastN` and the ranking
 forms keep a missing value as `null`, while `maxN`/`minN` skip it. `median`, `percentile` and the standard
 deviations compile only on a numeric field, and the first two always ask for the server's only method,
@@ -1124,7 +1131,7 @@ itemsField.expr.map(item => item.get(itemPrice) * item.get(itemQty))
 ```
 
 The element is MongoDB's `$$this`; nesting one `filter` or `map` inside another needs `filterAs`/`mapAs` with a name of
-its own, so the inner one does not hide the outer.
+its own, so the inner one does not hide the outer. `Expr.array(a, b, c)` builds an array from expressions of one type.
 
 Three things the Scala syntax decides rather than the library. `->` binds tighter than `>`, so a `switch` branch whose
 condition is a comparison needs parentheses — `(qtyField.expr > Expr.lit(10)) -> Expr.lit("big")`. ScalaTest's
@@ -1373,7 +1380,8 @@ collection.aggregate[Movie](
 )
 ```
 
-`SearchOperator` also has `phrase`, `autocomplete`, `wildcard`, `regex`, `equalTo`, `below` and `exists`.
+`SearchOptions.default.withIndex("movies")` names the search index when it is not `default`. `SearchOperator` also has
+`phrase`, `autocomplete`, `wildcard`, `regex`, `equalTo`, `below` and `exists`.
 `$searchMeta` takes the same operator and answers with counts instead of documents. `$vectorSearch` finds the nearest
 documents to a vector, among `numCandidates` approximate ones or exactly with `exactVectorSearch`, optionally narrowed
 by a `Filter` on the fields the index declared with `filteringOn`:
@@ -1701,7 +1709,7 @@ annotation, and cannot read a config.
 `FieldNaming` applies per *derived* segment only. Stored names — `Field.stored`, a `PrimaryKey`'s field names, a
 `$lookup`'s foreign field given as a string, map keys — are used verbatim. `FieldNaming.snakeCase` splits on every capital, so
 `userID` becomes `user_i_d`; `FieldNaming.overrides(Map("userID" -> "userId"), fallback = snakeCase)` is the way out
-of that.
+of that. `FieldNaming.kebabCase` is the same split with `-`, and `FieldNaming.identity` the default.
 
 One field of one class is renamed with `@stored`, and kept out of the document with `@notStored`:
 
@@ -1843,6 +1851,10 @@ WireCodec`, or a `ScalarWireCodec` in its companion — wins over that bridge.
 
 #### `ScalarWireCodec` — one codec for documents and for queries
 
+The rule to keep in mind: a document is written and read by a `WireCodec`, and a value inside a query — a filter, an
+update, a key, a `selectAs` — by a `BsonEncoder`/`BsonDecoder`. A `ScalarWireCodec` is both, so a scalar type
+needs nothing more; a document-shaped type that appears inside a query needs `toBsonCodec`, below.
+
 An opaque type over a primitive (`opaque type UserId = String`) needs a `WireCodec[UserId]` to be written into and
 read from documents, a `BsonEncoder[UserId]` for `Field.of[...].equalTo` and `PrimaryKey.single`, and a
 `BsonDecoder[UserId]` for `selectAs` and `distinct`. A `ScalarWireCodec[A]` — the type every primitive in
@@ -1912,11 +1924,18 @@ instances from `mongo4s-bson-cats-data`, delegating to the already-existing `Lis
 rather than reimplementing `BSON` encoding:
 
 ```scala
-import mongo4s.bson.catsdata.CatsDataBsonInstances.given // or CatsDataWireInstances.given for bson-direct
 import cats.data.NonEmptyList
+import mongo4s.bson.direct.WireCodec
 
-final case class Team(members: NonEmptyList[String]) derives MedeiaDocumentCodec // or your codec backend's own derives
+import mongo4s.bson.catsdata.CatsDataWireInstances.given // the WireCodecs a derived entity needs
+import mongo4s.bson.catsdata.CatsDataBsonInstances.given // the BsonEncoder/BsonDecoder a filter or update needs
+
+final case class Team(members: NonEmptyList[String]) derives WireCodec
 ```
+
+Neither import is found on its own; both are `mongo4s` instances. A model derived by `medeia`, `zio-bson` or `calypso`
+needs that library's own instance for `NonEmptyList`: the bridges carry a backend's codecs into `mongo4s`, not
+`mongo4s`'s back into the backend.
 
 `NonEmptySet`/`NonEmptyMap` additionally need a `cats.Order` for their element/key type — the same `Order` you'd
 already need to construct one of these types directly.
@@ -1968,6 +1987,9 @@ takes a field and a value, `…ByFilter` takes a whole `Filter`. `findByField`/`
 `deleteByField`/`deleteByFilter` write to every row that matches:
 
 ```scala
+users.exists("1")                                 // F[Boolean], by key
+users.updateField("1", ageField, 31)              // one field of one entity, by key
+users.getAll                                      // every entity, as a stream
 users.findByField(nameField, "alice")             // List[User]
 users.getByField(nameField, "alice")              // the same, as a stream
 users.updateByField(ageField, 30, birthday)       // every 30-year-old
@@ -2172,7 +2194,13 @@ in BSON's order — `null` below numbers, numbers below strings, and so on up to
 only values of its operand's type, element by element through an array; a sort treats a missing field as `null` and
 an array by its smallest element ascending and its largest descending; `$min`/`$max` replace across types; and a
 group's `$min`/`$max` skip `null`. A field holding `null` — which every codec but the direct one writes for a
-`None` — sorts and filters as it does on the server rather than failing the test. A duplicate in `insertMany` or a
+`None` — sorts and filters as it does on the server rather than failing the test.
+
+A few rare shapes it still answers differently, and a test that leans on one needs the server: `$size`, `$type`,
+`$mod` and the `$bits` operators do not look into an array of documents; a numeric path segment (`items.0.qty`) is
+read as a field called `0`; `$pull` by a document compares for equality, where the server reads the document as a
+query on each element; a negative `$position` prepends; `$in` holding a regular expression never matches; and a
+projection or `distinct` over a dotted path through an array drops the field. A duplicate in `insertMany` or a
 `bulkWrite` is a `BulkWriteFailed` naming the command, after the writes before it — and, unordered, the writes after
 it too. A unique index is enforced, sparse and partial ones included, and is named as the server names it
 (`email_1`), so `dropIndex` finds it. `listIndexes` describes each index as the server does — `v`, `key`, `name` and
@@ -2207,7 +2235,14 @@ Atlas Search's indexes and stages, a tailable cursor, `$jsonSchema`, the geospat
 collation anywhere it is accepted, an update carrying `arrayFilters`, a unique index over an array field, every
 aggregation stage outside the list above, `$median` and `$percentile`, whose `approximate` method only the server
 knows, and the `$addToSet` *accumulator*, which is refused on purpose: MongoDB leaves the order of its result
-undefined, so no fake can be faithful to it.
+undefined, so no fake can be faithful to it. `$inc`, `$mul`, `$sum` and `$avg` over a `Decimal128` are refused as
+well, since the rounding is the server's to define.
+
+Two kinds of option are not refused. A `sort` on `updateMany` throws `IllegalArgumentException`, as the real
+collection does, because the server has no such option. And the options that only tune how the server runs a query —
+`hint`, `maxTime`, `batchSize`, `comment`, `allowDiskUse`, `maxAwaitTime`, `noCursorTimeout` — are accepted and
+ignored, since they cannot change the answer; so is `let`, whose variables only an expression could read, and
+expressions are refused.
 
 Upserts insert on a miss the way the server does, whether they replace or update — `updateOne`, `updateMany`,
 `findOneAndUpdate`, `findOneAndReplace`, `replaceOne` and their `bulkWrite` commands. An update builds the new
@@ -2260,8 +2295,9 @@ and `given RsBridge[F, S]` (Reactive-Streams `Publisher` → `F`/`S`):
 | `mongo4s-rapid` | `rapid.Task` | `rapid.Stream` | |
 
 Beyond the members a runtime has to supply, `Effect` carries defaults it may override with its own: `monotonic` and
-`sleep` — the pause between transaction retries — read the runtime's clock and scheduler on all four backends
-instead of `System.nanoTime` and a blocked thread.
+`sleep` — the pause between transaction retries. All four backends sleep on the runtime's scheduler rather than a
+blocked thread; `cats` and `zio` also read the runtime's clock for `monotonic`, while `kyo` and `rapid` keep the
+default, `System.nanoTime`, which a test clock of theirs does not move.
 
 `MongoClient.fromClient`/`fromSettings`/`fromConnectionString` return a bare `F[MongoClient[F, S]]` — you own calling
 `.close`. Every runtime module also ships `MongoClientResource` with the same three constructor names, wrapped in
@@ -2324,7 +2360,10 @@ given RsBridgeConfig = RsBridgeConfig.default
 
 `bufferSize` bounds memory against a fast cursor. On `cats` and `kyo` it does not apply to `all`, which asks for
 everything by definition; `zio` and `rapid` read `all` through the same buffered source as a stream, so it applies
-there. `timeout` is a backstop for a cursor that stops signalling entirely — the driver has its own timeouts,
+there. On `cats` it is also how many documents a stream gathers before it emits the first: fs2 hands a `Publisher`'s
+elements on in chunks of that size, so with the default of 256, `find().stream.take(1)` reads 256 documents — or the
+whole result, if smaller — before it answers. A stream read for its first few elements, or processed one document at
+a time as they arrive, wants a smaller `bufferSize`; change streams already use a buffer of one. `timeout` is a backstop for a cursor that stops signalling entirely — the driver has its own timeouts,
 and streams are deliberately excluded, since a change stream sitting idle is working rather than stuck.
 `strictSingleResult` is off by default, matching the driver.
 
@@ -2409,7 +2448,7 @@ What changed in each release: **[CHANGELOG.md](CHANGELOG.md)**. What is not cove
 
 ## Benchmarks
 
-Six JMH harnesses in [`benchmarks/`](benchmarks), against `mongo4cats` `0.8.0` as a reference point. The short
+Eight JMH harnesses in [`benchmarks/`](benchmarks), against `mongo4cats` `0.8.0` as a reference point. The short
 version: `bson-direct`'s `WireCodec` writes and reads real BSON bytes **2.4–3.2×** faster than either `mongo4cats`
 codec and allocates up to **6.4×** less; against a real `MongoDB` the single-document operations land level for all
 six stacks, while bulk reads pull ahead — `mongo4cats` allocates **2.1–6.0×** more on `findAll`/`findStream`, reads

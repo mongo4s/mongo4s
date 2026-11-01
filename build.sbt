@@ -283,6 +283,7 @@ lazy val examples = project
     bsonZio,
     bsonCalypso,
     bsonDirect,
+    bsonCatsData,
   )
 
 lazy val benchmarks = project

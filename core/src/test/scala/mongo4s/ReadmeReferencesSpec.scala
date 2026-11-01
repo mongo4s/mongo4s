@@ -52,6 +52,14 @@ object ReadmeReferencesSpec:
     "UpdateOptions"            -> "core/src/main/scala/mongo4s/operations/UpdateOptions.scala",
     "VectorSimilarity"         -> "core/src/main/scala/mongo4s/operations/SearchIndex.scala",
     "WatchOptions"             -> "core/src/main/scala/mongo4s/changestream/WatchOptions.scala",
+    "BaseMongoRepository"      -> "repositories/src/main/scala/mongo4s/repositories/BaseMongoRepository.scala",
+    "DocumentCodecBridge"      -> "bson/direct/src/main/scala/mongo4s/bson/direct/DocumentCodecBridge.scala",
+    "FakeMongoCollection"      -> "testkit/src/main/scala/mongo4s/testkit/FakeMongoCollection.scala",
+    "FakeRepository"           -> "testkit/src/main/scala/mongo4s/testkit/FakeRepository.scala",
+    "KeyCodec"                 -> "bson/direct/src/main/scala/mongo4s/bson/direct/KeyCodec.scala",
+    "MongoClientResource"      -> "runtime/cats/src/main/scala/mongo4s/cats/MongoClientResource.scala",
+    "ScalarWireCodec"          -> "bson/direct/src/main/scala/mongo4s/bson/direct/ScalarWireCodec.scala",
+    "WireCodec"                -> "bson/direct/src/main/scala/mongo4s/bson/direct/WireCodec.scala",
     "WindowFunction"           -> "core/src/main/scala/mongo4s/operations/Window.scala",
     "WireCodecConfig"          -> "bson/direct/src/main/scala/mongo4s/bson/direct/WireCodecConfig.scala",
     "WriteCommand"             -> "core/src/main/scala/mongo4s/operations/WriteCommand.scala",
@@ -83,6 +91,21 @@ final class ReadmeReferencesSpec extends AnyWordSpec, Matchers:
     then Set.empty
     else definition.findAllMatchIn(Files.readString(file)).map(_.group(1)).toSet
 
+  private val inlineCode = raw"`([^`\n]+)`".r
+  private val htmlCode   = raw"(?s)<code>(.*?)</code>".r
+
+  private def unescaped(html: String): String =
+    html.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&mdash;", "—").replace("&amp;", "&")
+
+  private def undefined(snippets: List[String]): List[String] =
+    (for
+      snippet  <- snippets
+      m        <- reference.findAllMatchIn(snippet).toList
+      source   <- known.get(m.group(1)).toList
+      available = members(source)
+      if !available.contains(m.group(2))
+    yield s"${m.group(1)}.${m.group(2)}").distinct
+
   "every mongo4s name the README's Scala blocks mention" should {
 
     "exist in the code" in {
@@ -95,17 +118,27 @@ final class ReadmeReferencesSpec extends AnyWordSpec, Matchers:
         known.values.filterNot(source => Files.exists(Path.of(source))) shouldBe empty
       }
 
-      val missing =
-        for
-          block    <- blocks
-          m        <- reference.findAllMatchIn(block).toList
-          source   <- known.get(m.group(1)).toList
-          available = members(source)
-          if !available.contains(m.group(2))
-        yield s"${m.group(1)}.${m.group(2)}"
+      val missing = undefined(blocks)
 
-      withClue(s"named in README but not defined in the source that owns it: ${missing.distinct.mkString(", ")} — ") {
-        missing.distinct shouldBe empty
+      withClue(s"named in README but not defined in the source that owns it: ${missing.mkString(", ")} — ") {
+        missing shouldBe empty
+      }
+    }
+  }
+
+  "every mongo4s name the README's prose and the website mention" should {
+
+    "exist in the code too" in {
+      val prose   = inlineCode.findAllMatchIn(Files.readString(Path.of("README.md"))).map(_.group(1)).toList
+      val website = htmlCode.findAllMatchIn(Files.readString(Path.of("docs/index.html"))).map(m => unescaped(m.group(1))).toList
+
+      prose should not be empty
+      website should not be empty
+
+      val missing = undefined(prose ++ website)
+
+      withClue(s"named in the README's prose or on the website but not defined in the source that owns it: ${missing.mkString(", ")} — ") {
+        missing shouldBe empty
       }
     }
   }

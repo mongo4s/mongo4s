@@ -662,7 +662,7 @@ collection.insertOne(other)      // still the client's default</code></pre>
         For more examples see:
         <a href="https://github.com/mongo4s/mongo4s/tree/main/examples/src/main/scala/mongo4s/examples">examples/src/main/scala/mongo4s/examples</a>
         — a shared domain model (opaque types, enums, nested case classes) run through every runtime/codec combination
-        (cats+medeia, ZIO+zio-bson, kyo+medeia, rapid+calypso), a repository example covering all three
+        (cats+medeia, ZIO+zio-bson, kyo+medeia, rapid+calypso), a repository example covering four
         <code>BaseMongoRepository</code> construction styles against bson-direct, and a sessions/transactions + typed
         aggregation pipeline example on cats+medeia. Most of what this page shows is compiled there too —
         <a href="https://github.com/mongo4s/mongo4s/blob/main/examples/src/main/scala/mongo4s/examples/ReadmeSnippets.scala"><code>ReadmeSnippets.scala</code></a>
@@ -1516,25 +1516,20 @@ yield ()</code></pre>
     <p>
         The trade for that speed is strictness: derivation requires every modelled field to be present, unless its
         decoder supplies a default — which <code>Option</code> does. So a <strong>projection that drops a field the
-        entity declares cannot be read back</strong> through a direct collection. Use <code>getCollection</code> with a
-        <code>BsonDocumentCodec</code>, or model the projected shape as its own type, when you need partial reads.
+        entity declares cannot be read back</strong> as the entity; <code>selectAs</code> reads it as the smaller
+        shape it is (see <a href="#partial-reads">Partial reads</a>).
     </p>
     <p>
-        Strictness extends to BSON numeric types. A <code>Long</code> field is read with <code>readInt64</code>, an
-        <code>Int</code> with <code>readInt32</code>, a <code>Double</code> with <code>readDouble</code> — the exact
-        type the encoder writes. So a document that stores <code>42</code> as an Int32 (written by
-        <code>mongosh</code>, by a <code>$inc</code>, or by another client) decodes fine through
-        <code>getCollection</code>, whose <code>BsonDecoder[Long]</code> accepts any whole number, and
-        <strong>fails</strong> through <code>getDirectCollection</code>. The failure is an ordinary
-        <code>BsonError</code>, so <code>attempting</code> reports it per document like any other decode error. If a
-        collection holds mixed numeric widths for the same field, read it through <code>getCollection</code>.
+        Numbers are not part of that strictness. A <code>Long</code> field reads an Int32 as well as an Int64, and every
+        numeric width converts the way <code>getCollection</code>'s <code>BsonDecoder</code> converts it, refusing only
+        what would lose information — so a document that stores <code>42</code> as an Int32 (written by
+        <code>mongosh</code>, by a <code>$inc</code>, or by another client) reads the same through either collection.
     </p>
     <p class="muted">
-        <code>aggregate</code>/<code>distinct</code> still go through
-        <code>BsonDocumentCodec</code>/<code>BsonDecoder</code>
-        on a direct collection (their output shape isn't <code>A</code>, and they're not the hot path); everything
-        else — <code>Filter</code>/<code>Update</code>/<code>Field</code> construction — is identical regardless of
-        which codec backs the collection.
+        <code>aggregateDirect</code> reads a pipeline's output through a <code>WireCodec</code> of its own shape;
+        <code>aggregate</code> and <code>distinct</code> go through <code>BsonDocumentCodec</code>/<code>BsonDecoder</code>.
+        Everything else — <code>Filter</code>/<code>Update</code>/<code>Field</code> construction — is identical
+        regardless of which codec backs the collection.
     </p>
 
     <h4>Field naming</h4>
@@ -1714,10 +1709,17 @@ val result: Either[ValidationError, Approved] = ...</code></pre>
         <code>List</code>/<code>Vector</code>/<code>Set</code>/<code>Map</code>
         instances rather than reimplementing BSON encoding:
     </p>
-    <pre><code>import mongo4s.bson.catsdata.CatsDataBsonInstances.given // or CatsDataWireInstances.given for bson-direct
-import cats.data.NonEmptyList
+    <pre><code>import cats.data.NonEmptyList
+import mongo4s.bson.direct.WireCodec
 
-final case class Team(members: NonEmptyList[String]) derives MedeiaDocumentCodec // or your codec backend's own derives</code></pre>
+import mongo4s.bson.catsdata.CatsDataWireInstances.given // the WireCodecs a derived entity needs
+import mongo4s.bson.catsdata.CatsDataBsonInstances.given // the BsonEncoder/BsonDecoder a filter or update needs
+
+final case class Team(members: NonEmptyList[String]) derives WireCodec</code></pre>
+    <p class="muted">
+        Neither import is found on its own. A model derived by medeia, zio-bson or calypso needs that library's own
+        instance for <code>NonEmptyList</code>: the bridges carry a backend's codecs into mongo4s, not the other way.
+    </p>
     <p class="muted">
         <code>NonEmptySet</code>/<code>NonEmptyMap</code> additionally need a <code>cats.Order</code> for their
         element/key type — the same <code>Order</code> you'd already need to construct one of these types directly.
@@ -1966,9 +1968,10 @@ yield number</code></pre>
     </table>
     <p class="muted">
         Beyond the members a runtime has to supply, <code>Effect</code> carries defaults it may override:
-        <code>monotonic</code> and <code>sleep</code> &mdash; the pause between transaction retries &mdash; read the
-        runtime's own clock and scheduler on all four backends instead of <code>System.nanoTime</code> and a blocked
-        thread.
+        <code>monotonic</code> and <code>sleep</code> &mdash; the pause between transaction retries. All four backends
+        sleep on the runtime's scheduler rather than a blocked thread; <code>cats</code> and <code>zio</code> also read
+        the runtime's clock for <code>monotonic</code>, while <code>kyo</code> and <code>rapid</code> keep
+        <code>System.nanoTime</code>.
     </p>
     <p>
         <code>MongoClient.fromClient</code>/<code>fromSettings</code>/<code>fromConnectionString</code> return a bare
@@ -2151,7 +2154,7 @@ given RsBridgeConfig = RsBridgeConfig.default
         methods say what they take, and its inserts return the entity's key.
     </p>
     <p class="muted">
-        The full migration guides, 3.x → 4.0 and 2.x → 3.0, including the corrected behaviours, are in
+        The full migration guides, 4.x → 5.0, 3.x → 4.0 and 2.x → 3.0, including the corrected behaviours, are in
         <a href="https://github.com/mongo4s/mongo4s/blob/main/COMPATIBILITY.md">COMPATIBILITY.md</a>; what changed in
         each release is in <a href="https://github.com/mongo4s/mongo4s/blob/main/CHANGELOG.md">CHANGELOG.md</a>; what
         is not covered yet and how it will land is in
@@ -2176,7 +2179,7 @@ given RsBridgeConfig = RsBridgeConfig.default
 
     <h2 id="benchmarks">Benchmarks</h2>
     <p>
-        Six JMH harnesses in <code>benchmarks/</code>, against mongo4cats as a reference point. Everything below was
+        Eight JMH harnesses in <code>benchmarks/</code>, against mongo4cats as a reference point. Everything below was
         measured in one evening (2026-10-12) on mongo4s <code>4.1.0</code>, on an <strong>Apple M4 Max</strong>
         (14 cores, 36 GB), macOS 26.7.1, <strong>OpenJDK 25.0.4.1</strong>, Scala 3.9.0, JMH 1.37, with
         <code>mongo:8.2</code> (8.2.12) in Docker Desktop (engine 29.8.2) on <code>localhost:27018</code>. Directional
@@ -2823,11 +2826,10 @@ findOne     0.129 ms/op → ~7,750 ops/s</code></pre>
     <p class="muted">
         <strong>It is strict by construction, and that is a trade, not an oversight.</strong> Derivation requires
         every modelled field to be present unless its decoder supplies a default (<code>Option</code> does), so a
-        projection that drops a modelled field cannot be read back through a direct collection — use
-        <code>getCollection</code> with a <code>BsonDocumentCodec</code>, or model the projected shape as its own
-        type. Strictness catches the far more common bug, which is a document that quietly lost a field.
-        <code>aggregate</code> and <code>distinct</code> still go through <code>BsonDocumentCodec</code>, because
-        their output shape is not <code>A</code> and they are not the hot path.
+        projection that drops a modelled field cannot be read back as the entity — <code>selectAs</code> reads the
+        smaller shape instead. Strictness catches the far more common bug, which is a document that quietly lost a
+        field. <code>aggregateDirect</code> reads a pipeline's output through a <code>WireCodec</code>;
+        <code>aggregate</code> and <code>distinct</code> go through <code>BsonDocumentCodec</code>.
     </p>
 
     <h3 id="design-ast">The query AST</h3>
@@ -3081,7 +3083,7 @@ findOne     0.129 ms/op → ~7,750 ops/s</code></pre>
         </li>
         <li><strong>A circe bridge.</strong> There is no <code>mongo4s-bson-circe</code> module, and there is not going
             to be one. circe is a JSON codec: routing an entity through it is the same trip the benchmarks measure at
-            2.5–5× slower on decode, the cost mongo4s exists to remove. A model already on circe should get a
+            1.9–3.5× slower on decode, the cost mongo4s exists to remove. A model already on circe should get a
             <code>BsonDocumentCodec[A]</code> written against BSON directly.
         </li>
         <li><strong>Streaming bulk inputs.</strong> <code>insertMany</code> and <code>bulkWrite</code> take a
@@ -3101,7 +3103,7 @@ findOne     0.129 ms/op → ~7,750 ops/s</code></pre>
             expressions, which the fake does not. Each is refused by name; <code>$fill</code> is simulated.
         </li>
         <li><strong>Batching rapid's demand.</strong> rapid asks the cursor for one document at a time. Measured first:
-            its <code>findStream</code> ran at 1,667 ops/s against 1,523 for cats-effect and 1,504 for zio, so the
+            its <code>findStream</code> ran at 3,179 ops/s against 3,174 for cats-effect and 3,044 for zio, so the
             simpler code stays.
         </li>
         <li><strong>Copying every <code>BsonDocument</code> the API accepts.</strong> Raw filters, stages, hints and
