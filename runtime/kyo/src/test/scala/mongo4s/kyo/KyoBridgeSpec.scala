@@ -1,12 +1,15 @@
 package mongo4s.kyo
 
+import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.atomic.AtomicInteger
+
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
-import kyo.{Abort, AllowUnsafe, Duration, KyoApp, Result, Sync}
+import kyo.{Abort, AllowUnsafe, Async, Duration, Fiber, Kyo, KyoApp, Result, Sync}
 import org.reactivestreams.{Publisher, Subscriber, Subscription}
 
-import mongo4s.{Effect, RsBridge, RsBridgeConfig, RsBridgeError, Streamable}
+import mongo4s.{Effect, ExitCase, RsBridge, RsBridgeConfig, RsBridgeError, Streamable}
 
 import scala.concurrent.duration.given
 import mongo4s.kyo.KyoInstances.given
@@ -129,5 +132,58 @@ final class KyoBridgeSpec extends AnyWordSpec, Matchers:
       evaluated shouldBe false
       run(io) shouldBe 42
       evaluated shouldBe true
+    }
+
+    "release what was acquired when the fiber is interrupted while acquiring it" in {
+      val acquiring = CountDownLatch(1)
+      val proceed   = CountDownLatch(1)
+      val released  = CountDownLatch(1)
+
+      val program: KIO[Int] =
+        effect.bracket(effect.delay { acquiring.countDown(); proceed.await(); "session" })(_ => Async.never[Int])(_ => effect.delay(released.countDown()))
+
+      run(
+        for
+          fiber <- Fiber.initUnscoped(program)
+          _     <- Sync.defer(acquiring.await())
+          _     <- fiber.interrupt
+          _     <- Sync.defer(proceed.countDown())
+        yield ()
+      )
+
+      released.await(5, TimeUnit.SECONDS) shouldBe true
+    }
+
+    "release exactly what it acquired, wherever an interrupt lands" in {
+      val acquired = AtomicInteger(0)
+      val released = AtomicInteger(0)
+
+      val program: KIO[Int] =
+        effect.bracket(effect.delay(acquired.incrementAndGet()))(_ => Async.never[Int])(_ => effect.delay(released.incrementAndGet(): Unit))
+
+      run(
+        Kyo.foreachDiscard(1 to 200) { round =>
+          for
+            fiber <- Fiber.initUnscoped(program)
+            _     <- if round % 2 == 0 then Async.sleep(Duration.fromScala(1.millis)) else Sync.defer(())
+            _     <- fiber.interrupt
+          yield ()
+        }
+      )
+
+      val deadline = System.nanoTime() + 5.seconds.toNanos
+      while released.get < acquired.get && System.nanoTime() < deadline do Thread.sleep(10)
+
+      acquired.get should be > 0
+      released.get shouldBe acquired.get
+    }
+
+    "run the finalizer of a body that succeeded, and raise the finalizer's failure" in {
+      val ran  = AtomicInteger(0)
+      val boom = IllegalStateException("finalizer")
+
+      run(effect.guaranteeCase(effect.pure(1))(exitCase => effect.delay { ran.incrementAndGet(); exitCase shouldBe ExitCase.Succeeded; () })) shouldBe 1
+      run(effect.attempt(effect.guaranteeCase(effect.pure(1))(_ => effect.raiseError(boom)))) shouldBe Left(boom)
+      ran.get shouldBe 1
     }
   }

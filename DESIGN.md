@@ -749,6 +749,16 @@ was being wired up, so a body that threw before returning an `F` — a `require`
 escaped the finalizer and left the transaction open on the session. The default `Effect.bracketCase` had the same
 hole, and it was the one kyo and rapid used.
 
+kyo had two more, both about where an interrupt can land. Its `bracketCase` was the default — acquire, then install
+the guard — so an interrupt arriving as the acquisition finished left a session open with nothing to close it; a
+test interrupting two hundred brackets at random points lost about one in a hundred. And its `guaranteeCase` ran the
+finalizer of a body that succeeded after the scope had closed, where an interrupt could skip it. kyo `1.0.0-RC7` has
+no mask that hands back a way to restore interruption, so `bracketCase` installs the guard first and runs the
+acquisition in an uninterruptible fiber; the two settle between themselves who goes first, and a guard that comes
+second waits for the acquisition to finish and releases what it produced. Every finalizer of `guaranteeCase` now runs
+inside the scope, which kyo runs whatever happens, and since kyo only logs a finalizer's failure, the failure of the
+one for a success is kept and raised once the scope has closed.
+
 The manual path (`startTransaction`/`commitTransaction`/`abortTransaction` with `(using Some(session))` at each call
 site) is still there, and nothing is automatic on it, including the rollback. Both exist because the safe version
 should be the easy one, not the only one.

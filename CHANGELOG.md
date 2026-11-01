@@ -147,6 +147,10 @@ Binary compatible with `5.0.0`, checked by MiMa.
   left `withTransaction` as a typed failure. Only failures are recovered now; a defect still rolls the transaction
   back and then stays a defect. A function given to `map` or `flatMap` that throws, and a `suspend` whose body throws,
   fail the effect rather than die, as they do on the other three runtimes — each runtime's spec checks it.
+- **On `kyo`, a session could be left open by an interrupt.** One landing just as `withSession` or
+  `client.withTransaction` had started its session skipped the release, and one landing after a body succeeded could
+  skip a `guaranteeCase` finalizer. `bracketCase` installs its guard before it acquires, and acquires where an
+  interrupt cannot reach; every finalizer runs inside kyo's scope.
 - **`findMany` returned a document once per batch its key appeared in.** A key repeated further down the list than
   `batchSize` went out in a second `$in`, and the document came back twice. The keys are made distinct before they
   are batched, as the README already promised.

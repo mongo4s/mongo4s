@@ -1,5 +1,8 @@
 package mongo4s.kyo
 
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
+
 import scala.compiletime.asMatchable
 import scala.concurrent.duration.FiniteDuration
 
@@ -22,15 +25,53 @@ trait KyoEffectInstance:
     override def sleep(duration: FiniteDuration): KIO[Unit] = Async.sleep(Duration.fromScala(duration))
 
     def guaranteeCase[A](fa: KIO[A])(finalizer: ExitCase => KIO[Unit]): KIO[A] =
-      val abnormal: KIO[A] = Scope.run(
-        Scope.ensure {
-          case Absent          => pure(())
-          case Present(failed) => runFinalizer(KyoEffectInstance.exitCaseOf(Present(failed)), finalizer)
-        }.map(_ => fa)
-      )
+      Sync.defer {
+        val finalizerFailure = AtomicReference[Maybe[Throwable]](Absent)
 
-      abnormal.map(value => runFinalizer(ExitCase.Succeeded, finalizer).map(_ => value))
+        val guarded: KIO[A] = Scope.run(
+          Scope.ensure { outcome =>
+            handleErrorWith(runFinalizer(KyoEffectInstance.exitCaseOf(outcome), finalizer)) { error =>
+              delay(finalizerFailure.set(Present(error)))
+            }
+          }.map(_ => fa)
+        )
+
+        guarded.map { value =>
+          finalizerFailure.get match
+            case Present(error) => raiseError(error)
+            case Absent         => pure(value)
+        }
+      }
     end guaranteeCase
+
+    override def bracketCase[A, B](acquire: KIO[A])(use: A => KIO[B])(release: (A, ExitCase) => KIO[Unit]): KIO[B] =
+      Sync.defer {
+        val claimed = AtomicBoolean(false)
+        val settled = CompletableFuture[Maybe[A]]()
+
+        val owned: KIO[A] = suspend {
+          if claimed.compareAndSet(false, true)
+          then
+            val acquired = map(acquire) { resource =>
+              settled.complete(Present(resource)): Unit
+              resource
+            }
+
+            handleErrorWith(acquired)(error => flatMap(delay(settled.complete(Absent): Unit))(_ => raiseError(error)))
+          else raiseError(IllegalStateException("bracketCase was stopped before its acquisition began"))
+        }
+
+        guaranteeCase(flatMap(Async.uninterruptible(owned))(use)) { exitCase =>
+          if claimed.compareAndSet(false, true)
+          then unit
+          else
+            flatMap(Async.fromCompletableFuture(settled)) {
+              case Present(resource) => release(resource, exitCase)
+              case Absent            => unit
+            }
+        }
+      }
+    end bracketCase
 
 object KyoEffectInstance extends KyoEffectInstance:
 

@@ -886,7 +886,8 @@ is written, not when it runs, so `val write = users.insertOne(user)` outside the
 
 It commits on success and rolls back on failure **and on cancellation**: `Effect[F]` carries a `guaranteeCase` that
 sees how the action ended, so an interrupted transaction does not linger on the server until it is reaped. That holds
-on `cats`, `zio` and `kyo`. The `rapid` backend builds `guaranteeCase` from `attempt`, which sees success and failure
+on `cats`, `zio` and `kyo`, and on each of them the session is closed even when the interrupt lands as it is being
+started. The `rapid` backend builds `guaranteeCase` from `attempt`, which sees success and failure
 only, so a cancelled `rapid` transaction is left to the server's timeout rather than rolled back. A
 rollback that itself fails is attached as a suppressed exception rather than replacing the error that caused it.
 
