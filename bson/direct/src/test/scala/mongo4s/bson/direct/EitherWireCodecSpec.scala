@@ -16,6 +16,13 @@ object EitherWireCodecSpec:
   final case class Bar(y: String) derives WireCodec
   final case class Tagged(_type: String) derives WireCodec
 
+  opaque type UserId = String
+
+  object UserId:
+    given WireCodec[UserId] = WireCodec[String]
+
+  final case class Holds(choice: Either[UserId, String]) derives WireCodec
+
 final class EitherWireCodecSpec extends AnyWordSpec, Matchers:
   import EitherWireCodecSpec.*
 
@@ -77,6 +84,20 @@ final class EitherWireCodecSpec extends AnyWordSpec, Matchers:
       intercept[IllegalArgumentException] {
         summon[WireCodec[Either[Foo, Foo]]]
       }
+    }
+
+    "refuse an opaque type beside the type it wraps, which erase to one name, at once when summoned" in {
+      the[IllegalArgumentException] thrownBy summon[WireCodec[Either[UserId, String]]] should have message
+        "requirement failed: Either's two branches must have distinguishable type names to derive a WireCodec — both were 'String'"
+    }
+
+    "refuse it for a field of a derived class only when that class is first encoded" in {
+      val codec  = summon[WireCodec[Holds]]
+      val writer = BsonBinaryWriter(BasicOutputBuffer())
+      writer.writeStartDocument()
+      writer.writeName("h")
+
+      an[IllegalArgumentException] should be thrownBy codec.encode(writer, Holds(Right("x")))
     }
 
     "refuse a branch that declares a field of its own colliding with the discriminator, which would overwrite it" in {

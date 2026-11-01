@@ -175,6 +175,9 @@ Binary compatible with `5.0.0`, checked by MiMa.
   decoded every match, so a later document the codec could not read failed it; a bulk write error other than a
   duplicate escaped as a bare `MongoError` instead of a `BulkWriteFailed`; and `explain` and `watch` threw where they
   were called rather than in the effect or the stream. Each is checked against MongoDB 8.2 now.
+- **The README said an `Either` with indistinguishable branches is refused when its codec is summoned.** For a field
+  of a derived case class it is refused on the first encode or decode of that class, since field codecs are built
+  lazily; the README says so now, and names the opaque-type and anonymous-class cases beside the erased generics.
 - **`findMany` returned a document once per batch its key appeared in.** A key repeated further down the list than
   `batchSize` went out in a second `$in`, and the document came back twice. The keys are made distinct before they
   are batched, as the README already promised.

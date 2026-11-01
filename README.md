@@ -1936,9 +1936,13 @@ val result: Either[ValidationError, Approved] = ...
 
 A scalar branch (no fields to inline, e.g. a bare `String`) keeps a `"value"` field, since a bare BSON scalar can't
 also carry the discriminator in the same slot. The two branches must resolve to distinguishable type names —
-`Either[Foo, Foo]`, or two differently-named types that happen to share a runtime class name once generics are
-erased, throws when the codec is summoned rather than risking a silent wrong-branch decode later. So does a branch
-with a field of its own named `_type`, which inlined next to the discriminator would overwrite it.
+`Either[Foo, Foo]`, two types that share a runtime class name once generics are erased (`Either[List[Int],
+List[String]]`), an opaque type and the type it wraps (`Either[UserId, String]`), or two anonymous classes — and that
+is refused with an `IllegalArgumentException` rather than risking a silent wrong-branch decode later. So is a branch
+with a field of its own named `_type`, which inlined next to the discriminator would overwrite it. The refusal comes
+when the `Either` codec is built: at once for a codec you summon, but for a field of a derived case class only on the
+first encode or decode of that class, since its field codecs are built lazily so that recursive types derive. A test
+that writes one value of each entity finds it before production does.
 
 The discriminator is `ClassTag[A].runtimeClass.getSimpleName` — for `Int`/`Long`/`Double`/`Boolean`/etc, that's the *JVM
 primitive's* name (`"int"`, not `"Integer"`), since `ClassTag[Int]`'s `runtimeClass` is the primitive class,
@@ -1972,7 +1976,8 @@ already need to construct one of these types directly.
 branches always nest their payload under `"value"`. `Both` doesn't have a
 single "own" type — it holds an `A` and a `B` at once — so its discriminator is the two names joined (`"String+Foo"`),
 with each side nested under its own `"left"`/`"right"` key rather than inlined, to avoid a silent
-field-name collision if `A` and `B` happen to share a field.
+field-name collision if `A` and `B` happen to share a field. Its two names must differ as `Either`'s do, and the
+refusal comes at the same moment.
 
 ### Codecs and the driver's registry
 
