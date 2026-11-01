@@ -34,14 +34,16 @@ open class MongoCounters[F[*], S[*]](protected val collection: MongoCollection[F
   private val valueField = Field.stored[Counter, Long](Counter.ValueField)
 
   def next(name: String, step: Long)(using session: Option[ClientSession]): F[Long] =
-    require(step > 0, s"a counter only moves forward, got a step of $step")
+    if step <= 0
+    then F.raiseError(IllegalArgumentException(s"a counter only moves forward, got a step of $step"))
+    else
+      val advanced =
+        collection.findOneAndUpdate(nameField.equalTo(name), Update.inc(valueField, step), FindOneAndUpdateOptions.default[Counter].withUpsert)(using session)
 
-    val advanced = collection.findOneAndUpdate(nameField.equalTo(name), Update.inc(valueField, step), FindOneAndUpdateOptions.default[Counter].withUpsert)(using session)
-
-    F.flatMap(advanced) {
-      case Some(counter) => F.pure(counter.value)
-      case None          => F.raiseError(IllegalStateException(s"the upsert of counter $name returned no document"))
-    }
+      F.flatMap(advanced) {
+        case Some(counter) => F.pure(counter.value)
+        case None          => F.raiseError(IllegalStateException(s"the upsert of counter $name returned no document"))
+      }
   end next
 
   def current(name: String)(using session: Option[ClientSession]): F[Option[Long]] =

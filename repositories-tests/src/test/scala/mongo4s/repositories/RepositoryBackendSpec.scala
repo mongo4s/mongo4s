@@ -116,10 +116,11 @@ trait RepositoryBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
       secondPage.next shouldBe None
     }
 
-    "refuse a page that holds nothing" in {
+    "refuse a page that holds nothing, when the effect runs" in {
       val (_, repository) = repo()
+      val page            = repository.findPage(0)
 
-      an[IllegalArgumentException] should be thrownBy repository.findPage(0)
+      an[IllegalArgumentException] should be thrownBy run(page)
     }
   }
 
@@ -279,8 +280,10 @@ trait RepositoryBackendSpec[F[*], S[*]] extends AnyWordSpec, Matchers:
       run(sequence.next("orders")) shouldBe 1L
     }
 
-    "refuse a step that does not move forward" in {
-      an[IllegalArgumentException] should be thrownBy counters.next("orders", step = 0L)
+    "refuse a step that does not move forward, when the effect runs" in {
+      val next = counters.next("orders", step = 0L)
+
+      an[IllegalArgumentException] should be thrownBy run(next)
     }
 
     "store one document per name" in {

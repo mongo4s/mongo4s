@@ -2,7 +2,6 @@ package mongo4s.internal
 
 import scala.concurrent.duration.FiniteDuration
 
-import org.bson.conversions.Bson
 import org.bson.BsonDocument
 import org.reactivestreams.Publisher
 import com.mongodb.ExplainVerbosity
@@ -20,7 +19,8 @@ private[mongo4s] final class DirectAggregateQueryImpl[F[*], S[*], A](
     typedCollection: RSMongoCollection[A],
     documentCollection: RSMongoCollection[BsonDocument],
     documentCodec: BsonDocumentCodec[A],
-    pipeline: Seq[Bson],
+    pipeline: Seq[Stage[?]],
+    naming: FieldNaming,
     allowDiskUse: Option[Boolean],
     session: Option[ClientSession],
     options: QueryOptions = QueryOptions.empty,
@@ -52,18 +52,8 @@ private[mongo4s] final class DirectAggregateQueryImpl[F[*], S[*], A](
     def stream(using Streamable[S, DecodeResult[A]]): S[DecodeResult[A]] =
       rs.stream(AttemptingPublisher(documents(limited = false), documentCodec.decodeDocument))
 
-  private def writesToCollection: Boolean =
-    pipeline.lastOption match
-      case Some(document: BsonDocument) => document.keySet.asScala.exists(AggregateQueryImpl.TerminalStages.contains)
-      case _                            => false
-
-  private def stagesFor(limited: Boolean): Seq[Bson] =
-    if limited && !writesToCollection
-    then pipeline :+ Stage.Limit[Any](1).toBson(FieldNaming.identity)
-    else pipeline
-
   private def typed(limited: Boolean): Publisher[A] =
-    val stages = stagesFor(limited)
+    val stages = AggregateQueryImpl.render(pipeline, naming, limited)
 
     val base: AggregatePublisher[A] =
       session match
@@ -74,7 +64,7 @@ private[mongo4s] final class DirectAggregateQueryImpl[F[*], S[*], A](
   end typed
 
   private def documents(limited: Boolean): AggregatePublisher[BsonDocument] =
-    val stages = stagesFor(limited)
+    val stages = AggregateQueryImpl.render(pipeline, naming, limited)
 
     val base: AggregatePublisher[BsonDocument] =
       session match
@@ -102,4 +92,4 @@ private[mongo4s] final class DirectAggregateQueryImpl[F[*], S[*], A](
       allowDiskUse: Option[Boolean] = allowDiskUse,
       options: QueryOptions = options,
   ): DirectAggregateQueryImpl[F, S, A] =
-    DirectAggregateQueryImpl(typedCollection, documentCollection, documentCodec, pipeline, allowDiskUse, session, options)
+    DirectAggregateQueryImpl(typedCollection, documentCollection, documentCodec, pipeline, naming, allowDiskUse, session, options)

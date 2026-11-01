@@ -2,20 +2,21 @@ package mongo4s.internal
 
 import scala.concurrent.duration.FiniteDuration
 
-import org.bson.conversions.Bson
 import org.bson.{BsonDocument, BsonValue}
 import org.reactivestreams.Publisher
 import com.mongodb.client.model.Collation
 import com.mongodb.reactivestreams.client.{ClientSession, DistinctPublisher, MongoCollection as RSMongoCollection}
 
 import mongo4s.{RsBridge, Streamable}
-import mongo4s.bson.{BsonDecoder, DecodeResult}
+import mongo4s.bson.{BsonDecoder, DecodeResult, FieldNaming}
+import mongo4s.operations.Filter
 import mongo4s.queries.{DecodeAttempts, DistinctQuery}
 
 private[mongo4s] final class DistinctQueryImpl[F[*], S[*], A](
     collection: RSMongoCollection[BsonDocument],
     field: String,
-    filter: Bson,
+    filter: Filter[?],
+    naming: FieldNaming,
     decoder: BsonDecoder[A],
     session: Option[ClientSession],
     options: QueryOptions = QueryOptions.empty,
@@ -41,8 +42,8 @@ private[mongo4s] final class DistinctQueryImpl[F[*], S[*], A](
 
   private def values: DistinctPublisher[BsonValue] =
     val base: DistinctPublisher[BsonValue] = session match
-      case Some(s) => collection.distinct(s, field, filter, classOf[BsonValue])
-      case None    => collection.distinct(field, filter, classOf[BsonValue])
+      case Some(s) => collection.distinct(s, field, filter.toBson(naming), classOf[BsonValue])
+      case None    => collection.distinct(field, filter.toBson(naming), classOf[BsonValue])
 
     var distinct = base
 
@@ -60,6 +61,7 @@ private[mongo4s] final class DistinctQueryImpl[F[*], S[*], A](
       collection = collection,
       field = field,
       filter = filter,
+      naming = naming,
       decoder = decoder,
       session = session,
       options = options,

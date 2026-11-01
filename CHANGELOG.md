@@ -134,6 +134,12 @@ Binary compatible with `5.0.0`, checked by MiMa.
   is built.
 - **A date's `plus` and `minus` took only a `Long` amount**, so `Expr.lit(1)` or an `Int` field did not compile; the
   server takes either, and so do they.
+- **Some refusals were thrown where the operation was built, not raised in `F`**, so `attempt` and `handleErrorWith`
+  never saw them: an aggregation or a `distinct` whose filter does not render (an unclosed polygon ring), create
+  options that contradict each other, a `findPage` of no entities, a `Counters.next` step that does not move forward,
+  and the driver's own argument checks on `listIndexes`, `dropIndex`, `dropIndexes`, `drop`, `runCommand`,
+  `dropCollection` and the listing streams. All of them fail the effect now, and a kyo stream builds its publisher
+  when it runs rather than when it is defined.
 - **`findMany` returned a document once per batch its key appeared in.** A key repeated further down the list than
   `batchSize` went out in a second `$in`, and the document came back twice. The keys are made distinct before they
   are batched, as the README already promised.

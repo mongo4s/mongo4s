@@ -54,7 +54,7 @@ private[mongo4s] final class MongoDatabaseImpl[F[*], S[*]](
     )
 
   def listCollectionNames(using session: Option[ClientSession])(using Streamable[S, String]): S[String] =
-    val publisher = session match
+    def publisher = session match
       case Some(s) => underlying.listCollectionNames(s)
       case None    => underlying.listCollectionNames()
 
@@ -62,7 +62,7 @@ private[mongo4s] final class MongoDatabaseImpl[F[*], S[*]](
   end listCollectionNames
 
   def listCollections(using session: Option[ClientSession])(using Streamable[S, BsonDocument]): S[BsonDocument] =
-    val publisher = session match
+    def publisher = session match
       case Some(s) => underlying.listCollections(s, classOf[BsonDocument])
       case None    => underlying.listCollections(classOf[BsonDocument])
 
@@ -72,42 +72,46 @@ private[mongo4s] final class MongoDatabaseImpl[F[*], S[*]](
   def createCollection(name: String, options: CreateCollectionOptions)(using
       session: Option[ClientSession],
   ): F[Unit] =
-    val driverOptions = options.toDriver
+    F.suspend {
+      val driverOptions = options.toDriver
 
-    val publisher = session match
-      case Some(s) => underlying.createCollection(s, name, driverOptions)
-      case None    => underlying.createCollection(name, driverOptions)
+      val publisher = session match
+        case Some(s) => underlying.createCollection(s, name, driverOptions)
+        case None    => underlying.createCollection(name, driverOptions)
 
-    rs.unit(publisher)
-  end createCollection
+      rs.unit(publisher)
+    }
 
   def runCommand(command: BsonDocument)(using session: Option[ClientSession]): F[BsonDocument] =
-    val publisher = session match
-      case Some(s) => underlying.runCommand(s, command, classOf[BsonDocument])
-      case None    => underlying.runCommand(command, classOf[BsonDocument])
+    F.suspend {
+      val publisher = session match
+        case Some(s) => underlying.runCommand(s, command, classOf[BsonDocument])
+        case None    => underlying.runCommand(command, classOf[BsonDocument])
 
-    rs.one(publisher)
-  end runCommand
+      rs.one(publisher)
+    }
 
   def drop(using session: Option[ClientSession]): F[Unit] =
-    val publisher = session match
-      case Some(s) => underlying.drop(s)
-      case None    => underlying.drop()
+    F.suspend {
+      val publisher = session match
+        case Some(s) => underlying.drop(s)
+        case None    => underlying.drop()
 
-    rs.unit(publisher)
-  end drop
+      rs.unit(publisher)
+    }
 
   def dropCollection(collectionName: String)(using
       session: Option[ClientSession],
   ): F[Unit] =
-    val collection = underlying.getCollection(collectionName, classOf[BsonDocument])
+    F.suspend {
+      val collection = underlying.getCollection(collectionName, classOf[BsonDocument])
 
-    val publisher = session match
-      case Some(s) => collection.drop(s)
-      case None    => collection.drop()
+      val publisher = session match
+        case Some(s) => collection.drop(s)
+        case None    => collection.drop()
 
-    rs.unit(publisher)
-  end dropCollection
+      rs.unit(publisher)
+    }
 
   def watch(options: WatchOptions[BsonDocument])(using
       session: Option[ClientSession]

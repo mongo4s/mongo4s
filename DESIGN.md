@@ -119,6 +119,17 @@ subscribed to, and building an `F[A]` value is not running it — a by-value par
 computation that may never run, or run twice for one that is retried. By-name means the subscription happens when
 the effect does.
 
+By name is only half of it. Whatever an operation computes before it calls the bridge is computed where the
+operation is built, and a refusal there is thrown at the caller rather than raised in `F`, where `attempt` never sees
+it. Up to `5.0` that was a publisher built into a `val` before the call — `listIndexes`, `dropIndex`, `drop`,
+`runCommand`, `dropCollection`, the listing streams — the pipeline `aggregate` rendered and the filter `distinct`
+rendered when they were called (an unclosed polygon ring is refused at render), the options `createCollection`
+converted, the page size of `findPage` and the step of `Counters.next`; and kyo's `stream` built its publisher when
+the stream was defined. Each of them builds inside the effect now. `aggregate` and `distinct` keep their stages and
+filter as the AST and render them when they run, as `find` always did. `DeferredFailureSpec` drives them against a
+client with no server behind it, so every refusal has to come back as a failed `IO` rather than a thrown exception,
+and each runtime's bridge spec checks that a publisher is built only when its effect or stream runs.
+
 `Streamable[S, A]` is a marker typeclass with no methods. It exists so that every streaming call names its element
 type at the call site, which is what lets the kyo backend supply the per-element `Tag` its stream type requires.
 Without it, kyo could not be supported at all without changing every signature.

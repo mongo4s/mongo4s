@@ -59,6 +59,17 @@ final class CatsBridgeSpec extends AsyncWordSpec, AsyncIOSpec, Matchers:
     "expose a stream" in {
       bridge.stream(ListPublisher(List(1, 2, 3))).compile.toList.asserting(_ shouldBe List(1, 2, 3))
     }
+    "build each publisher when the effect or stream runs, not when it is defined" in {
+      var built  = 0
+      val list   = bridge.list { built += 1; ListPublisher(List(1, 2)) }
+      val stream = bridge.stream { built += 1; ListPublisher(List(1, 2)) }
+
+      for
+        before <- IO(built)
+        listed <- list
+        all    <- stream.compile.toList
+      yield (before, listed, all, built) shouldBe (0, List(1, 2), List(1, 2), 2)
+    }
   }
 
   "cats RsBridge with strictSingleResult" should {

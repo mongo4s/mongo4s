@@ -51,22 +51,23 @@ open class BaseMongoRepository[F[*], S[*], E, K](
       filter: Filter[E],
       descending: Boolean,
   )(using session: Option[ClientSession]): F[KeysetPage[E, K]] =
-    require(limit > 0 && limit < Int.MaxValue, s"a page has to hold at least one entity, got $limit")
+    if limit <= 0 || limit == Int.MaxValue
+    then F.raiseError(IllegalArgumentException(s"a page has to hold at least one entity and fewer than Int.MaxValue, got $limit"))
+    else
+      val bounded = after.fold(filter)(key => Filter.and(filter, pk.afterFilter(key, descending)))
 
-    val bounded = after.fold(filter)(key => Filter.and(filter, pk.afterFilter(key, descending)))
+      val rows =
+        collection
+          .find(bounded)(using session)
+          .projection(defaultProjection)
+          .sort(pk.keyOrder(descending))
+          .limit(limit + 1)
+          .all
 
-    val rows =
-      collection
-        .find(bounded)(using session)
-        .projection(defaultProjection)
-        .sort(pk.keyOrder(descending))
-        .limit(limit + 1)
-        .all
-
-    F.map(rows) { fetched =>
-      val items = fetched.take(limit)
-      KeysetPage(items, if fetched.sizeIs > limit then items.lastOption.map(pk.key) else None)
-    }
+      F.map(rows) { fetched =>
+        val items = fetched.take(limit)
+        KeysetPage(items, if fetched.sizeIs > limit then items.lastOption.map(pk.key) else None)
+      }
   end findPage
 
   def getAll(using session: Option[ClientSession])(using Streamable[S, E]): S[E] =

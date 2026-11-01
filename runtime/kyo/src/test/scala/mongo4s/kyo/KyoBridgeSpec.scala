@@ -3,7 +3,7 @@ package mongo4s.kyo
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
-import kyo.{AllowUnsafe, Duration, KyoApp, Sync}
+import kyo.{Abort, AllowUnsafe, Duration, KyoApp, Result, Sync}
 import org.reactivestreams.{Publisher, Subscriber, Subscription}
 
 import mongo4s.{Effect, RsBridge, RsBridgeConfig, RsBridgeError, Streamable}
@@ -70,6 +70,24 @@ final class KyoBridgeSpec extends AnyWordSpec, Matchers:
 
     "stream all elements" in {
       run(bridge.stream(ListPublisher(List(1, 2, 3))).run).toList shouldBe List(1, 2, 3)
+    }
+
+    "build the publisher of a stream when the stream runs, not when it is defined" in {
+      var built  = 0
+      val stream = bridge.stream { built += 1; ListPublisher(List(1, 2)) }
+
+      built shouldBe 0
+      run(stream.run).toList shouldBe List(1, 2)
+      run(stream.run).toList shouldBe List(1, 2)
+      built shouldBe 2
+    }
+
+    "fail the stream itself when its publisher cannot be built" in {
+      val stream = bridge.stream[Int](throw IllegalArgumentException("no publisher"))
+
+      run(Abort.run[Throwable](stream.run)) match
+        case Result.Failure(error) => error.getMessage shouldBe "no publisher"
+        case other                 => fail(s"expected a failure in the stream, got $other")
     }
   }
 

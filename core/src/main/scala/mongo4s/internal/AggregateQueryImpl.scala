@@ -2,7 +2,6 @@ package mongo4s.internal
 
 import scala.concurrent.duration.FiniteDuration
 
-import org.bson.conversions.Bson
 import org.bson.BsonDocument
 import org.reactivestreams.Publisher
 import com.mongodb.ExplainVerbosity
@@ -18,7 +17,8 @@ import scala.jdk.CollectionConverters.given
 
 private[mongo4s] final class AggregateQueryImpl[F[*], S[*], A](
     collection: RSMongoCollection[BsonDocument],
-    pipeline: Seq[Bson],
+    pipeline: Seq[Stage[?]],
+    naming: FieldNaming,
     decoder: BsonDocumentDecoder[A],
     allowDiskUse: Option[Boolean],
     session: Option[ClientSession],
@@ -52,16 +52,8 @@ private[mongo4s] final class AggregateQueryImpl[F[*], S[*], A](
 
   private def publisher(limited: Boolean): Publisher[A] = DecodingPublisher(documents(limited), decoder.decodeDocument)
 
-  private def writesToCollection: Boolean =
-    pipeline.lastOption match
-      case Some(document: BsonDocument) => document.keySet.asScala.exists(AggregateQueryImpl.TerminalStages.contains)
-      case _                            => false
-
   private def documents(limited: Boolean): AggregatePublisher[BsonDocument] =
-    val stages =
-      if limited && !writesToCollection
-      then pipeline :+ Stage.Limit[Any](1).toBson(FieldNaming.identity)
-      else pipeline
+    val stages = AggregateQueryImpl.render(pipeline, naming, limited)
 
     val base: AggregatePublisher[BsonDocument] =
       session match
@@ -86,7 +78,14 @@ private[mongo4s] final class AggregateQueryImpl[F[*], S[*], A](
       allowDiskUse: Option[Boolean] = allowDiskUse,
       options: QueryOptions = options,
   ): AggregateQueryImpl[F, S, A] =
-    AggregateQueryImpl(collection, pipeline, decoder, allowDiskUse, session, options)
+    AggregateQueryImpl(collection, pipeline, naming, decoder, allowDiskUse, session, options)
 
 private[mongo4s] object AggregateQueryImpl:
-  private[internal] val TerminalStages = Set("$out", "$merge")
+  private val TerminalStages = Set("$out", "$merge")
+
+  private[internal] def render(pipeline: Seq[Stage[?]], naming: FieldNaming, limited: Boolean): Seq[BsonDocument] =
+    val stages = pipeline.map(_.toBson(naming))
+
+    if limited && !stages.lastOption.exists(_.keySet.asScala.exists(TerminalStages.contains))
+    then stages :+ Stage.Limit[Any](1).toBson(FieldNaming.identity)
+    else stages

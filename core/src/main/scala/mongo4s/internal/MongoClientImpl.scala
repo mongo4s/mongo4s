@@ -23,7 +23,7 @@ private[mongo4s] final class MongoClientImpl[F[*], S[*]](
   def listDatabaseNames(using
       session: Option[ClientSession]
   )(using Streamable[S, String]): S[String] =
-    val publisher = session match
+    def publisher = session match
       case Some(s) => underlying.listDatabaseNames(s)
       case None    => underlying.listDatabaseNames()
 
@@ -33,7 +33,7 @@ private[mongo4s] final class MongoClientImpl[F[*], S[*]](
   def listDatabases(using
       session: Option[ClientSession]
   )(using Streamable[S, BsonDocument]): S[BsonDocument] =
-    val publisher = session match
+    def publisher = session match
       case Some(s) => underlying.listDatabases(s, classOf[BsonDocument])
       case None    => underlying.listDatabases(classOf[BsonDocument])
 

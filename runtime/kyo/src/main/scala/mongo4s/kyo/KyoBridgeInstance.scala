@@ -65,7 +65,9 @@ trait KyoBridgeInstance:
       given Tag[Emit[Chunk[A]]] = streamable.emitTag
       given Tag[Poll[Chunk[A]]] = streamable.pollTag
 
-      Stream.unwrap(fromPublisher(RsBridgeSupport.translating(publisher), config.bufferSize)).handle(Scope.run)
+      Stream
+        .unwrap(Sync.defer(Abort.catching[Throwable](fromPublisher(RsBridgeSupport.translating(publisher), config.bufferSize))))
+        .handle(Scope.run)
     end stream
 
 object KyoBridgeInstance extends KyoBridgeInstance:

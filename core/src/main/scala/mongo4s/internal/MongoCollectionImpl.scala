@@ -222,7 +222,8 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
   ): AggregateQuery[F, S, B] =
     AggregateQueryImpl(
       collection = underlying,
-      pipeline = pipeline.map(_.toBson(naming)),
+      pipeline = pipeline,
+      naming = naming,
       decoder = decoder,
       allowDiskUse = None,
       session = session,
@@ -237,7 +238,8 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
     DistinctQueryImpl(
       collection = underlying,
       field = field.path.render(naming),
-      filter = filter.toBson(naming),
+      filter = filter,
+      naming = naming,
       decoder = decoder,
       session = session,
     )
@@ -270,12 +272,13 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
       }
 
   def listIndexes(using session: Option[ClientSession]): F[List[BsonDocument]] =
-    val publisher = session match
-      case Some(s) => underlying.listIndexes(s, classOf[BsonDocument])
-      case None    => underlying.listIndexes(classOf[BsonDocument])
+    F.suspend {
+      val publisher = session match
+        case Some(s) => underlying.listIndexes(s, classOf[BsonDocument])
+        case None    => underlying.listIndexes(classOf[BsonDocument])
 
-    rs.list(publisher)
-  end listIndexes
+      rs.list(publisher)
+    }
 
   def createSearchIndex(index: SearchIndex[A]): F[String] = F.map(createSearchIndexes(List(index)))(_.head)
 
@@ -288,20 +291,22 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
   def listSearchIndexes: F[List[BsonDocument]] = SearchIndexes.list(underlying)
 
   def dropIndex(indexName: String)(using session: Option[ClientSession]): F[Unit] =
-    val publisher = session match
-      case Some(s) => underlying.dropIndex(s, indexName)
-      case None    => underlying.dropIndex(indexName)
+    F.suspend {
+      val publisher = session match
+        case Some(s) => underlying.dropIndex(s, indexName)
+        case None    => underlying.dropIndex(indexName)
 
-    rs.unit(publisher)
-  end dropIndex
+      rs.unit(publisher)
+    }
 
   def dropIndexes(using session: Option[ClientSession]): F[Unit] =
-    val publisher = session match
-      case Some(s) => underlying.dropIndexes(s)
-      case None    => underlying.dropIndexes()
+    F.suspend {
+      val publisher = session match
+        case Some(s) => underlying.dropIndexes(s)
+        case None    => underlying.dropIndexes()
 
-    rs.unit(publisher)
-  end dropIndexes
+      rs.unit(publisher)
+    }
 
   def renameCollection(to: String, dropTarget: Boolean)(using session: Option[ClientSession]): F[Unit] =
     F.suspend {
@@ -316,12 +321,13 @@ private[mongo4s] final class MongoCollectionImpl[F[*], S[*], A](
     }
 
   def drop(using session: Option[ClientSession]): F[Unit] =
-    val publisher = session match
-      case Some(s) => underlying.drop(s)
-      case None    => underlying.drop()
+    F.suspend {
+      val publisher = session match
+        case Some(s) => underlying.drop(s)
+        case None    => underlying.drop()
 
-    rs.unit(publisher)
-  end drop
+      rs.unit(publisher)
+    }
 
   def watch(options: WatchOptions[A])(using
       session: Option[ClientSession],

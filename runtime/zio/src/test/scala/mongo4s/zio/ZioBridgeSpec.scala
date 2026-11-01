@@ -61,6 +61,16 @@ final class ZioBridgeSpec extends AnyWordSpec, Matchers:
     "expose a stream" in {
       run(bridge.stream(ListPublisher(List(1, 2, 3))).runCollect).toList shouldBe List(1, 2, 3)
     }
+    "build each publisher when the effect or stream runs, not when it is defined" in {
+      var built  = 0
+      val list   = bridge.list { built += 1; ListPublisher(List(1, 2)) }
+      val stream = bridge.stream { built += 1; ListPublisher(List(1, 2)) }
+
+      built shouldBe 0
+      run(list) shouldBe List(1, 2)
+      run(stream.runCollect).toList shouldBe List(1, 2)
+      built shouldBe 2
+    }
   }
 
   "zio RsBridge with strictSingleResult" should {
