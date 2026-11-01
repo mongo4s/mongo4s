@@ -29,10 +29,12 @@ object Field:
 
   def element[A](identifier: String): Field[A, A] =
     require(
-      identifier.matches("[a-z][A-Za-z0-9]*"),
+      identifier.matches(ArrayFilterIdentifier),
       s"an array filter identifier starts with a lowercase letter and holds only letters and digits, got '$identifier'"
     )
     Field(FieldPath.empty.stored(identifier))
+
+  private val ArrayFilterIdentifier = "[a-z][A-Za-z0-9]*"
 
   extension [E, A](field: Field[E, A]) def path: FieldPath = field
 
@@ -140,7 +142,12 @@ object Field:
     def matched[A](using ElementOf[C, A]): Field[E, A] = Field(field.path.stored("$"))
 
     def where[A](element: Field[A, A])(using ElementOf[C, A]): Field[E, A] =
-      Field(field.path.stored(s"$$[${element.path.render(FieldNaming.identity)}]"))
+      val identifier = element.path.render(FieldNaming.identity)
+      require(
+        identifier.matches(ArrayFilterIdentifier),
+        s"where takes the identifier of an array filter, built by Field.element, got '$identifier'; each is the one for every element"
+      )
+      Field(field.path.stored(s"$$[$identifier]"))
 
   extension [E, A](field: Field[E, A])
     def near(point: Geometry.Point, maxDistance: Option[Double] = None, minDistance: Option[Double] = None): Filter[E] =

@@ -417,7 +417,8 @@ collection.updateOne(
 
 On an array of scalars the element is the value itself: `scores.where(high)` with `high.gte(90)` as its filter. An
 identifier the server would refuse — anything but a lowercase letter followed by letters and digits — is refused
-when it is built.
+when it is built, and so is a `where` given anything but such an identifier: `Field.self` would render `$[]`, which
+is `each`.
 
 #### Write options
 

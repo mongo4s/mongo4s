@@ -55,6 +55,13 @@ final class ArrayElementsSpec extends AnyWordSpec, Matchers:
       an[IllegalArgumentException] should be thrownBy Field.element[Line]("low-qty")
     }
 
+    "refuse an element that is not an array filter identifier, rather than render $[] or a dotted one" in {
+      the[IllegalArgumentException] thrownBy recentScores.where(Field.self[Int]) should have message
+        "requirement failed: where takes the identifier of an array filter, built by Field.element, got ''; each is the one for every element"
+      an[IllegalArgumentException] should be thrownBy recentScores.where(Field.stored[Int, Int]("high.low"))
+      an[IllegalArgumentException] should be thrownBy recentScores.where(Field.stored[Int, Int]("High"))
+    }
+
     "compile only on an array field, and keep the element's type" in {
       typeChecks("Field.of[ArrayElementsSpec.Basket, BsonTimestamp](_.lastSync).each") shouldBe false
       typeChecks("Update.set(lineItems.each / unitPrice, \"text\")") shouldBe false
