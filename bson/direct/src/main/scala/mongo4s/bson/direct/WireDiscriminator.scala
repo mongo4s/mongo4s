@@ -29,6 +29,21 @@ private[bson] object WireDiscriminator:
     tag
   end read
 
+  def open(reader: BsonReader, field: String): String =
+    reader.readStartDocument()
+    val start = reader.getMark
+
+    if reader.readBsonType() == BsonType.END_OF_DOCUMENT
+    then throw BsonError.DecodingFailure(BsonError.MissingField(field))
+
+    if reader.readName() == field
+    then readTag(reader, field)
+    else
+      val tag = locate(reader, field)
+      start.reset()
+      tag
+  end open
+
   def skipRest(reader: BsonReader): Unit =
     while reader.readBsonType() != BsonType.END_OF_DOCUMENT
     do
@@ -37,18 +52,22 @@ private[bson] object WireDiscriminator:
     end while
 
   def readValue[T](reader: BsonReader, codec: WireDecoder[T]): T =
-    var value: Option[T] = None
+    var value: Any = Unread
 
     while reader.readBsonType() != BsonType.END_OF_DOCUMENT
     do
       val name = reader.readName()
-      if value.isEmpty && name == ValueField
-      then value = Some(WirePath.under(ValueField)(codec.decode(reader)))
+      if (value.asInstanceOf[AnyRef] eq Unread) && name == ValueField
+      then value = WirePath.under(ValueField)(codec.decode(reader))
       else reader.skipValue()
     end while
 
-    value.getOrElse(throw BsonError.DecodingFailure(BsonError.MissingField(ValueField)))
+    if value.asInstanceOf[AnyRef] eq Unread
+    then throw BsonError.DecodingFailure(BsonError.MissingField(ValueField))
+    else value.asInstanceOf[T]
   end readValue
+
+  private val Unread: AnyRef = new Object
 
   private def readTag(reader: BsonReader, field: String): String =
     if reader.getCurrentBsonType == BsonType.STRING

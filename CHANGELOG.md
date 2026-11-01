@@ -72,6 +72,12 @@ Binary compatible with `5.0.0`, checked by MiMa.
   last. `setOnInsert(None)` adds nothing to the update, and `Repository.updateField(key, field, None)` removes the
   field. Where the `null` was wanted, `setNull` writes it. Documents already carrying a `null` read back as `None` as
   before.
+- **Decoding a derived entity is cheaper**: a product no longer copies its fields into a tuple on the way to its
+  constructor, and a sum whose `_type` is first reads its case without rewinding — about 1.09× on a consumer-shaped
+  entity, 592 bytes less per document ([BENCHMARKS.md](BENCHMARKS.md#a-consumer-shaped-entity--wide-optional-nested)).
+- **Rendering a query is cheaper**: `snakeCase` and `kebabCase` rename without boxing a `Char` per letter, and an
+  update's overlap check no longer splits every path into arrays — 1.5× on a five-condition filter and 2.4× on a
+  ten-operator update, with half the garbage on the update ([BENCHMARKS.md](BENCHMARKS.md#rendering-a-query)).
 - **A `WireCodec` decoding failure names where it happened.** Each field, array position, map key, sum `value` and
   `Ior` side wraps the failure in `BsonError.Nested`, so the message reads `address -> city -> Expected string but got
   int` instead of the leaf alone; code matching a field's `TypeMismatch` directly now finds it inside a `Nested`. A
@@ -80,6 +86,12 @@ Binary compatible with `5.0.0`, checked by MiMa.
 
 ### Fixed
 
+- **The website told users to avoid `getDirectCollection` for a collection with mixed numeric widths**, a limit
+  `3.0.0` had already removed, and said `aggregate` never reads directly although `aggregateDirect` does. Both are
+  corrected, along with its benchmark figures and counts, the claim that `kyo` and `rapid` read the runtime's clock
+  for `monotonic` (they keep `System.nanoTime`), the README's `MongoCollection` sketch, the `bson-cats-data` example
+  (which could not compile, and now is compiled), and what the fake ignores rather than refuses. The README check
+  covers its prose and the website now, not only its code blocks.
 - **The fake failed on a field holding `null`, values of mixed types or an array** in a range filter, a sort, an
   `$min`/`$max` update or a group's `$min`/`$max`, throwing `cannot compare` where the server answers — and every
   codec but the direct one writes `None` as `null`. It compares in BSON's type order now, filters element by element

@@ -166,7 +166,7 @@ object WireSumDerivation:
         else if wrapped
         then decodeWrapped(reader)
         else
-          val tag = WireDiscriminator.read(reader, field)
+          val tag = WireDiscriminator.open(reader, field)
           val idx = caseOf(tag)
 
           val result =

@@ -237,16 +237,29 @@ object Update:
     def overlap(outer: String, inner: String): Nothing =
       throw IllegalArgumentException(s"Update changes both '$outer' and '$inner' — MongoDB refuses overlapping paths as a conflict")
 
-    def touch(path: String): Unit =
-      val prefixes = path.split('.').inits.drop(1).filter(_.nonEmpty).map(_.mkString(".")).toList
+    def prefixes(path: String): List[String] =
+      var found = List.empty[String]
+      var end   = path.lastIndexOf('.')
 
-      prefixes.find(touched.contains).foreach(overlap(_, path))
+      while end > 0
+      do
+        found = path.substring(0, end) :: found
+        end = path.lastIndexOf('.', end - 1)
+      end while
+
+      found.reverse
+    end prefixes
+
+    def touch(path: String): Unit =
+      val enclosing = if path.indexOf('.') < 0 then Nil else prefixes(path)
+
+      enclosing.find(touched.contains).foreach(overlap(_, path))
       enclosed.get(path).foreach(overlap(path, _))
 
       if !touched.add(path)
       then throw IllegalArgumentException(s"Update changes '$path' under two operators — MongoDB refuses that as a conflict")
 
-      prefixes.foreach(prefix => enclosed.getOrElseUpdate(prefix, path): Unit)
+      enclosing.foreach(prefix => enclosed.getOrElseUpdate(prefix, path): Unit)
     end touch
 
     document.forEach { (name, changes) =>

@@ -2,8 +2,9 @@
 
 [← back to the README](README.md)
 
-Six JMH harnesses in [`benchmarks/`](benchmarks). Every number below was measured on one machine, in one evening
-(2026-10-12), on `mongo4s` `4.1.0`:
+Eight JMH harnesses in [`benchmarks/`](benchmarks). Every number below was measured on one machine, in one evening
+(2026-10-12), on `mongo4s` `4.1.0` — except the two sections on a consumer-shaped entity and on rendering, which were
+measured on 2026-11-01 on the `5.1.0` build, on the same machine:
 
 | | |
 | --- | --- |
@@ -172,6 +173,56 @@ than of the machine: all four came back byte-for-byte identical to the run on th
 the two — the codecs themselves changed in that window, and changed back.
 
 Both columns write byte-identical BSON — the bridge is not a different format, only a slower way to the same bytes.
+
+## A consumer-shaped entity — wide, optional, nested
+
+The entity above has seven fields, none of them optional, no sum and no map. The services this library was written
+for store something else: [`WideEntityBenchmark`](benchmarks/src/main/scala/mongo4s/benchmarks/WideEntityBenchmark.scala)
+is modelled on the hottest of their writes — twenty fields with some `Option`s left `None`, a sum for the event's
+status, a list of nested periods, an `Instant` and a `BigDecimal`, and a `Map` keyed by an enum holding three
+twenty-six-field scores, all under `snakeCase`. It measures the two ways such an entity reaches bytes: `WireCodec`
+straight to the wire, and the same codec bridged through a `BsonDocument`, which is the path a repository built with
+`create` or `withoutId` over `DocumentCodecBridge` runs.
+
+```bash
+sbt "benchmarks/Jmh/run -f 2 -prof gc WideEntityBenchmark"
+```
+
+| Direction | `WireCodec`, direct | `WireCodec` through a `BsonDocument` |
+| --- | ---: | ---: |
+| Encode | **~298k ops/s**, 6400 B/op | ~189k ops/s, 14104 B/op |
+| Decode | **~257k ops/s**, 10680 B/op | ~177k ops/s, 19112 B/op |
+
+On an entity this size the direct path is **1.57×** on encode and **1.46×** on decode, with **55%** and **44%** less
+garbage. That gap is what moving a repository from `withoutId` over a bridged codec to `BaseMongoRepository.direct`
+buys, before the network round trip, which on a single write is still the larger cost.
+
+Decoding this entity got cheaper in `5.1.0`: a derived product hands its fields to the constructor straight from the
+array it read them into, rather than copying them into a tuple first, and a sum whose `_type` comes first reads its
+case without marking and rewinding the document. Measured A and B interleaved, twice, because this laptop drifts by
+a few percent between runs minutes apart:
+
+| `wireDecode` | `5.0.1` | `5.1.0` |
+| --- | ---: | ---: |
+| first pair | ~254k ops/s, 11272 B/op | **~282k ops/s**, 10680 B/op |
+| second pair | ~265k ops/s, 11272 B/op | **~281k ops/s**, 10680 B/op |
+
+About **1.09×**, and 592 bytes less per document — one tuple for each of the seven products in it, the
+twenty-six-field scores' the largest. `wireEncode` ran alongside as
+the control, its code untouched, and moved by less than 1%.
+
+## Rendering a query
+
+A `Filter` or an `Update` is rendered once per query, not once per document, so it rarely shows; it does on a bulk
+write, where every model renders its own. [`RenderBenchmark`](benchmarks/src/main/scala/mongo4s/benchmarks/RenderBenchmark.scala)
+renders a five-condition filter and a ten-operator update, every field renamed by `snakeCase`. The two columns are
+`5.0.1` and `5.1.0`, which renames without boxing a `Char` per letter and checks an update's paths for overlap without
+splitting every path into arrays:
+
+| | `5.0.1` | `5.1.0` |
+| --- | ---: | ---: |
+| Filter | ~2.56M ops/s, 2968 B/op | **~3.89M ops/s**, 2840 B/op |
+| Update | ~600k ops/s, 8048 B/op | **~1.47M ops/s**, 3808 B/op |
 
 ## Typed errors — what the translation costs
 

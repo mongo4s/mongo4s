@@ -54,3 +54,26 @@ final class FieldNamingSpec extends AnyWordSpec, Matchers:
       FieldNaming.overrides(Map("a" -> "b"))("firstName") shouldBe "firstName"
     }
   }
+
+  "the separated namings" should {
+    def separatedTheOldWay(field: String, separator: Char): String =
+      field
+        .foldLeft(new StringBuilder) { (sb, ch) =>
+          if ch.isUpper
+          then
+            if sb.nonEmpty
+            then sb.append(separator)
+            sb.append(ch.toLower)
+          else sb.append(ch)
+        }
+        .toString
+
+    val names = List("", "a", "A", "id", "Id", "ID", "userID", "firstName", "createdAtUtc", "already_snake", "X1y2Z3", "aBC", "ÉtéÀ", "try_", "HTTPServer")
+
+    "spell every name exactly as the fold they replace did" in {
+      names.foreach { name =>
+        FieldNaming.snakeCase(name) shouldBe separatedTheOldWay(name, '_')
+        FieldNaming.kebabCase(name) shouldBe separatedTheOldWay(name, '-')
+      }
+    }
+  }

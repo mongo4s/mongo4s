@@ -211,7 +211,7 @@ trait WireCollectionInstances extends WirePrimitiveInstances:
         case Right(b) => writeBranch(writer, nameB, b, codecB)
 
     def decode(reader: BsonReader): Either[A, B] =
-      val tag = WireDiscriminator.read(reader)
+      val tag = WireDiscriminator.open(reader, WireDiscriminator.Field)
 
       val result =
         if tag == nameA

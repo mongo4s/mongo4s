@@ -6,29 +6,33 @@ trait FieldNaming:
 object FieldNaming:
   val identity: FieldNaming = field => field
 
-  val snakeCase: FieldNaming = field =>
-    field
-      .foldLeft(new StringBuilder) { (sb, ch) =>
-        if ch.isUpper
-        then
-          if sb.nonEmpty
-          then sb.append('_')
-          sb.append(ch.toLower)
-        else sb.append(ch)
-      }
-      .toString
+  val snakeCase: FieldNaming = separated(_, '_')
 
-  val kebabCase: FieldNaming = field =>
-    field
-      .foldLeft(new StringBuilder) { (sb, ch) =>
+  val kebabCase: FieldNaming = separated(_, '-')
+
+  private def separated(field: String, separator: Char): String =
+    var i = 0
+    while i < field.length && !field.charAt(i).isUpper do i += 1
+
+    if i == field.length
+    then field
+    else
+      val renamed = new java.lang.StringBuilder(field.length + 4)
+      renamed.append(field, 0, i): Unit
+
+      while i < field.length
+      do
+        val ch = field.charAt(i)
         if ch.isUpper
         then
-          if sb.nonEmpty
-          then sb.append('-')
-          sb.append(ch.toLower)
-        else sb.append(ch)
-      }
-      .toString
+          if renamed.length > 0 then renamed.append(separator): Unit
+          renamed.append(ch.toLower): Unit
+        else renamed.append(ch): Unit
+        i += 1
+      end while
+
+      renamed.toString
+  end separated
 
   def overrides(mapping: Map[String, String], fallback: FieldNaming = identity): FieldNaming =
     field => mapping.getOrElse(field, fallback(field))

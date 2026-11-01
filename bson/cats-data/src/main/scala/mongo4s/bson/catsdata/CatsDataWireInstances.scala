@@ -102,7 +102,7 @@ trait CatsDataWireInstances:
             codecB.encode(writer, b)
             writer.writeEndDocument(),
       reader =>
-        val tag = WireDiscriminator.read(reader)
+        val tag = WireDiscriminator.open(reader, WireDiscriminator.Field)
 
         val result: Ior[A, B] =
           if tag == nameA

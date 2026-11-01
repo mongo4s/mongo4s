@@ -12,6 +12,11 @@ object WireProductDerivation:
 
   private val Unread: AnyRef = new Object
 
+  private final class Values(values: Array[Any]) extends Product:
+    def productArity: Int            = values.length
+    def productElement(n: Int): Any  = values(n)
+    def canEqual(that: Any): Boolean = false
+
   inline def derived[A](using m: Mirror.ProductOf[A], config: WireCodecConfig): WireCodec[A] =
     build[A](
       mirror = m,
@@ -127,5 +132,5 @@ object WireProductDerivation:
           i += 1
         end while
 
-        mirror.fromProduct(Tuple.fromArray(values))
+        mirror.fromProduct(WireProductDerivation.Values(values))
       end readFields

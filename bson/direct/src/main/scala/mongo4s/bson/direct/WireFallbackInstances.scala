@@ -38,9 +38,13 @@ trait WireFallbackInstances extends WireCodecLowPriorityDerivation:
       private val bsonValueCodec = BsonValueCodec()
 
       def encode(writer: BsonWriter, value: A): Unit =
-        bsonValueCodec.encode(writer, encoder.encode(value), EncoderContext.builder().build())
+        bsonValueCodec.encode(writer, encoder.encode(value), WireFallbackInstances.encoderContext)
 
       def decode(reader: BsonReader): A =
-        decoder.decode(bsonValueCodec.decode(reader, DecoderContext.builder().build())) match
+        decoder.decode(bsonValueCodec.decode(reader, WireFallbackInstances.decoderContext)) match
           case Right(value) => value
           case Left(error)  => throw error.toThrowable
+
+private object WireFallbackInstances:
+  val encoderContext: EncoderContext = EncoderContext.builder().build()
+  val decoderContext: DecoderContext = DecoderContext.builder().build()

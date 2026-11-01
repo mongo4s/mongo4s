@@ -10,13 +10,34 @@ response to, so the failures are here too.
 * [The shape: mirror the driver](#the-shape-mirror-the-driver)
 * [Effect-agnostic by construction](#effect-agnostic-by-construction)
 * [Codecs are per-collection, never global](#codecs-are-per-collection-never-global)
+* [The codec decides how field names are spelled](#the-codec-decides-how-field-names-are-spelled)
+* [Nothing derives without being asked](#nothing-derives-without-being-asked)
 * [The AST-free path](#the-ast-free-path)
+* [`$slice` and `$meta` are shapes the AST was missing](#slice-and-meta-are-shapes-the-ast-was-missing)
+* [`explain` returns a document, not a type](#explain-returns-a-document-not-a-type)
+* [Errors the server raises](#errors-the-server-raises)
+* [One numeric rule, two paths](#one-numeric-rule-two-paths)
+* [An operator is declared with the case that renders it](#an-operator-is-declared-with-the-case-that-renders-it)
+* [A transaction reaches as far as the session is in scope](#a-transaction-reaches-as-far-as-the-session-is-in-scope)
+* [Cancelling a stream has to wake whoever is waiting on it](#cancelling-a-stream-has-to-wake-whoever-is-waiting-on-it)
 * [The query AST](#the-query-ast)
 * [Reads: strict by default, lenient on request](#reads-strict-by-default-lenient-on-request)
 * [Streaming](#streaming)
 * [Transactions](#transactions)
 * [Change streams](#change-streams)
 * [Repositories, and one AST with two interpreters](#repositories-and-one-ast-with-two-interpreters)
+* [What the fake got wrong, and why the first parity spec missed it](#what-the-fake-got-wrong-and-why-the-first-parity-spec-missed-it)
+* [Aggregation expressions are a phantom-typed tree](#aggregation-expressions-are-a-phantom-typed-tree)
+* [Search: a typed core, a raw edge](#search-a-typed-core-a-raw-edge)
+* [A write the client sends keeps its collection's codec](#a-write-the-client-sends-keeps-its-collections-codec)
+* [Refusing what would be dropped](#refusing-what-would-be-dropped)
+* [A tailable cursor is a live stream](#a-tailable-cursor-is-a-live-stream)
+* [Insert-if-absent writes only on insert](#insert-if-absent-writes-only-on-insert)
+* [A counter is a document](#a-counter-is-a-document)
+* [A default stands in for the database only when asked](#a-default-stands-in-for-the-database-only-when-asked)
+* [The fake builds an upserted document the way the server does](#the-fake-builds-an-upserted-document-the-way-the-server-does)
+* [The build fails on a warning](#the-build-fails-on-a-warning)
+* [The integration tests compile on the next Scala](#the-integration-tests-compile-on-the-next-scala)
 * [Evolving the API](#evolving-the-api)
 * [Deliberately not done](#deliberately-not-done)
 
@@ -216,6 +237,19 @@ The slots are filled with a marker first. Measured, because this loop is the dec
 within noise. Reading the codecs' `lazy val` into a local once per document, which the audit suggested, cost seven
 percent in `readFields` and was left out; `writeFields` takes the local and reads fields by position rather than
 through `productIterator`, and is four percent faster for it.
+
+**The performance work was measured on what the consumers store, and two of the audit's guesses did not survive
+it.** The codec benchmarks had a seven-field entity; `WideEntityBenchmark` models the hottest consumer write — optional
+fields, a sum, an enum-keyed map of twenty-six-field scores — so a change shows where it matters. The audit blamed the
+`Some` that `indexOf.get` returns for part of decode's garbage: the allocation figure does not move when it goes, since
+the JIT removes it. It also suggested reading the codecs' `lazy val` into a local, which costs decode seven percent
+and is applied to encode only. What did show was a copy nobody had named — `Tuple.fromArray` copying each product's
+fields once more before the constructor read them — and on the rendering side, `snakeCase` boxing a `Char` per letter
+and the overlap check splitting every path into arrays. Three items were left alone on purpose: `aggregateDirect`
+assembling a codec registry per call, which the ten-document row of `AggregateBenchmark` shows lost in the round
+trip; the client-level bulk write going through `BsonDocument`, which would need a registry per client for a method
+no consumer calls; and running a repository's batches in parallel, which `Effect` has no combinator for and an ordered
+write must not do anyway.
 
 **A sum's cases are gathered by a macro, not by inline recursion.** The audit expected wide products to hit the
 compiler's 32-deep inline limit; a probe put 120 fields through `derives WireCodec` without it, because `summonAll`
