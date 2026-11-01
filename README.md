@@ -854,8 +854,9 @@ whose codec writes `id` will never match. Note that the names `single`, `id`, `s
 **stored** names, used verbatim: the collection's `FieldNaming` is not applied to them, so under `snakeCase` write
 `"user_id"`, not `"userId"` — or use `PrimaryKey.of`.
 
-For entities that don't carry their own id field, `WithId[ObjectId, E]` ships a ready-made `PrimaryKey` — no `given`
-needed.
+For entities that don't carry their own id field, `WithId[Id, E]` ships a ready-made `PrimaryKey` on `_id` — no
+`given` needed — for an `ObjectId` and for any id with a `BsonEncoder`, a `String`, a `Long`, a `UUID` or an opaque
+id of your own.
 
 `inFilter` on a compound key produces an `$or` of `$and`s; on a single field it's a plain `$in` — and an empty key
 list always produces `Filter.none`, so `findMany(Nil)`/`deleteMany(Nil)` are safe no-ops instead of matching every

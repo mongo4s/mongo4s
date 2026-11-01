@@ -21,6 +21,8 @@ object WithId:
       fieldsOf = id => KeyFields.one(BsonField.Id, BsonObjectId(id)),
     )
 
+  given keyedBy: [Id, E] => (encoder: BsonEncoder[Id]) => PrimaryKey[WithId[Id, E], Id] = PrimaryKey.storedId(_.id)
+
   given [Id, E] => (idEncoder: BsonEncoder[Id], idDecoder: BsonDecoder[Id], codec: BsonDocumentCodec[E]) => BsonDocumentCodec[WithId[Id, E]] =
     BsonDocumentCodec.from(
       BsonDocumentEncoder.instance { value =>

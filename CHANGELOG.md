@@ -72,6 +72,8 @@ Binary compatible with `5.0.0`, checked by MiMa.
 - **`withTimeout(duration)` on `MongoDatabase` and `MongoCollection`**, the driver's client-side operation timeout for
   one handle rather than the whole client; an operation that runs out fails as `MongoError.ExecutionTimeout`. A
   `MongoCollection` or `MongoDatabase` of your own inherits a default that refuses it by name.
+- **A `PrimaryKey` for `WithId[Id, E]` over any id with a `BsonEncoder`**, keyed on `_id`, beside the one for
+  `ObjectId` that was there.
 - **`$text` with its language and sensitivities**: `Filter.text(search, TextSearchOptions.default.withCaseSensitive(true))`,
   with `withLanguage` and `withDiacriticSensitive` beside it. The filter is a new `Filter.TextSearch` case; the
   `Filter.text(search, language)` that exists builds the `Text` case it always did.

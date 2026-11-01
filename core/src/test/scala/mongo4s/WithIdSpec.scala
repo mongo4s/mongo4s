@@ -67,3 +67,23 @@ final class WithIdSpec extends AnyWordSpec with Matchers:
       pk.eqFilter("intro").toBson(FieldNaming.snakeCase).toJson shouldBe """{"_id": "intro"}"""
     }
   }
+
+  "WithId's primary key" should {
+    "key on _id for an ObjectId" in {
+      val oid = ObjectId.get()
+      val key = summon[PrimaryKey[WithId[ObjectId, Note], ObjectId]]
+
+      key.key(WithId(oid, Note("a"))) shouldBe oid
+      key.fieldNames shouldBe List("_id")
+      key.eqFilter(oid).toBson(FieldNaming.identity).toJson shouldBe s"""{"_id": {"$$oid": "${oid.toHexString}"}}"""
+    }
+
+    "key on _id for any id with an encoder, a String or a Long" in {
+      val byName = summon[PrimaryKey[WithId[String, Note], String]]
+      val byLong = summon[PrimaryKey[WithId[Long, Note], Long]]
+
+      byName.key(WithId("n-1", Note("a"))) shouldBe "n-1"
+      byName.eqFilter("n-1").toBson(FieldNaming.identity).toJson shouldBe """{"_id": "n-1"}"""
+      byLong.eqFilter(7L).toBson(FieldNaming.identity).toJson shouldBe """{"_id": 7}"""
+    }
+  }
