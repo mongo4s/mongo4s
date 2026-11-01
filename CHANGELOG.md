@@ -151,6 +151,9 @@ Binary compatible with `5.0.0`, checked by MiMa.
   `client.withTransaction` had started its session skipped the release, and one landing after a body succeeded could
   skip a `guaranteeCase` finalizer. `bracketCase` installs its guard before it acquires, and acquires where an
   interrupt cannot reach; every finalizer runs inside kyo's scope.
+- **The README did not say that transactions do not nest.** A `client.withTransaction` inside another is a
+  transaction of its own, which the outer rollback leaves alone, and a `session.withTransaction` on a session already
+  in one is refused; both are said now, and pinned against MongoDB 8.2.
 - **`findMany` returned a document once per batch its key appeared in.** A key repeated further down the list than
   `batchSize` went out in a second `$in`, and the document came back twice. The keys are made distinct before they
   are batched, as the README already promised.

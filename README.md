@@ -884,6 +884,12 @@ The same holds for a call **built** before the transaction and only run inside i
 is written, not when it runs, so `val write = users.insertOne(user)` outside the block commits on its own even when
 `write` runs inside it. Write the call inside the body, or build it in a function that takes the session.
 
+**A transaction does not nest.** A `client.withTransaction` inside another one starts a session and a transaction of
+its own, which commits when it ends — the outer one's rollback does not take its writes back. A
+`session.withTransaction` on a session that is already in a transaction is refused by the driver with an
+`IllegalStateException`, and the outer transaction rolls back. To make a helper part of the caller's transaction,
+give it the `using Option[ClientSession]` above rather than a transaction of its own.
+
 It commits on success and rolls back on failure **and on cancellation**: `Effect[F]` carries a `guaranteeCase` that
 sees how the action ended, so an interrupted transaction does not linger on the server until it is reaped. That holds
 on `cats`, `zio` and `kyo`, and on each of them the session is closed even when the interrupt lands as it is being

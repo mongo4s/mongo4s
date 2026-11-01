@@ -167,4 +167,46 @@ final class TransactionItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Befo
         afterCancel shouldBe 0L
       }
     }
+
+    "run a client.withTransaction inside another as a transaction of its own, which the outer rollback leaves alone" in {
+      final case class Boom() extends RuntimeException("boom")
+
+      val program =
+        for
+          client     <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database   <- client.getDatabase("tx-nested")
+          collection <- database.getCollection[Person]("people")
+          outcome    <- client
+                          .withTransaction(
+                            collection.insertOne(Person("outer", 1)) *>
+                              client.withTransaction(collection.insertOne(Person("inner", 2))) *>
+                              IO.raiseError(Boom())
+                          )
+                          .attempt
+          names      <- collection.find().all.map(_.map(_.name))
+          _          <- client.close
+        yield (outcome.isLeft, names)
+
+      program.timeout(30.seconds).asserting(_ shouldBe (true, List("inner")))
+    }
+
+    "refuse a session.withTransaction on a session already in one" in {
+      val program =
+        for
+          client     <- MongoClient.fromConnectionString[IO, S](container.getConnectionString)
+          database   <- client.getDatabase("tx-nested-session")
+          collection <- database.getCollection[Person]("people")
+          session    <- client.startSession
+          outcome    <- session
+                          .withTransaction[IO, S, Unit](
+                            collection.insertOne(Person("first", 1)).void *> session.withTransaction[IO, S, Unit](IO.unit)
+                          )
+                          .attempt
+          afterwards <- collection.count()
+          _          <- IO(session.close())
+          _          <- client.close
+        yield (outcome.left.map(_.getClass), afterwards)
+
+      program.timeout(30.seconds).asserting(_ shouldBe (Left(classOf[IllegalStateException]), 0L))
+    }
   }

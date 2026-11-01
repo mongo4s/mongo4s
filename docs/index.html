@@ -1060,7 +1060,10 @@ client.withTransaction(body, TransactionOptions.withoutRetries) // report the fi
         pause, up to 5 ms growing by half each attempt to a 500 ms ceiling, so clients that conflicted do not retry in
         lockstep; and a commit that ran out of <code>maxCommitTime</code> is not asked again. A call takes its session
         when it is <em>written</em>, not when it runs, so <code>val write = users.insertOne(user)</code> built outside
-        the block commits on its own even when it runs inside.
+        the block commits on its own even when it runs inside. A transaction does not nest: a
+        <code>client.withTransaction</code> inside another is a transaction of its own, which the outer rollback does
+        not undo, and a <code>session.withTransaction</code> on a session already in one is refused with an
+        <code>IllegalStateException</code>.
     </p>
     <p>
         A session is useful without a transaction too — to read your own writes causally, or one point in time from a
