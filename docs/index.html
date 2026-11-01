@@ -712,6 +712,7 @@ tagsField.hasSize(3)                     // $size
 scoreField.hasType(BsonTypeName.Int)     // $type — an enum, not a string
 scoreField.hasAnyType(BsonTypeName.Int, BsonTypeName.Long) // $type over several types
 Filter.text[User]("scala")               // $text
+Filter.text[User]("Café", TextSearchOptions.default.withCaseSensitive(true)) // $text, $caseSensitive
 Filter.expr(totalField.expr &gt; limitField.expr) // $expr, typed
 Filter.jsonSchema[User](schema)          // $jsonSchema
 flagsField.bitsAllSet(4)                 // $bitsAllSet — also $bitsAnySet, $bitsAllClear, $bitsAnyClear

@@ -26,6 +26,7 @@ enum Filter[E](val key: String):
   case Type[T](path: FieldPath, bsonTypes: List[BsonTypeName])     extends Filter[T]("$type")
   case Mod[T](path: FieldPath, divisor: Long, remainder: Long)     extends Filter[T]("$mod")
   case Text[T](search: String, language: Option[String])           extends Filter[T]("$text")
+  case TextSearch[T](search: String, options: TextSearchOptions)   extends Filter[T]("$text")
 
   case Near[T](
       path: FieldPath,
@@ -91,6 +92,12 @@ enum Filter[E](val key: String):
       val document = BsonDocument("$search", BsonString(search))
       language.foreach(value => document.append("$language", BsonString(value)))
       BsonDocument(key, document)
+    case TextSearch(search, options)   =>
+      val document = BsonDocument("$search", BsonString(search))
+      options.language.foreach(value => document.append("$language", BsonString(value)))
+      options.caseSensitive.foreach(value => document.append("$caseSensitive", BsonBoolean(value)))
+      options.diacriticSensitive.foreach(value => document.append("$diacriticSensitive", BsonBoolean(value)))
+      BsonDocument(key, document)
 
     case Near(path, geometry, min, max)       => Filter.operator(naming, path, key, Filter.proximity(geometry, min, max))
     case NearSphere(path, geometry, min, max) => Filter.operator(naming, path, key, Filter.proximity(geometry, min, max))
@@ -136,6 +143,7 @@ object Filter:
   def all[E]: Filter[E]                                                   = MatchAll()
   def none[E]: Filter[E]                                                  = MatchNone()
   def text[E](search: String, language: Option[String] = None): Filter[E] = Text(search, language)
+  def text[E](search: String, options: TextSearchOptions): Filter[E]      = TextSearch(search, options)
   def expr[E](expression: BsonDocument): Filter[E]                        = Expr(Expression.raw(expression))
   def expr[E](expression: Expression[E, Boolean]): Filter[E]              = Expr(expression)
   def jsonSchema[E](schema: BsonDocument): Filter[E]                      = JsonSchema(schema)

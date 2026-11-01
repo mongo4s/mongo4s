@@ -12,7 +12,7 @@ import org.bson.{BsonArray, BsonDocument, BsonString, BsonValue}
 import scala.jdk.CollectionConverters.given
 
 import mongo4s.cats.CatsStream
-import mongo4s.operations.{Filter, Index, Projection, Sort}
+import mongo4s.operations.{Filter, Index, Projection, Sort, TextSearchOptions}
 import mongo4s.testkit.FakeMongoCollection
 import mongo4s.bson.BsonDocumentCodec
 import mongo4s.{Field, MongoClient, MongoCollection}
@@ -71,6 +71,19 @@ final class TextAndSliceItSpec extends AsyncWordSpec, AsyncIOSpec, Matchers, Bef
         yield titlesOf(ranked)
 
       program.timeout(30.seconds).asserting(_ shouldBe List("strong", "weak"))
+    }
+
+    "tell case and diacritics apart only when asked to" in {
+      val program =
+        for
+          collection <- collection("sensitive", List(article("upper", "Café opens"), article("lower", "cafe closes")))
+          _          <- collection.createIndex(Index.text(Field.stored[BsonDocument, String]("body")))
+          loose      <- collection.find(Filter.text("cafe")).all
+          cased      <- collection.find(Filter.text("Cafe", TextSearchOptions.default.withCaseSensitive(true))).all
+          accented   <- collection.find(Filter.text("café", TextSearchOptions.default.withDiacriticSensitive(true))).all
+        yield (titlesOf(loose).sorted, titlesOf(cased), titlesOf(accented))
+
+      program.timeout(30.seconds).asserting(_ shouldBe (List("lower", "upper"), List("upper"), List("upper")))
     }
   }
 

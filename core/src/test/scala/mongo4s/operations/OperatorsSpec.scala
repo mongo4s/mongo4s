@@ -78,6 +78,16 @@ final class OperatorsSpec extends AnyWordSpec, Matchers:
     "render text search" in {
       json(Filter.text[Order]("scala")) shouldBe """{"$text": {"$search": "scala"}}"""
     }
+
+    "render text search with its language and sensitivities, leaving out what was not set" in {
+      val options = TextSearchOptions.default.withLanguage("es").withCaseSensitive(true).withDiacriticSensitive(false)
+
+      json(Filter.text[Order]("café", options)) shouldBe
+        """{"$text": {"$search": "café", "$language": "es", "$caseSensitive": true, "$diacriticSensitive": false}}"""
+      json(Filter.text[Order]("scala", TextSearchOptions.default.withCaseSensitive(true))) shouldBe
+        """{"$text": {"$search": "scala", "$caseSensitive": true}}"""
+      json(Filter.text[Order]("scala", TextSearchOptions.default)) shouldBe """{"$text": {"$search": "scala"}}"""
+    }
   }
 
   "$group" should {

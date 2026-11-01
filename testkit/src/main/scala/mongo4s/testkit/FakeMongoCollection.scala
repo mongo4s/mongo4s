@@ -640,7 +640,7 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Filter.ElemMatch(path, inner) =>
       elementsAt(document, path).exists(_.exists(element => elementMatches(element, inner.asInstanceOf[Filter[E]])))
 
-    case Filter.Text(_, _) =>
+    case Filter.Text(_, _) | Filter.TextSearch(_, _) =>
       throw UnsupportedOperationException("FakeMongoCollection: $text needs a real text index, so it is not simulated")
 
     case Filter.Expr(_) =>

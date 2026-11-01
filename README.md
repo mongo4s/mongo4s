@@ -240,6 +240,7 @@ scoreField.hasAnyType(BsonTypeName.Int, BsonTypeName.Long) // $type over several
 totalField.mod(4, 1)                     // $mod
 flagsField.bitsAllSet(4)                 // $bitsAllSet — also $bitsAnySet, $bitsAllClear, $bitsAnyClear
 Filter.text[User]("scala")               // $text
+Filter.text[User]("Café", TextSearchOptions.default.withCaseSensitive(true)) // $text, $caseSensitive
 Filter.expr(totalField.expr > limitField.expr) // $expr, typed — see Aggregation expressions
 Filter.expr[User](someBsonDocument)      // $expr, raw
 Filter.jsonSchema[User](schema)          // $jsonSchema
@@ -598,6 +599,10 @@ returns matches in whatever order the server finds them:
 ```scala
 collection.find(Filter.text("mongodb")).sort(Sort.byTextScore()).all
 ```
+
+`TextSearchOptions` carries the rest of `$text`: `withLanguage` for the stemming and stop words, `withCaseSensitive`
+and `withDiacriticSensitive` to tell `Café` from `cafe` and `café` from `cafe`. Each is left out of the query unless
+it is set, so the index's own defaults apply.
 
 `explain` answers the question a typed filter otherwise leaves open — did it use an index?
 

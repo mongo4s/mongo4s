@@ -406,6 +406,17 @@ final class FakeFidelitySpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "a $text search" should {
+    "be refused by name in either form, since it needs a real text index" in {
+      val c = fake(keyed("a"))
+
+      intercept[UnsupportedOperationException](c.find(Filter.text("a")).all.unsafeRunSync()).getMessage should include("$text")
+      intercept[UnsupportedOperationException](
+        c.find(Filter.text("a", TextSearchOptions.default.withCaseSensitive(true))).all.unsafeRunSync()
+      ).getMessage should include("$text")
+    }
+  }
+
   "a write for a client bulk write" should {
     "be refused, since a fake has no namespace the client could address" in {
       intercept[UnsupportedOperationException](fake(keyed("a")).write(WriteCommand.InsertOne(keyed("b"))))

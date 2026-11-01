@@ -100,6 +100,8 @@ object ReadmeSnippets:
   )
 
   val search   = Filter.text[User]("scala")
+  val cased    = Filter.text[User]("Café", TextSearchOptions.default.withCaseSensitive(true))
+  val accented = Filter.text[User]("café", TextSearchOptions.default.withLanguage("french").withDiacriticSensitive(true))
   val sameAs   = Filter.expr[User](BsonDocument("$gt", BsonDocument()))
   val startsA  = Field.of[User, String](_.name).regex("^A")
   val hasScore = scoreField.exists
