@@ -401,7 +401,7 @@ final class FakeMongoCollection[F[*], S[*], E](
 
       commands.zipWithIndex.iterator.takeWhile(_ => !options.ordered || failures.isEmpty).foreach { (command, index) =>
         try perform((command, index))
-        catch case duplicate: MongoError.DuplicateKey => failures.addOne(failureAt(index, duplicate)): Unit
+        catch case refused: MongoError => failures.addOne(failureAt(index, refused)): Unit
       }
 
       val written = BulkWriteResult(inserted, matched, modified, deleted, upserted.toMap)
@@ -585,10 +585,12 @@ final class FakeMongoCollection[F[*], S[*], E](
   def watchAttempting(options: WatchOptions[E])(using
       session: Option[ClientSession]
   )(using Streamable[S, ChangeEvent[DecodeResult[E]]]): S[ChangeEvent[DecodeResult[E]]] =
-    throw UnsupportedOperationException("FakeMongoCollection: watch is not simulated")
+    rs.liveStream(DeferredPublisher(() => refuseWatch))
 
   def watch(options: WatchOptions[E])(using session: Option[ClientSession])(using Streamable[S, ChangeEvent[E]]): S[ChangeEvent[E]] =
-    throw UnsupportedOperationException("FakeMongoCollection: watch is not simulated")
+    rs.liveStream(DeferredPublisher(() => refuseWatch))
+
+  private def refuseWatch: Nothing = throw UnsupportedOperationException("FakeMongoCollection: watch is not simulated")
 
   def underlying: RSMongoCollection[BsonDocument] =
     throw UnsupportedOperationException("FakeMongoCollection: no real driver collection behind this fake")
@@ -877,18 +879,13 @@ final class FakeMongoCollection[F[*], S[*], E](
       case Projection.Everything(_) => document
 
       case Projection.Exclude(fields, _) =>
-        fields.foldLeft(document)((acc, path) => unsetAt(acc, storedSegments(path)))
+        fields.foldLeft(document)((acc, path) => excluded(acc, storedSegments(path)).asDocument)
 
       case Projection.Include(fields, withId, slices, computed) =>
         if computed.nonEmpty then refuseExpressions("a computed projection field")
 
-        val kept = (fields ++ slices.map(_._1)).foldLeft(BsonDocument()) { (acc, path) =>
-          at(document, path).fold(acc)(value => setAt(acc, storedSegments(path), value))
-        }
-
-        if withId
-        then Option(document.get(BsonField.Id)).fold(kept)(id => kept.append(BsonField.Id, id))
-        else kept
+        val paths = (fields ++ slices.map(_._1)).map(storedSegments) ++ Option.when(withId)(List(BsonField.Id))
+        included(document, Included.of(paths))
 
     projection.slices.foldLeft(projected) { (acc, entry) =>
       at(acc, entry._1) match
@@ -897,6 +894,31 @@ final class FakeMongoCollection[F[*], S[*], E](
         case _                            => acc
     }
   end applyProjection
+
+  private def included(document: BsonDocument, kept: Included): BsonDocument =
+    document.entrySet.asScala.foldLeft(BsonDocument()) { (acc, entry) =>
+      kept.children.get(entry.getKey) match
+        case Some(inner) if inner.whole => acc.append(entry.getKey, entry.getValue)
+        case Some(inner)                => includedIn(entry.getValue, inner).fold(acc)(acc.append(entry.getKey, _))
+        case None                       => acc
+    }
+
+  private def includedIn(value: BsonValue, kept: Included): Option[BsonValue] =
+    value match
+      case document: BsonDocument => Some(included(document, kept))
+      case array: BsonArray       => Some(BsonArray(array.getValues.asScala.toList.flatMap(includedIn(_, kept)).asJava))
+      case _                      => None
+
+  private def excluded(value: BsonValue, segments: List[String]): BsonValue =
+    (value, segments) match
+      case (document: BsonDocument, seg :: Nil)  =>
+        val copy = copyOf(document)
+        copy.remove(seg): Unit
+        copy
+      case (document: BsonDocument, seg :: rest) =>
+        Option(document.get(seg)).fold(document)(nested => copyOf(document).append(seg, excluded(nested, rest)))
+      case (array: BsonArray, _)                 => BsonArray(array.getValues.asScala.toList.map(excluded(_, segments)).asJava)
+      case _                                     => value
 
   private def sliced(array: BsonArray, slice: Slice): BsonArray =
     val values = array.getValues.asScala.toList
@@ -1078,8 +1100,8 @@ final class FakeMongoCollection[F[*], S[*], E](
   ): List[BsonDocument] =
     val keyed = documents.map(document => keyOf(document, by) -> document)
 
-    keyed.map(_._1).distinct.map { key =>
-      val members = keyed.collect { case (candidate, document) if candidate == key => document }
+    BsonOrdering.distinct(keyed.map(_._1)).map { key =>
+      val members = keyed.collect { case (candidate, document) if BsonOrdering.same(candidate, key) => document }
       accumulators.foldLeft(BsonDocument(BsonField.Id, key)) { (acc, entry) =>
         acc.append(entry._1, accumulated(entry._2, members))
       }
@@ -1184,11 +1206,12 @@ final class FakeMongoCollection[F[*], S[*], E](
     values.filterNot(_.isNull).reduceOption((left, right) => if keep(BsonOrdering.compare(left, right)) then left else right).getOrElse(BsonNull.VALUE)
 
   private def distinctValues(path: mongo4s.FieldPath, filter: Filter[E]): List[BsonValue] =
-    matching(filter).flatMap { document =>
-      at(document, path) match
-        case Some(array) if array.isArray => array.asArray.getValues.asScala.toList
-        case other                        => other.toList
-    }.distinct
+    BsonOrdering.distinct(matching(filter).flatMap { document =>
+      candidates(document, path).flatMap {
+        case array: BsonArray => array.getValues.asScala.toList
+        case value            => List(value)
+      }
+    })
 
   private final class FakeDistinctQuery[B](
       path: mongo4s.FieldPath,
@@ -1230,9 +1253,9 @@ final class FakeMongoCollection[F[*], S[*], E](
     def bypassDocumentValidation(value: Boolean): AggregateQuery[F, S, B]                         = this
 
     def explain(verbosity: ExplainVerbosity): F[BsonDocument] =
-      throw UnsupportedOperationException("FakeMongoCollection: explain needs a real query planner, so it is not simulated")
+      F.raiseError(UnsupportedOperationException("FakeMongoCollection: explain needs a real query planner, so it is not simulated"))
 
-    def first: F[Option[B]] = atomically(decoded.headOption)
+    def first: F[Option[B]] = atomically(runPipeline(stages).headOption.map(decoderB.decodeDocument(_).fold(error => throw error.toThrowable, identity)))
     def all: F[List[B]]     = atomically(decoded)
 
     def stream(using Streamable[S, B]): S[B] =
@@ -1277,9 +1300,9 @@ final class FakeMongoCollection[F[*], S[*], E](
       else throw UnsupportedOperationException("FakeMongoCollection: a tailable cursor waits for writes, and the fake's cursor ends, so it is not simulated")
 
     def explain(verbosity: ExplainVerbosity): F[BsonDocument] =
-      throw UnsupportedOperationException("FakeMongoCollection: explain needs a real query planner, so it is not simulated")
+      F.raiseError(UnsupportedOperationException("FakeMongoCollection: explain needs a real query planner, so it is not simulated"))
 
-    def first: F[Option[E]]                  = atomically(results.headOption)
+    def first: F[Option[E]]                  = atomically(documents.headOption.map(decodedOrThrow))
     def all: F[List[E]]                      = atomically(results)
     def stream(using Streamable[S, E]): S[E] = rs.stream(DeferredPublisher(() => locked(results)))
 
@@ -1320,12 +1343,9 @@ final class FakeMongoCollection[F[*], S[*], E](
 
     private def documents: List[BsonDocument] = sourceDocuments.map(applyProjection(_, projection))
 
-    private def results: List[E] =
-      documents.map { document =>
-        codec
-          .decodeDocument(document)
-          .fold(error => throw error.toThrowable, identity)
-      }
+    private def results: List[E] = documents.map(decodedOrThrow)
+
+    private def decodedOrThrow(document: BsonDocument): E = codec.decodeDocument(document).fold(error => throw error.toThrowable, identity)
 
 object FakeMongoCollection:
 
@@ -1335,6 +1355,23 @@ object FakeMongoCollection:
   private[testkit] val Exact: org.bson.json.JsonWriterSettings =
     org.bson.json.JsonWriterSettings.builder().outputMode(org.bson.json.JsonMode.EXTENDED).build()
 
+private final case class Included(children: Map[String, Included]):
+  def whole: Boolean = children.isEmpty
+
+private object Included:
+  def of(paths: List[List[String]]): Included =
+    paths.foldLeft(Included(Map.empty))(add)
+
+  private def add(tree: Included, path: List[String]): Included =
+    path match
+      case Nil         => tree
+      case seg :: rest =>
+        val inner = tree.children.get(seg) match
+          case Some(existing) if existing.whole => existing
+          case Some(existing)                   => if rest.isEmpty then Included(Map.empty) else add(existing, rest)
+          case None                             => if rest.isEmpty then Included(Map.empty) else add(Included(Map.empty), rest)
+        Included(tree.children.updated(seg, inner))
+
 private object FakeWriteError:
   def apply(code: Int, message: String): Throwable =
     MongoError.translate(MongoWriteException(WriteError(code, message, BsonDocument()), ServerAddress(), java.util.Collections.emptyList()))
@@ -1342,6 +1379,9 @@ private object FakeWriteError:
 private object BsonOrdering:
   def same(a: BsonValue, b: BsonValue): Boolean =
     if a.isNumber && b.isNumber then compareNumbers(a, b) == 0 else a == b
+
+  def distinct(values: List[BsonValue]): List[BsonValue] =
+    values.foldLeft(List.empty[BsonValue])((kept, value) => if kept.exists(same(_, value)) then kept else value :: kept).reverse
 
   private def compareNumbers(a: BsonValue, b: BsonValue): Int =
     if (a.isInt32 || a.isInt64) && (b.isInt32 || b.isInt64)

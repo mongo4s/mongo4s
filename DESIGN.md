@@ -879,6 +879,16 @@ a unique secondary index, a stream built before an insert, a no-op update, a rep
 numbers of different widths. One of them was pinned by a test that expected the fake's wrong answer, which is a
 reminder that a green suite describes the implementation it runs against, not the server. Each is now a parity case.
 
+A third round came from the `5.0.1` audit, and its lesson was where a path goes rather than what a value is. The fake
+read a path one way everywhere — through documents, never by position — and the server reads it three ways: a query
+walks every element of an array but not into an array inside it, a numeric segment means a position *and* a field of
+that name, and an update or a projection reaches into each element by its own rules. Every shape the audit listed
+failed its new parity case before the fix, the server's answers came out as expected in all of them, and two cases
+turned up something nobody had listed: an insert stored a generated `_id` last where the server stores it first, and
+a replacement counts as unmodified only when it is byte-identical to the stored document *as sent* — one without an
+`_id` counts as modified even when the result is the same. `FakePathParityItSpec`, `FakeUpdatePathParityItSpec` and
+`FakeReadParityItSpec` hold them.
+
 **The fake streams through the `RsBridge` rather than an `emit` function the caller supplies.** `emit` took the
 results as a list, so they were computed when the stream was built and a stream set up before an insert missed it —
 the one thing a cursor never does. It also meant `aggregate`, `distinct` and `selectAs` could not stream at all,

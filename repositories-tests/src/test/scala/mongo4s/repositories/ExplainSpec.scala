@@ -26,16 +26,16 @@ final class ExplainSpec extends AnyWordSpec, Matchers:
 
   "the fake" should {
 
-    "refuse to explain a find, rather than invent a query plan" in {
-      val refused = intercept[UnsupportedOperationException](collection.find().explain())
+    "refuse to explain a find when it runs, rather than invent a query plan" in {
+      val explained = collection.find().explain()
+      val refused   = intercept[UnsupportedOperationException](explained.unsafeRunSync())
 
       refused.getMessage should include("explain")
     }
 
     "refuse to explain an aggregation for the same reason" in {
-      val refused = intercept[UnsupportedOperationException] {
-        collection.aggregate[Person](Seq(Stage.limit(1))).explain()
-      }
+      val explained = collection.aggregate[Person](Seq(Stage.limit(1))).explain()
+      val refused   = intercept[UnsupportedOperationException](explained.unsafeRunSync())
 
       refused.getMessage should include("explain")
     }

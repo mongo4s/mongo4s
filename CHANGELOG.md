@@ -167,6 +167,11 @@ Binary compatible with `5.0.0`, checked by MiMa.
   of reading it as a query on each element; `$pull`, `$pullAll` and `$addToSet` told `1` from `1L`; an insert stored
   a generated `_id` last; and a replacement identical to the stored document counted as modified. Each is checked
   against MongoDB 8.2 now.
+- **The fake answered several reads and bulk writes differently from the server.** A projection or `distinct` over
+  a dotted path through an array dropped the field; `distinct` and `$group` told `1`, `1L` and `1.0` apart; `first`
+  decoded every match, so a later document the codec could not read failed it; a bulk write error other than a
+  duplicate escaped as a bare `MongoError` instead of a `BulkWriteFailed`; and `explain` and `watch` threw where they
+  were called rather than in the effect or the stream. Each is checked against MongoDB 8.2 now.
 - **`findMany` returned a document once per batch its key appeared in.** A key repeated further down the list than
   `batchSize` went out in a second `$in`, and the document came back twice. The keys are made distinct before they
   are batched, as the README already promised.

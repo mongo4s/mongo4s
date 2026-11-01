@@ -2225,8 +2225,13 @@ an array by its smallest element ascending and its largest descending; `$min`/`$
 group's `$min`/`$max` skip `null`. A field holding `null` — which every codec but the direct one writes for a
 `None` — sorts and filters as it does on the server rather than failing the test.
 
-A few rare shapes it still answers differently, and a test that leans on one needs the server: a projection or
-`distinct` over a dotted path through an array drops the field. A duplicate in `insertMany` or a
+A projection through an array keeps the field in each element, as the server does — an element without it becomes
+`{}` and a scalar element is left out of an inclusion — and `distinct` reads a dotted path through an array of
+documents. `distinct` and `$group` treat numbers of different widths as one value, `first` decodes only the document
+it returns, and a write error inside a `bulkWrite` — a changed `_id`, a path the update cannot reach — is a
+`BulkWriteFailed` naming the command, as a duplicate is.
+
+A duplicate in `insertMany` or a
 `bulkWrite` is a `BulkWriteFailed` naming the command, after the writes before it — and, unordered, the writes after
 it too. A unique index is enforced, sparse and partial ones included, and is named as the server names it
 (`email_1`), so `dropIndex` finds it. `listIndexes` describes each index as the server does — `v`, `key`, `name` and
@@ -2259,8 +2264,9 @@ compare numbers across widths. The positional
 operators are not: `each`, `matched` and `where` paths are refused by name, rather than written to a field called
 `$[]`.
 
-Everything else throws `UnsupportedOperationException` naming what was asked for, rather than quietly answering
-wrong — a fake that lies is worse than no fake. That includes `watch`, `explain`, `renameCollection` — the fake
+Everything else fails with `UnsupportedOperationException` naming what was asked for, rather than quietly answering
+wrong — a fake that lies is worse than no fake. The failure is raised where the real operation would fail — in `F`,
+or in the stream — so `attempt` sees it. That includes `watch`, `explain`, `renameCollection` — the fake
 holds a single namespace, with nowhere to move it — a write for the client-level `bulkWrite`, for the same reason,
 `$text` and ranking by `$meta textScore`, every [aggregation expression](#aggregation-expressions) and so `$expr`,
 Atlas Search's indexes and stages, a tailable cursor, `$jsonSchema`, the geospatial operators, `Filter.Raw`, `Stage.Raw`, `Update.Raw`, a pipeline update, a

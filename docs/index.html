@@ -1926,8 +1926,9 @@ yield number</code></pre>
         <code>renameCollection</code>, <code>$text</code>, aggregation expressions and so <code>$expr</code>,
         <code>$jsonSchema</code>, <code>$median</code>/<code>$percentile</code>, Atlas Search, a tailable cursor, the
         positional update operators, a write for the client-level <code>bulkWrite</code>, <code>Filter.Raw</code>, a
-        pipeline update, a collation and an update carrying <code>arrayFilters</code> throw
-        <code>UnsupportedOperationException</code> naming what was asked for, rather than quietly answering wrong.
+        pipeline update, a collation and an update carrying <code>arrayFilters</code> fail with
+        <code>UnsupportedOperationException</code> naming what was asked for, in the effect or the stream, rather than
+        quietly answering wrong. A session is accepted and ignored, so a transaction over a fake undoes nothing.
         It streams through the runtime's <code>RsBridge</code>, reading the collection when the stream runs, so
         <code>FakeMongoCollection[IO, S, User](codec)</code> and <code>FakeRepository[IO, S, User, String]()</code> are
         all it takes. One fake can be shared between fibers: each operation runs under one lock, so concurrent
