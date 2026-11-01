@@ -1919,8 +1919,8 @@ yield number</code></pre>
         against an in-memory buffer instead, so repository logic is testable without a running MongoDB. Filters,
         every update operator, sorting, paging, projections, <code>distinct</code> and a subset of
         <code>aggregate</code> are simulated, and so are unique indexes, <code>listIndexes</code> as the server
-        describes them, the way a bulk write reports a duplicate, and how the server compares numbers of different
-        widths, unordered inserts, a <code>sort</code> on single-document updates, <code>pullWhere</code> and conditions
+        describes them, the way a bulk write reports a duplicate, how the server compares numbers of different widths
+        and strings by their UTF-8 bytes, how a path walks through arrays, numeric segments included, unordered inserts, a <code>sort</code> on single-document updates, <code>pullWhere</code> and conditions
         on scalar elements &mdash; each checked against a real server by a parity spec. <code>watch</code>, <code>explain</code>,
         <code>renameCollection</code>, <code>$text</code>, aggregation expressions and so <code>$expr</code>,
         <code>$jsonSchema</code>, <code>$median</code>/<code>$percentile</code>, Atlas Search, a tailable cursor, the

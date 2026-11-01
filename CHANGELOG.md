@@ -154,6 +154,12 @@ Binary compatible with `5.0.0`, checked by MiMa.
 - **The README did not say that transactions do not nest.** A `client.withTransaction` inside another is a
   transaction of its own, which the outer rollback leaves alone, and a `session.withTransaction` on a session already
   in one is refused; both are said now, and pinned against MongoDB 8.2.
+- **The fake answered several filters differently from the server.** A numeric path segment (`items.0.name`) was read
+  as a field called `0`; `$size`, `$type`, `$mod`, `$elemMatch` and the `$bits` operators did not look through an
+  array of documents, and `$type`, `$mod` and `$bits` not into an array of scalars; a path went on into an array
+  nested in an array, which the server does not; `$all` did not match a scalar field; a regular expression inside
+  `$in` never matched; and strings sorted by UTF-16 rather than by their UTF-8 bytes. Each is checked against
+  MongoDB 8.2 now.
 - **`findMany` returned a document once per batch its key appeared in.** A key repeated further down the list than
   `batchSize` went out in a second `$in`, and the document came back twice. The keys are made distinct before they
   are batched, as the README already promised.

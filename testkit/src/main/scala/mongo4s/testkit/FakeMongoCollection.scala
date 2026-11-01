@@ -617,8 +617,8 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Filter.Gte(path, value)              => ranged(document, path, value, inclusive = true)(_ >= 0)
     case Filter.Lt(path, value)               => ranged(document, path, value, inclusive = false)(_ < 0)
     case Filter.Lte(path, value)              => ranged(document, path, value, inclusive = true)(_ <= 0)
-    case Filter.In(path, values)              => values.exists(equals(document, path, _))
-    case Filter.Nin(path, values)             => !values.exists(equals(document, path, _))
+    case Filter.In(path, values)              => values.exists(listed(document, path, _))
+    case Filter.Nin(path, values)             => !values.exists(listed(document, path, _))
     case Filter.Exists(path, exists)          => candidates(document, path).nonEmpty == exists
     case Filter.Regex(path, pattern, options) =>
       val compiled = BsonOrdering.regex(pattern, options)
@@ -629,13 +629,12 @@ final class FakeMongoCollection[F[*], S[*], E](
     case Filter.MatchAll()                    => true
     case Filter.MatchNone()                   => false
 
-    case Filter.All(path, values) =>
-      values.nonEmpty && elementsAt(document, path).exists(elements => values.forall(value => elements.exists(BsonOrdering.same(_, value))))
-    case Filter.Size(path, size)  => at(document, path).exists(v => v.isArray && v.asArray.size == size)
-    case Filter.Type(path, names) => at(document, path).exists(v => names.contains(mongo4s.bson.BsonTypeName.of(v)))
+    case Filter.All(path, values) => values.nonEmpty && values.forall(equals(document, path, _))
+    case Filter.Size(path, size)  => candidates(document, path).exists(v => v.isArray && v.asArray.size == size)
+    case Filter.Type(path, names) => leaves(document, path).exists(v => names.contains(mongo4s.bson.BsonTypeName.of(v)))
 
     case Filter.Mod(path, divisor, remainder) =>
-      at(document, path).exists(v => v.isNumber && v.asNumber.longValue % divisor == remainder)
+      leaves(document, path).exists(v => v.isNumber && v.asNumber.longValue % divisor == remainder)
 
     case Filter.ElemMatch(path, inner) =>
       elementsAt(document, path).exists(_.exists(element => elementMatches(element, inner.asInstanceOf[Filter[E]])))
@@ -669,8 +668,8 @@ final class FakeMongoCollection[F[*], S[*], E](
 
   private def storedSegments(path: mongo4s.FieldPath): List[String] = path.render(naming).split('.').toList
 
-  private def elementsAt(document: BsonDocument, path: mongo4s.FieldPath): Option[List[BsonValue]] =
-    at(document, path).collect { case array if array.isArray => array.asArray.getValues.asScala.toList }
+  private def elementsAt(document: BsonDocument, path: mongo4s.FieldPath): List[List[BsonValue]] =
+    candidates(document, path).collect { case array: BsonArray => array.getValues.asScala.toList }
 
   private def candidates(document: BsonDocument, path: mongo4s.FieldPath): List[BsonValue] =
     def go(current: BsonValue, segments: List[String]): List[BsonValue] = segments match
@@ -678,7 +677,10 @@ final class FakeMongoCollection[F[*], S[*], E](
       case seg :: rest =>
         current match
           case nested: BsonDocument => Option(nested.get(seg)).toList.flatMap(go(_, rest))
-          case array: BsonArray     => array.getValues.asScala.toList.flatMap(go(_, segments))
+          case array: BsonArray     =>
+            val elements = array.getValues.asScala.toList
+            val position = seg.toIntOption.filter(index => index >= 0 && index < elements.size && seg.forall(_.isDigit))
+            position.toList.flatMap(index => go(elements(index), rest)) ++ elements.collect { case element: BsonDocument => element }.flatMap(go(_, segments))
           case _                    => Nil
 
     go(document, storedSegments(path))
@@ -707,6 +709,14 @@ final class FakeMongoCollection[F[*], S[*], E](
     else found.max(using BsonOrdering.compare(_, _))
   end sortKey
 
+  private def listed(document: BsonDocument, path: mongo4s.FieldPath, value: BsonValue): Boolean =
+    if value.isRegularExpression
+    then
+      val expression = value.asRegularExpression
+      val compiled   = BsonOrdering.regex(expression.getPattern, expression.getOptions)
+      leaves(document, path).exists(leaf => (leaf.isString && compiled.matcher(leaf.asString.getValue).find()) || BsonOrdering.same(leaf, value))
+    else equals(document, path, value)
+
   private def equals(document: BsonDocument, path: mongo4s.FieldPath, value: BsonValue): Boolean =
     if value.isNull
     then candidates(document, path).isEmpty || leaves(document, path).exists(_.isNull)
@@ -719,8 +729,8 @@ final class FakeMongoCollection[F[*], S[*], E](
     go(document, storedSegments(path))
   end at
 
-  private def bitsOf(document: BsonDocument, path: mongo4s.FieldPath): Option[Long] =
-    at(document, path).collect {
+  private def bitsOf(document: BsonDocument, path: mongo4s.FieldPath): List[Long] =
+    leaves(document, path).collect {
       case value if value.isInt32 || value.isInt64                    => value.asNumber.longValue
       case value if value.isDouble && value.asDouble.getValue.isWhole => value.asDouble.getValue.toLong
     }
@@ -1326,7 +1336,7 @@ private object BsonOrdering:
 
   private def within(a: BsonValue, b: BsonValue): Int =
     if a.isNumber && b.isNumber then compareNumbers(a, b)
-    else if bracket(a) == 4 then textOf(a).compareTo(textOf(b))
+    else if bracket(a) == 4 then utf8(textOf(a), textOf(b))
     else if a.isDocument then entries(a.asDocument, b.asDocument)
     else if a.isArray then elements(a.asArray.getValues.asScala.toList, b.asArray.getValues.asScala.toList)
     else if a.isBinary then binary(a.asBinary, b.asBinary)
@@ -1335,11 +1345,14 @@ private object BsonOrdering:
     else if a.isDateTime then java.lang.Long.compare(a.asDateTime.getValue, b.asDateTime.getValue)
     else if a.isTimestamp then a.asTimestamp.getValue.compareTo(b.asTimestamp.getValue)
     else if a.isRegularExpression then
-      val byPattern = a.asRegularExpression.getPattern.compareTo(b.asRegularExpression.getPattern)
-      if byPattern != 0 then byPattern else a.asRegularExpression.getOptions.compareTo(b.asRegularExpression.getOptions)
+      val byPattern = utf8(a.asRegularExpression.getPattern, b.asRegularExpression.getPattern)
+      if byPattern != 0 then byPattern else utf8(a.asRegularExpression.getOptions, b.asRegularExpression.getOptions)
     else 0
 
   private def textOf(value: BsonValue): String = if value.isSymbol then value.asSymbol.getSymbol else value.asString.getValue
+
+  private def utf8(a: String, b: String): Int =
+    java.util.Arrays.compareUnsigned(a.getBytes(java.nio.charset.StandardCharsets.UTF_8), b.getBytes(java.nio.charset.StandardCharsets.UTF_8))
 
   private def entries(a: BsonDocument, b: BsonDocument): Int =
     val left  = a.entrySet.asScala.toList
@@ -1352,7 +1365,7 @@ private object BsonOrdering:
         val byType = Integer.compare(bracket(l.getValue), bracket(r.getValue))
         if byType != 0 then byType
         else
-          val byName = l.getKey.compareTo(r.getKey)
+          val byName = utf8(l.getKey, r.getKey)
           if byName != 0 then byName else compare(l.getValue, r.getValue)
       }
       .find(_ != 0)

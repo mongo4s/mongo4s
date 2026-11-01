@@ -2204,27 +2204,30 @@ Filters, updates, sorting, paging and projections are simulated, and so is a sub
 test to reach for Docker.
 
 `distinct` is simulated too, array fields flattened into their elements the way the server does, and so is `$slice`
-in a projection. Filters follow the server's array semantics — a filter on an array field matches its elements, and a
-dotted path descends through an array of documents — `$regex` searches rather than anchors and honours its options,
-`$eq null` matches a missing field, `$all: []` matches nothing, `$elemMatch` and `pullWhere` take a condition on a scalar
+in a projection. Filters follow the server's array semantics — a filter on an array field matches its elements, a
+dotted path descends through an array of documents but not into an array inside it, a numeric segment
+(`items.0.name`) picks that position as well as a field of that name, and `$size`, `$type`, `$mod`, `$elemMatch` and
+the `$bits` operators look through arrays as the comparisons do — `$regex` searches rather than anchors and honours
+its options, a regular expression inside `$in` matches the strings it matches, `$eq null` matches a missing field,
+`$all` on a scalar field matches its one value, `$all: []` matches nothing, `$elemMatch` and `pullWhere` take a condition on a scalar
 element as well as on a document one, `$inc` keeps the width the server keeps, and an insert stamps an `_id` and
 refuses a duplicate one — through `insertOne`, `insertMany` (ordered or not), a `bulkWrite` insert, and an upsert that
 inserts, so `wasUpserted` and `upsertedIds` say what the server would say. A `sort` on `updateOne`/`replaceOne` picks
 the document the server would pick.
 
 Numbers compare the way the server compares them: an `Int64` of 5 equals an `Int32` of 5 and a `Double` of 5.0,
-`Long`s past `Double`'s precision sort exactly, and `NaN` sorts below every number. Values of different types compare
+`Long`s past `Double`'s precision sort exactly, and `NaN` sorts below every number. Strings compare by their UTF-8
+bytes, as the server's binary comparison does, so a character outside the Basic Multilingual Plane sorts after
+`U+FFFF` rather than among the surrogates. Values of different types compare
 in BSON's order — `null` below numbers, numbers below strings, and so on up to dates — so a range filter matches
 only values of its operand's type, element by element through an array; a sort treats a missing field as `null` and
 an array by its smallest element ascending and its largest descending; `$min`/`$max` replace across types; and a
 group's `$min`/`$max` skip `null`. A field holding `null` — which every codec but the direct one writes for a
 `None` — sorts and filters as it does on the server rather than failing the test.
 
-A few rare shapes it still answers differently, and a test that leans on one needs the server: `$size`, `$type`,
-`$mod` and the `$bits` operators do not look into an array of documents; a numeric path segment (`items.0.qty`) is
-read as a field called `0`; `$pull` by a document compares for equality, where the server reads the document as a
-query on each element; a negative `$position` prepends; `$in` holding a regular expression never matches; and a
-projection or `distinct` over a dotted path through an array drops the field. A duplicate in `insertMany` or a
+A few rare shapes it still answers differently, and a test that leans on one needs the server: `$pull` by a document
+compares for equality, where the server reads the document as a query on each element; a negative `$position`
+prepends; and a projection or `distinct` over a dotted path through an array drops the field. A duplicate in `insertMany` or a
 `bulkWrite` is a `BulkWriteFailed` naming the command, after the writes before it — and, unordered, the writes after
 it too. A unique index is enforced, sparse and partial ones included, and is named as the server names it
 (`email_1`), so `dropIndex` finds it. `listIndexes` describes each index as the server does — `v`, `key`, `name` and
