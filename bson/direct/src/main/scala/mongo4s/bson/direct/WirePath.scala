@@ -4,7 +4,7 @@ import scala.util.control.NonFatal
 
 import mongo4s.bson.BsonError
 
-private[bson] object WirePath:
+private[mongo4s] object WirePath:
 
   inline def under[A](inline segment: String)(inline decode: A): A =
     try decode

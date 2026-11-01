@@ -1,9 +1,10 @@
 package mongo4s
 
-import org.bson.BsonObjectId
 import org.bson.types.ObjectId
+import org.bson.{BsonObjectId, BsonReader, BsonType, BsonWriter}
 
 import mongo4s.bson.*
+import mongo4s.bson.direct.{FieldCodec, WireCodec, WirePath}
 
 final case class WithId[+Id, +E](id: Id, entity: E)
 
@@ -34,3 +35,42 @@ object WithId:
         yield WithId(id, entity)
       },
     )
+
+  given wire: [Id, E] => (id: WireCodec[Id], entity: WireCodec[E]) => WireCodec[WithId[Id, E]] =
+    entity match
+      case fields: FieldCodec[E @unchecked] =>
+        require(
+          !fields.fieldNames.contains(BsonField.Id),
+          "WithId writes _id itself, so the entity it wraps cannot have a field stored as _id",
+        )
+
+        new FieldCodec[WithId[Id, E]]:
+          override def fieldNaming: FieldNaming  = fields.fieldNaming
+          override def fieldNames: Array[String] = BsonField.Id +: fields.fieldNames
+
+          def writeFields(writer: BsonWriter, value: WithId[Id, E]): Unit =
+            writer.writeName(BsonField.Id)
+            id.encode(writer, value.id)
+            fields.writeFields(writer, value.entity)
+
+          def readFields(reader: BsonReader): WithId[Id, E] =
+            val start = reader.getMark
+            var found = false
+            var key   = null.asInstanceOf[Id]
+
+            while !found && reader.readBsonType() != BsonType.END_OF_DOCUMENT
+            do
+              if reader.readName() == BsonField.Id
+              then
+                key = WirePath.under(BsonField.Id)(id.decode(reader))
+                found = true
+              else reader.skipValue()
+            end while
+
+            if !found then throw BsonError.DecodingFailure(BsonError.MissingField(BsonField.Id))
+
+            start.reset()
+            WithId(key, fields.readFields(reader))
+          end readFields
+      case _                                =>
+        throw IllegalArgumentException("WithId needs the entity's codec to be a derived case class, whose fields it can write beside _id")

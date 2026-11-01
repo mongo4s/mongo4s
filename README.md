@@ -2040,6 +2040,7 @@ BaseMongoRepository.createDirect[F, S, E, K](db, "collection") // the same over 
 BaseMongoRepository.withoutId[F, S, E, K](db, "collection")    // strips _id from reads — for entities that do not model it
 BaseMongoRepository.objectId[F, S, E](db, "collection")        // WithId[ObjectId, E], auto _id round-trip
 BaseMongoRepository.direct(db, "collection")                   // a Repository over a WireCodec, typed by where it goes
+BaseMongoRepository.objectIdDirect[F, S, E](db, "collection")  // WithId[ObjectId, E] over a WireCodec
 ```
 
 `direct` is the one to reach for when the entity has a `WireCodec`. It reads and writes through `getDirectCollection`,
@@ -2053,7 +2054,9 @@ def players[F[*]: Async](db: MongoDatabase[F, CatsStream[F]]): F[PlayerRepositor
   BaseMongoRepository.direct(db, "players", projection = Projection.excludeId[Player])
 ```
 
-`projection` is what `withoutId` sets, and `batchSize` is the same as everywhere else.
+`projection` is what `withoutId` sets, and `batchSize` is the same as everywhere else. `objectIdDirect` is the
+direct `objectId`: a `WithId[ObjectId, E]` has a `WireCodec` whenever `E` is a derived case class, writing `_id` first
+and the entity's fields beside it under the entity's naming.
 
 `create` is the default, and it is the right one far more often than it looks: none of the four codec backends
 rejects a document carrying an `_id` the entity does not model — `medeia`, `zio-bson`, `calypso` and a bridged

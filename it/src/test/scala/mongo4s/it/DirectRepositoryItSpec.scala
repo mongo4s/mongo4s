@@ -8,7 +8,7 @@ import org.testcontainers.mongodb.MongoDBContainer
 import mongo4s.bson.direct.{WireCodec, WireCodecConfig}
 import mongo4s.repositories.{BaseMongoRepository, Repository}
 import mongo4s.operations.{Projection, Update, WriteCommand}
-import mongo4s.{Effect, Field, MongoClient, PrimaryKey, RsBridge, Streamable}
+import mongo4s.{Effect, Field, MongoClient, PrimaryKey, RsBridge, Streamable, WithId}
 
 import mongo4s.bson.BsonInstances.given
 
@@ -104,6 +104,24 @@ trait DirectRepositoryItSpec[F[*], S[*]] extends AnyWordSpec, Matchers, BeforeAn
       byKey shouldBe Some(Account("a1", "Ann"))
       keyIndex shouldBe "account_id_1"
       stored.map(_.keySet.toArray.toList.map(_.toString).filterNot(_ == "_id")) shouldBe List(List("account_id", "display_name"))
+    }
+
+    "keep an entity with no id of its own under an ObjectId, through objectIdDirect" in {
+      import DirectRepositoryItSpec.Snake.Account
+
+      given Effect[F]      = effectInstance
+      given RsBridge[F, S] = rsBridge
+      val client           = run(MongoClient.fromConnectionString[F, S](container.getConnectionString))
+      val database         = run(client.getDatabase("direct_it_object_id"))
+      val repo             = run(BaseMongoRepository.objectIdDirect[F, S, Account](database, "events"))
+      val id               = org.bson.types.ObjectId.get()
+      run(repo.insertOne(WithId(id, Account("a1", "Ann"))))
+      val found            = run(repo.findOne(id))
+      val stored           = run(RsBridge[F, S].list(run(database.getCollection[org.bson.BsonDocument]("events")).underlying.find()))
+      run(client.close)
+
+      found shouldBe Some(WithId(id, Account("a1", "Ann")))
+      stored.map(_.keySet.toArray.toList.map(_.toString)) shouldBe List(List("_id", "account_id", "display_name"))
     }
 
     "upsert every field but the kept ones, leaving those as another writer stored them" in {

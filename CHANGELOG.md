@@ -52,6 +52,8 @@ Binary compatible with `5.0.0`, checked by MiMa.
   and `FakeRepository` is `open`, so a service's own repository trait can mix into it.
 - **`MongoClient.ping(timeout)`**, `false` when the server does not answer in time, and in `mongo4s-cats`
   `MongoClientResource.reachability(client, interval)`, a background ping whose last answer a readiness check reads.
+- **`BaseMongoRepository.objectIdDirect`**, and a `WireCodec` for `WithId[Id, E]` whenever `E` is a derived case
+  class: `_id` first, the entity's fields beside it, under the entity's naming.
 - `MongoError.writeConcernErrors`, with `MongoError.WriteConcernFailure`: what the write concern reported, on a single
   write, a bulk write and a client bulk write.
 - `field.setNull` and `Update.setNull(field)` on an `Option` field: the explicit `null` that `set(None)` no longer

@@ -1787,7 +1787,8 @@ BaseMongoRepository.create[F, S, E, K](db, "collection")       // reads return t
 BaseMongoRepository.createDirect[F, S, E, K](db, "collection") // the same over getDirectCollection and a WireCodec
 BaseMongoRepository.withoutId[F, S, E, K](db, "collection")    // strips _id from reads — for entities that do not model it
 BaseMongoRepository.objectId[F, S, E](db, "collection")        // WithId[ObjectId, E], auto _id round-trip
-BaseMongoRepository.direct(db, "collection")                   // a Repository over a WireCodec, typed by where it goes</code></pre>
+BaseMongoRepository.direct(db, "collection")                   // a Repository over a WireCodec, typed by where it goes
+BaseMongoRepository.objectIdDirect[F, S, E](db, "collection")  // WithId[ObjectId, E] over a WireCodec</code></pre>
     <p class="muted">
         <code>direct</code> is the one for an entity with a <code>WireCodec</code>: the names come from the codec's
         naming, and it answers <code>F[Repository[F, S, E, K]]</code>, so the type it is assigned to decides

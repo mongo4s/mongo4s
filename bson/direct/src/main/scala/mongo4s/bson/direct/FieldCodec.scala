@@ -2,7 +2,7 @@ package mongo4s.bson.direct
 
 import org.bson.{BsonReader, BsonWriter}
 
-private[direct] trait FieldCodec[A] extends WireCodec[A]:
+private[mongo4s] trait FieldCodec[A] extends WireCodec[A]:
   def writeFields(writer: BsonWriter, value: A): Unit
   def readFields(reader: BsonReader): A
   def fieldNames: Array[String] = Array.empty
@@ -22,7 +22,7 @@ private[direct] trait FieldCodec[A] extends WireCodec[A]:
     result
   end decode
 
-private[direct] object FieldCodec:
+private[mongo4s] object FieldCodec:
   def mapped[A, B](source: FieldCodec[A], f: A => B, g: B => A): FieldCodec[B] =
     new FieldCodec[B]:
       def writeFields(writer: BsonWriter, value: B): Unit = source.writeFields(writer, g(value))

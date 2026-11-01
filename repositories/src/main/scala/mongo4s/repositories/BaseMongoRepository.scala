@@ -272,6 +272,13 @@ object BaseMongoRepository:
       BaseMongoRepository(collection, batchSize, projection)
     }
 
+  def objectIdDirect[F[*], S[*], E](
+      database: MongoDatabase[F, S],
+      collectionName: String,
+      batchSize: Int = DefaultBatchSize,
+  )(using F: Effect[F], codec: WireCodec[E]): F[Repository[F, S, WithId[ObjectId, E], ObjectId]] =
+    direct[F, S, WithId[ObjectId, E], ObjectId](database, collectionName, batchSize)
+
   def withoutId[F[*], S[*], E, K](
       database: MongoDatabase[F, S],
       collectionName: String,
