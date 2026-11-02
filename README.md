@@ -56,10 +56,10 @@ third-party codec library, nothing beyond `mongo4s-core`, which brings it in:
 
 ```scala
 libraryDependencies ++= Seq(
-  "org.mongo4s" %% "mongo4s-cats"           % "5.0.1", // mongo4s-core + cats-effect integration
-  "org.mongo4s" %% "mongo4s-bson-direct"    % "5.0.1", // ast-free bson codecs
-  "org.mongo4s" %% "mongo4s-bson-cats-data" % "5.0.1", // if you need NonEmptyList etc. codec instances
-  "org.mongo4s" %% "mongo4s-repositories"   % "5.0.1", // if you need auto-generated CRUD repository ops for your model
+  "org.mongo4s" %% "mongo4s-cats"           % "5.1.0", // mongo4s-core + cats-effect integration
+  "org.mongo4s" %% "mongo4s-bson-direct"    % "5.1.0", // ast-free bson codecs
+  "org.mongo4s" %% "mongo4s-bson-cats-data" % "5.1.0", // if you need NonEmptyList etc. codec instances
+  "org.mongo4s" %% "mongo4s-repositories"   % "5.1.0", // if you need auto-generated CRUD repository ops for your model
 )
 ```
 
@@ -2219,7 +2219,7 @@ a session, so a number can be drawn inside a transaction. `Counters[F]` is the t
 `FakeCounters` in the testkit is the real implementation over a `FakeMongoCollection`.
 
 For unit tests, `FakeMongoCollection` (in `mongo4s-testkit`, a published module — add it as
-`"org.mongo4s" %% "mongo4s-testkit" % "5.0.1" % Test`) implements `MongoCollection` in memory. The exact same
+`"org.mongo4s" %% "mongo4s-testkit" % "5.1.0" % Test`) implements `MongoCollection` in memory. The exact same
 `Filter`/`Update`/`Field` AST the real driver interprets is interpreted against an in-memory buffer instead, so
 repository logic is testable without a running MongoDB.
 
@@ -2446,7 +2446,7 @@ the other single-result publishers that it guards.
 Published for `Scala 3.9 LTS` under `org.mongo4s`:
 
 ```scala
-"org.mongo4s" %% "mongo4s-<module>" % "5.0.1"
+"org.mongo4s" %% "mongo4s-<module>" % "5.1.0"
 ```
 
 | | Module | Notes |
@@ -2490,6 +2490,15 @@ shape — `Group`'s key, `Filter.Expr`, `Filter.Type`, `Update.CurrentDate`, `Pr
 `MongoCollection` and `MongoClient` gain members an implementation of your own has to provide. Two behaviours change
 without a compile error: `containsAll(Nil)` matches nothing, as `$all: []` does on the server, and a `sort` on
 `updateMany` is refused rather than dropped. Each has a migration note in [COMPATIBILITY.md](COMPATIBILITY.md).
+
+`5.1.0` is binary compatible with `5.0.0` and is mostly what services moving onto the direct codec path were
+writing by hand: a `ScalarWireCodec` answers as the `BsonEncoder` and `BsonDecoder` of its type,
+`BaseMongoRepository.direct` and `PrimaryKey.of` build a repository over a `WireCodec` keyed on the entity's own
+fields, and `@stored`, named scalar representations, `Map` keys beyond `String` and `Float`/`Short`/`Byte`/`Char`/
+`Array[Byte]` cover the shapes existing collections already have. A few things change without a compile error —
+`set(None)` renders `$unset`, a filter that matches nothing renders an empty `$in` on `_id`, refusals are raised in `F`
+rather than thrown where the call is built, and on `zio` a defect stays a defect. Each has a note in
+[COMPATIBILITY.md](COMPATIBILITY.md).
 
 `5.0.1` is binary compatible with `5.0.0` and fixes code the library inlines into yours: a derived `WireCodec` with
 a default parameter, and `PrimaryKey.compound`, carried Scala 3.10's deprecated `ArrowAssoc` into the calling code,
