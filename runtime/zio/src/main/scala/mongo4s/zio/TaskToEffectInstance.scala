@@ -3,6 +3,7 @@ package mongo4s.zio
 import java.util.concurrent.TimeUnit
 
 import scala.concurrent.duration.FiniteDuration
+import scala.util.control.NonFatal
 
 import zio.{Cause, Clock, Duration, Exit, Task, ZIO}
 
@@ -12,8 +13,8 @@ trait TaskToEffectInstance:
   given taskEffect: Effect[Task] = new Effect[Task]:
     def pure[A](a: A): Task[A]                               = ZIO.succeed(a)
     def delay[A](a: => A): Task[A]                           = ZIO.attempt(a)
-    def map[A, B](fa: Task[A])(f: A => B): Task[B]           = fa.mapAttempt(f)
-    def flatMap[A, B](fa: Task[A])(f: A => Task[B]): Task[B] = fa.flatMap(a => ZIO.suspend(f(a)))
+    def map[A, B](fa: Task[A])(f: A => B): Task[B]           = fa.flatMap(a => TaskToEffectInstance.failing(Exit.succeed(f(a))))
+    def flatMap[A, B](fa: Task[A])(f: A => Task[B]): Task[B] = fa.flatMap(a => TaskToEffectInstance.failing(f(a)))
     def raiseError[A](error: Throwable): Task[A]             = ZIO.fail(error)
 
     override def suspend[A](fa: => Task[A]): Task[A] = ZIO.suspend(fa)
@@ -47,7 +48,7 @@ trait TaskToEffectInstance:
     override def bracketCase[A, B](acquire: Task[A])(use: A => Task[B])(release: (A, ExitCase) => Task[Unit]): Task[B] =
       ZIO.uninterruptibleMask { restore =>
         acquire.flatMap { a =>
-          restore(ZIO.suspend(use(a))).exit.flatMap { exit =>
+          restore(TaskToEffectInstance.failing(use(a))).exit.flatMap { exit =>
             runFinalizer(
               TaskToEffectInstance.exitCaseOf(exit),
               exitCase => release(a, exitCase),
@@ -63,6 +64,10 @@ trait TaskToEffectInstance:
       }
 
 object TaskToEffectInstance extends TaskToEffectInstance:
+  private inline def failing[A](inline task: Task[A]): Task[A] =
+    try task
+    catch case NonFatal(error) => Exit.fail(error)
+
   private def errorOf(cause: Cause[Throwable]): Option[Throwable] =
     if cause.isInterrupted
     then None
