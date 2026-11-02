@@ -1147,8 +1147,9 @@ simulated — including the explicit `null` the server writes where there is not
 
 **Batching rapid's demand.** rapid's stream asks the cursor for one more document each time it takes one, where
 fs2 asks by the chunk. Measured before changing it: against a real MongoDB, rapid's `findStream` runs at 3,179 ops/s
-against 3,174 for cats-effect and 3,044 for zio, in the same sitting ([BENCHMARKS.md](BENCHMARKS.md)). A per-element `request` is
-lost in the decode and the round trip, so the simpler code stays.
+against 3,174 for cats-effect and 3,044 for zio, in the same sitting ([BENCHMARKS.md](BENCHMARKS.md)), and at 3,262 against 3,109
+and 3,029 when the `5.1.0` build was measured. A per-element `request` is lost in the decode and the round trip, so
+the simpler code stays.
 
 **Copying every `BsonDocument` the API accepts.** `Filter.Raw`, `Stage.Raw`, hints and resume tokens are taken as
 given, not cloned: mongo4s never writes into them, so aliasing only matters if the caller mutates a document after

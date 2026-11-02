@@ -1315,7 +1315,7 @@ decode error rather than a default. `attempting` reports it per document.
 On a collection opened with `getCollection` the same call still works — the `WireCodec` is bridged to a document
 codec — so the method is about the codec you have, not about which constructor you used.
 
-It is worth reaching for when the pipeline returns *a lot*. Measured against a real MongoDB it is **1.40×** the
+It is worth reaching for when the pipeline returns *a lot*. Measured against a real MongoDB it is **1.42×** the
 bridged path over ten thousand documents and indistinguishable from it over ten, where the round trip is all there is
 — see [BENCHMARKS.md](BENCHMARKS.md#aggregation-through-a-cursor--real-mongodb).
 
@@ -2517,15 +2517,15 @@ What changed in each release: **[CHANGELOG.md](CHANGELOG.md)**. What is not cove
 
 ## Benchmarks
 
-Eight JMH harnesses in [`benchmarks/`](benchmarks), against `mongo4cats` `0.8.0` as a reference point. The short
-version: `bson-direct`'s `WireCodec` writes and reads real BSON bytes **2.4–3.2×** faster than either `mongo4cats`
-codec and allocates up to **6.4×** less; against a real `MongoDB` the single-document operations land level for all
-six stacks, while bulk reads pull ahead — `mongo4cats` allocates **2.1–6.0×** more on `findAll`/`findStream`, reads
-`findAll` **1.13–1.35×** slower, and its `find(...).stream` runs at **1,626 ops/s** against `mongo4s`'s **3,174** on
+Nine JMH harnesses in [`benchmarks/`](benchmarks), against `mongo4cats` `0.8.0` as a reference point. The short
+version: `bson-direct`'s `WireCodec` writes and reads real BSON bytes **2.4–3.5×** faster than either `mongo4cats`
+codec and allocates up to **6.8×** less; against a real `MongoDB` the single-document operations land level for all
+six stacks, while bulk reads pull ahead — `mongo4cats` allocates **2.1–6.1×** more on `findAll`/`findStream`, reads
+`findAll` **1.12–1.36×** slower, and its `find(...).stream` runs at **1,471 ops/s** against `mongo4s`'s **3,109** on
 the same effect system (`mongo4cats` `0.7.18` ran it at 392; `0.8.0` closed most of that gap, not all).
 
 The server-backed rates were measured against `MongoDB` in Docker on macOS, where a bare `ping` inside the container
-costs 0.135 ms and the round trip is still most of a single-document call. They compare stacks honestly; read them as
+costs 0.137 ms and the round trip is still most of a single-document call. They compare stacks honestly; read them as
 ratios rather than as throughput a server can deliver.
 
 Every table, the methodology and the commands to reproduce them: **[BENCHMARKS.md](BENCHMARKS.md)**.
