@@ -91,6 +91,10 @@ Binary compatible with `5.0.0`, checked by MiMa.
 - **Rendering a query is cheaper**: `snakeCase` and `kebabCase` rename without boxing a `Char` per letter, and an
   update's overlap check no longer splits every path into arrays — 1.5× on a five-condition filter and 2.4× on a
   ten-operator update, with half the garbage on the update ([BENCHMARKS.md](BENCHMARKS.md#rendering-a-query)).
+- **A `ScalarWireCodec` encodes a query value without a writer of its own.** `toBsonEncoder` — the `BsonEncoder` a
+  filter on an opaque id goes through — built a capturing writer, its context and its name stack for every value; it
+  reuses one per thread now, so an `$in` over a thousand opaque ids renders 2.1× as fast and allocates what one over
+  plain strings does ([BENCHMARKS.md](BENCHMARKS.md#rendering-a-query)).
 - **A `WireCodec` decoding failure names where it happened.** Each field, array position, map key, sum `value` and
   `Ior` side wraps the failure in `BsonError.Nested`, so the message reads `address -> city -> Expected string but got
   int` instead of the leaf alone; code matching a field's `TypeMismatch` directly now finds it inside a `Nested`. A

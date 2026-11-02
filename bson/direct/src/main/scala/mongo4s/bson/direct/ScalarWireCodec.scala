@@ -17,9 +17,11 @@ trait ScalarWireCodec[A] extends WireCodec[A], BsonCodecSource[A]:
 
   def toBsonEncoder: BsonEncoder[A] =
     (value: A) =>
-      val writer = BsonValueCapturingWriter()
-      encode(writer, value)
-      writer.result
+      val writer = BsonValueCapturingWriter.acquire()
+      try
+        encode(writer, value)
+        writer.result
+      finally BsonValueCapturingWriter.release(writer)
   end toBsonEncoder
 
   def toBsonDecoder: BsonDecoder[A] = bson => WireValues.decode(this, bson)

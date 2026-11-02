@@ -8,11 +8,28 @@ import org.bson.BsonDocument
 
 import mongo4s.Field
 import mongo4s.bson.FieldNaming
+import mongo4s.bson.direct.ScalarWireCodec
 import mongo4s.operations.{Filter, Update}
 
 import mongo4s.bson.BsonInstances.given
 
 object RenderBenchmark:
+  opaque type PlayerId = String
+
+  object PlayerId:
+    def apply(value: String): PlayerId = value
+
+    given ScalarWireCodec[PlayerId] = ScalarWireCodec.instance((writer, id) => writer.writeString(id), reader => reader.readString())
+
+  final case class Player(id: PlayerId, name: String)
+  final case class Named(id: String, name: String)
+
+  val opaqueIds: List[PlayerId] = List.tabulate(1000)(i => PlayerId(s"player-$i"))
+  val plainIds: List[String]    = List.tabulate(1000)(i => s"player-$i")
+
+  val opaqueId: Field[Player, PlayerId] = Field.of[Player](_.id)
+  val plainId: Field[Named, String]     = Field.of[Named](_.id)
+
   final case class Inner(homeScore: Int, awayScore: Int, periodNumber: Int)
   final case class Doc(
       eventId: Long,
@@ -58,3 +75,6 @@ class RenderBenchmark:
 
   @Benchmark def renderFilter: BsonDocument = filter.toBson(FieldNaming.snakeCase)
   @Benchmark def renderUpdate: BsonDocument = update.toBson(FieldNaming.snakeCase)
+
+  @Benchmark def inThousandOpaqueIds: BsonDocument = opaqueId.in(opaqueIds).toBson(FieldNaming.identity)
+  @Benchmark def inThousandStrings: BsonDocument   = plainId.in(plainIds).toBson(FieldNaming.identity)

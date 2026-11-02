@@ -10,6 +10,13 @@ private[direct] final class BsonValueCapturingWriter extends AbstractBsonWriter(
   setState(AbstractBsonWriter.State.VALUE)
 
   private var captured: BsonValue = uninitialized
+  private var busy: Boolean       = false
+
+  private def claimed: BsonValueCapturingWriter =
+    busy = true
+    captured = null
+    setState(AbstractBsonWriter.State.VALUE)
+    this
 
   def result: BsonValue =
     if captured == null
@@ -51,3 +58,11 @@ private[direct] final class BsonValueCapturingWriter extends AbstractBsonWriter(
 
 private[direct] object BsonValueCapturingWriter:
   private val Settings = BsonWriterSettings()
+
+  private val Reused = ThreadLocal.withInitial(() => BsonValueCapturingWriter())
+
+  def acquire(): BsonValueCapturingWriter =
+    val reused = Reused.get
+    if reused.busy then BsonValueCapturingWriter() else reused.claimed
+
+  def release(writer: BsonValueCapturingWriter): Unit = writer.busy = false

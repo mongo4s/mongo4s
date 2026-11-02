@@ -80,6 +80,39 @@ final class BsonCodecSourceSpec extends AnyWordSpec, Matchers:
     }
   }
 
+  "the bridge's encoder" should {
+    val nesting = ScalarWireCodec.instance[String](
+      (writer, value) => writer.writeString(value + ":" + BsonEncoder[PlayerId].encode(PlayerId(value.length.toLong)).asInt64.getValue),
+      reader => reader.readString(),
+    )
+
+    "encode correctly when a codec encodes through another bridge while it writes" in {
+      nesting.toBsonEncoder.encode("abc") shouldBe BsonString("abc:3")
+      BsonEncoder[PlayerId].encode(PlayerId(9L)) shouldBe BsonInt64(9L)
+    }
+
+    "recover after a codec that wrote nothing failed" in {
+      val silent = ScalarWireCodec.instance[String]((_, _) => (), reader => reader.readString())
+
+      an[IllegalStateException] should be thrownBy silent.toBsonEncoder.encode("x")
+      BsonEncoder[PlayerId].encode(PlayerId(7L)) shouldBe BsonInt64(7L)
+    }
+
+    "give each thread its own value" in {
+      val encoder = BsonEncoder[PlayerId]
+      val threads = (1 to 8).map { t =>
+        val results = new java.util.concurrent.ConcurrentLinkedQueue[Boolean]()
+        val thread  = Thread(() => (1 to 20000).foreach(i => results.add(encoder.encode(PlayerId((t * 100000 + i).toLong)) == BsonInt64((t * 100000 + i).toLong))): Unit)
+        thread.start()
+        (thread, results)
+      }
+
+      threads.foreach(_._1.join())
+      threads.forall(_._2.stream().allMatch(ok => ok)) shouldBe true
+      threads.map(_._2.size).sum shouldBe 8 * 20000
+    }
+  }
+
   "WireCodec#toBsonCodec" should {
 
     "turn a document-shaped codec into a BsonCodec writing the same document" in {
