@@ -62,13 +62,14 @@ trait KyoEffectInstance:
         }
 
         guaranteeCase(flatMap(Async.uninterruptible(owned))(use)) { exitCase =>
-          if claimed.compareAndSet(false, true)
-          then unit
-          else
-            flatMap(Async.fromCompletableFuture(settled)) {
+          def releasing(acquired: Maybe[A]): KIO[Unit] =
+            acquired match
               case Present(resource) => release(resource, exitCase)
               case Absent            => unit
-            }
+
+          if claimed.compareAndSet(false, true) then unit
+          else if settled.isDone then releasing(settled.getNow(Absent))
+          else flatMap(Async.fromCompletableFuture(settled))(releasing)
         }
       }
     end bracketCase

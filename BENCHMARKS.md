@@ -279,15 +279,14 @@ sbt "benchmarks/Jmh/run -f 2 -prof gc EffectBenchmark"
 | Step | `cats` | `zio` | `kyo` | `rapid` |
 | --- | ---: | ---: | ---: | ---: |
 | `flatMap` | 23 ns, 81 B | 15 ns, 119 B | **12 ns, 16 B** | 31 ns, 175 B |
-| `bracket` | 246 ns, 895 B | **190 ns**, 933 B | 3,142 ns, 7,474 B | 227 ns, 1,620 B |
-| `guaranteeCase` | **164 ns, 577 B** | 175 ns, 775 B | 1,654 ns, 4,560 B | 178 ns, 1,223 B |
+| `bracket` | 246 ns, 895 B | **190 ns**, 933 B | 2,474 ns, 6,291 B | 228 ns, 1,620 B |
+| `guaranteeCase` | **150 ns, 577 B** | 172 ns, 775 B | 1,597 ns, 4,588 B | 185 ns, 1,223 B |
 
-The runner's own start-up is in each figure once per program, a thousandth of it per step. Error is ±0.1–4.4%
-everywhere but `zio`'s `guaranteeCase` (±6.7%), which is level with `cats`' within it.
+The runner's own start-up is in each figure once per program, a thousandth of it per step. Error is ±0.1–5.5%.
 
 **A `flatMap` is tens of nanoseconds on every runtime**, against a server round trip of 130,000 — what a repository
 method composes is not where its time goes. **`kyo`'s `bracket` and `guaranteeCase` cost about ten times the
-others'**, 3.1 µs and 1.7 µs, and 4–7 KB. Its `guaranteeCase` is a `kyo` `Scope` with the finalizer ensured on it,
+others'**, 2.5 µs and 1.6 µs, and 4.6–6.3 KB. Its `guaranteeCase` is a `kyo` `Scope` with the finalizer ensured on it,
 and its `bracket` adds an uninterruptible acquire and a handshake that still releases what was acquired when an
 interrupt lands mid-acquire. Either is paid once per session or transaction, not per document: about 2% of one round
 trip.
