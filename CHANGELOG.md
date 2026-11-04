@@ -10,7 +10,7 @@ part of `2.0.0` below.
 
 ## 5.1.1
 
-Binary compatible with `5.0.0`, checked by MiMa.
+Binary compatible with `5.0.0` and `5.1.0`, checked by MiMa.
 
 ### Fixed
 
