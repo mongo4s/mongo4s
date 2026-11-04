@@ -759,6 +759,16 @@ second waits for the acquisition to finish and releases what it produced. Every 
 inside the scope, which kyo runs whatever happens, and since kyo only logs a finalizer's failure, the failure of the
 one for a success is kept and raised once the scope has closed.
 
+What the scope tells its finalizers about how it ended is not what `ExitCase` needs, though. kyo does not resume a
+fiber interrupted while it waits — on the server, in a `sleep` — but abandons it, and closes what the fiber owed with
+`KyoException("fiber abandoned")` rather than with the interrupt, so `5.1.0`, which read the scope's outcome, reported
+every such cancellation as an error. Nothing caught it: no runtime's spec cancelled a body inside `guaranteeCase`, and
+a transaction aborts on `Errored` as on `Canceled`. `guaranteeCase` now records how the body ended as the body ends;
+a scope that closes with nothing recorded closed on a body that never reached its end, which is a cancellation. The
+finalizer still runs in the scope, where kyo runs it whatever happens. Recording the ending costs a `guaranteeCase`
+2–4% and 44 bytes; running the body under `Async.uninterruptible` and the finalizer from a release of its own, the
+other way to tell, would have forked a fiber for every call, which is most of what a kyo `bracket` already costs.
+
 The manual path (`startTransaction`/`commitTransaction`/`abortTransaction` with `(using Some(session))` at each call
 site) is still there, and nothing is automatic on it, including the rollback. Both exist because the safe version
 should be the easy one, not the only one.

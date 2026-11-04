@@ -1,7 +1,7 @@
 package mongo4s.kyo
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
@@ -186,4 +186,59 @@ final class KyoBridgeSpec extends AnyWordSpec, Matchers:
       run(effect.attempt(effect.guaranteeCase(effect.pure(1))(_ => effect.raiseError(boom)))) shouldBe Left(boom)
       ran.get shouldBe 1
     }
+
+    "report a body that failed or threw as Errored, and keep a failing finalizer's error on the body's" in {
+      val seen          = AtomicReference[List[ExitCase]](Nil)
+      val failed        = IllegalStateException("failed")
+      val thrown        = IllegalStateException("thrown")
+      val finalizerBoom = IllegalStateException("finalizer")
+      val unlucky       = IllegalStateException("unlucky")
+
+      def record(exitCase: ExitCase): KIO[Unit] = effect.delay(seen.updateAndGet(_ :+ exitCase): Unit)
+
+      run(effect.attempt(effect.guaranteeCase(effect.raiseError[Int](failed))(record))) shouldBe Left(failed)
+      run(effect.attempt(effect.guaranteeCase(Sync.defer[Int, Any](throw thrown))(record))) shouldBe Left(thrown)
+      run(effect.attempt(effect.guaranteeCase(effect.raiseError[Int](unlucky))(_ => effect.raiseError(finalizerBoom)))) shouldBe Left(unlucky)
+
+      seen.get shouldBe List(ExitCase.Errored(failed), ExitCase.Errored(thrown))
+      unlucky.getSuppressed.toList shouldBe List(finalizerBoom)
+    }
+
+    "report a body interrupted while it waits as Canceled, to guaranteeCase's finalizer once" in {
+      val seen    = AtomicReference[List[ExitCase]](Nil)
+      val started = CountDownLatch(1)
+
+      def record(exitCase: ExitCase): KIO[Unit] = effect.delay(seen.updateAndGet(_ :+ exitCase): Unit)
+
+      run(
+        for
+          fiber <- Fiber.initUnscoped(effect.guaranteeCase(effect.flatMap(effect.delay(started.countDown()))(_ => Async.never[Int]))(record))
+          _     <- Sync.defer(started.await())
+          _     <- fiber.interrupt
+        yield ()
+      )
+      run(Abort.run[Throwable](Async.timeout(Duration.fromScala(50.millis))(effect.guaranteeCase(Async.never[Int])(record))))
+
+      awaitUntil(seen.get.size >= 2)
+      Thread.sleep(50)
+
+      seen.get shouldBe List(ExitCase.Canceled, ExitCase.Canceled)
+    }
+
+    "release what bracketCase acquired as Canceled when the body is interrupted" in {
+      val released = AtomicReference[List[(Int, ExitCase)]](Nil)
+
+      val program: KIO[Int] =
+        effect.bracketCase(effect.pure(7))(_ => Async.never[Int])((resource, exitCase) => effect.delay(released.updateAndGet(_ :+ (resource -> exitCase)): Unit))
+
+      run(Abort.run[Throwable](Async.timeout(Duration.fromScala(50.millis))(program)))
+
+      awaitUntil(released.get.nonEmpty)
+
+      released.get shouldBe List(7 -> ExitCase.Canceled)
+    }
   }
+
+  private def awaitUntil(condition: => Boolean): Unit =
+    val deadline = System.nanoTime() + 2.seconds.toNanos
+    while !condition && System.nanoTime() < deadline do Thread.sleep(10)

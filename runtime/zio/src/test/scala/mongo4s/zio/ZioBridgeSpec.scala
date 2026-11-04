@@ -132,4 +132,12 @@ final class ZioBridgeSpec extends AnyWordSpec, Matchers:
 
       seen shouldBe Some(ExitCase.Errored(boom))
     }
+
+    "report a body that is interrupted to guaranteeCase as Canceled" in {
+      var seen = List.empty[ExitCase]
+
+      run(effect.guaranteeCase(ZIO.never)(exitCase => ZIO.succeed { seen = seen :+ exitCase }).timeout(zio.Duration.fromMillis(50)))
+
+      seen shouldBe List(ExitCase.Canceled)
+    }
   }

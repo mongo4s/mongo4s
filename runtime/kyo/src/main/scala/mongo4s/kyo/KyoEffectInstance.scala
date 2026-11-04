@@ -3,7 +3,6 @@ package mongo4s.kyo
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
-import scala.compiletime.asMatchable
 import scala.concurrent.duration.FiniteDuration
 
 import kyo.*
@@ -26,14 +25,20 @@ trait KyoEffectInstance:
 
     def guaranteeCase[A](fa: KIO[A])(finalizer: ExitCase => KIO[Unit]): KIO[A] =
       Sync.defer {
+        val ended            = AtomicReference[ExitCase](ExitCase.Canceled)
         val finalizerFailure = AtomicReference[Maybe[Throwable]](Absent)
 
         val guarded: KIO[A] = Scope.run(
-          Scope.ensure { outcome =>
-            handleErrorWith(runFinalizer(KyoEffectInstance.exitCaseOf(outcome), finalizer)) { error =>
+          Scope.ensure {
+            handleErrorWith(runFinalizer(ended.get, finalizer)) { error =>
               delay(finalizerFailure.set(Present(error)))
             }
-          }.map(_ => fa)
+          }.map { _ =>
+            Abort.run[Throwable](fa).map { result =>
+              ended.set(KyoEffectInstance.exitCaseOf(result))
+              Abort.get(result)
+            }
+          }
         )
 
         guarded.map { value =>
@@ -76,15 +81,10 @@ trait KyoEffectInstance:
 
 object KyoEffectInstance extends KyoEffectInstance:
 
-  private def exitCaseOf(error: Maybe[Result.Error[Any]]): ExitCase =
-    error match
-      case Absent          => ExitCase.Succeeded
-      case Present(failed) =>
-        failed match
-          case Result.Panic(_: Interrupted) => ExitCase.Canceled
-          case Result.Panic(exception)      => ExitCase.Errored(exception)
-          case Result.Failure(failure)      =>
-            failure.asMatchable match
-              case error: Throwable => ExitCase.Errored(error)
-              case other            => ExitCase.Errored(RuntimeException(String.valueOf(other)))
-          case other                        => ExitCase.Errored(RuntimeException(String.valueOf(other)))
+  private def exitCaseOf(result: Result[Throwable, Any]): ExitCase =
+    result.foldError(
+      _ => ExitCase.Succeeded,
+      _.failureOrPanic match
+        case _: Interrupted => ExitCase.Canceled
+        case error          => ExitCase.Errored(error)
+    )

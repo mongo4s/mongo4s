@@ -8,6 +8,21 @@ Notable changes per release. Breaking changes and how to migrate are in
 This file starts at `2.0.0`. `1.0.0` was released without one, and `1.1.0` was never published — its changes are
 part of `2.0.0` below.
 
+## 5.1.1
+
+Binary compatible with `5.0.0`, checked by MiMa.
+
+### Fixed
+
+- **On `kyo`, `guaranteeCase` reported a cancellation as an error.** kyo `1.0.0-RC7` does not resume a fiber
+  interrupted while it waits — on the server, in a `sleep`, in `Async.never` — but abandons it, and closes what the
+  fiber owed with `KyoException("fiber abandoned")` rather than the interrupt. The finalizer saw
+  `ExitCase.Errored` of that exception instead of `ExitCase.Canceled`, and so did what `bracketCase` acquired. A
+  transaction still rolled back, since `withTransaction` aborts on either, but code on `Effect[KIO]` that tells the
+  two apart — metrics, logging — counted every timeout as a failure. `guaranteeCase` now records how the body ended,
+  and a scope that closes with nothing recorded is a cancellation, whatever kyo reports. `cats`, `zio` and `kyo` each
+  have a spec that interrupts a body inside `guaranteeCase` now; none did.
+
 ## 5.1.0
 
 Binary compatible with `5.0.0`, checked by MiMa.

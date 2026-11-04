@@ -13,6 +13,13 @@
   `build.sbt`, so nothing is waived silently. A major release — `3.0.0`, `4.0.0`, `5.0.0` — has no such exceptions: its
   migration guide below is what the major version covers.
 
+## Upgrading from 5.1.0 to 5.1.1
+
+Binary compatible: MiMa checks `5.1.1` against `5.0.0` and finds nothing. Nothing to change in calling code. On `kyo`,
+a finalizer given to `guaranteeCase` or `bracketCase` sees an interrupted body as `ExitCase.Canceled`, where `5.1.0`
+handed it `ExitCase.Errored(KyoException("fiber abandoned"))`; code that matched that error to spot an interrupt
+matches `Canceled` instead.
+
 ## Upgrading from 5.0.x to 5.1.0
 
 Binary compatible: MiMa checks `5.1.0` against `5.0.0` and finds nothing, and no exclusion was needed — a library

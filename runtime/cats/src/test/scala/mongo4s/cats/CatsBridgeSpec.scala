@@ -7,7 +7,7 @@ import cats.effect.testing.scalatest.AsyncIOSpec
 import cats.effect.IO
 import org.reactivestreams.{Publisher, Subscriber, Subscription}
 
-import mongo4s.{Effect, RsBridge, RsBridgeConfig, RsBridgeError}
+import mongo4s.{Effect, ExitCase, RsBridge, RsBridgeConfig, RsBridgeError}
 
 import scala.concurrent.duration.given
 import mongo4s.cats.CatsInstances.given
@@ -106,5 +106,13 @@ final class CatsBridgeSpec extends AsyncWordSpec, AsyncIOSpec, Matchers:
     }
     "raise and surface errors" in {
       effect.raiseError[Int](new RuntimeException("boom")).attempt.asserting(_.isLeft shouldBe true)
+    }
+
+    "report a body that is canceled to guaranteeCase as Canceled" in {
+      for
+        seen  <- IO.ref(List.empty[ExitCase])
+        _     <- effect.guaranteeCase(IO.never[Int])(exitCase => seen.update(_ :+ exitCase)).timeout(50.millis).attempt
+        ended <- seen.get
+      yield ended shouldBe List(ExitCase.Canceled)
     }
   }
