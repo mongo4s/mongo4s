@@ -34,17 +34,19 @@ lazy val sourceLevel = settingKey[String]("Scala -source level the build compile
 
 lazy val relocated = settingKey[Boolean]("publish only a pom that moves the previous organization's coordinates to the current one")
 
-def relocation(pom: Node): Node =
+def relocation(pom: Node, notice: String): Node =
   pom match {
     case project: Elem =>
-      val kept = project.child.filterNot(child => Set("dependencies", "packaging", "distributionManagement").contains(child.label))
+      val kept = project.child.filterNot(child => Set("description", "dependencies", "packaging", "distributionManagement").contains(child.label))
 
       project.copy(child =
         kept ++
+          <description>{notice}</description>
           <packaging>pom</packaging>
           <distributionManagement>
             <relocation>
               <groupId>{currentOrganization}</groupId>
+              <message>{notice}</message>
             </relocation>
           </distributionManagement>
       )
@@ -58,7 +60,11 @@ lazy val relocationSettings = Seq(
   Compile / packageBin / publishArtifact := !relocated.value,
   Compile / packageSrc / publishArtifact := !relocated.value,
   Compile / packageDoc / publishArtifact := !relocated.value,
-  pomPostProcess                         := { val moving = relocated.value; pom => if (moving) relocation(pom) else pom },
+  pomPostProcess                         := {
+    val moving = relocated.value
+    val notice = s"Moved to $currentOrganization, see ${homepage.value.mkString}"
+    pom => if (moving) relocation(pom, notice) else pom
+  },
 )
 
 lazy val commonSettings = relocationSettings ++ Seq(

@@ -36,8 +36,10 @@ libraryDependencies += ("com.example" %% "internal-commons" % "1.2.3").excludeAl
 
 `org.mongo4s` `6.0.0` exists as a relocation: each module is a `pom` whose `<relocation>` names `now.sendline`, with no
 jar of its own. Maven, and sbt through Coursier, resolve it to the `now.sendline` module of the same name and version,
-so a build — or Scala Steward — that only bumps the version lands on the new organization. Nothing is published under
-`org.mongo4s` after it.
+so a build — or Scala Steward — that only bumps the version lands on the new organization. Its description and its
+relocation message both read "Moved to now.sendline, see https://oss.sendline.now/mongo4s/": Maven prints the message
+when it follows the relocation, and Central and mvnrepository show the description. sbt follows it silently. Nothing
+is published under `org.mongo4s` after it.
 
 ## Upgrading from 5.1.0 to 5.1.1
 
