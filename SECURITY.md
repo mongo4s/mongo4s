@@ -9,7 +9,7 @@ versions; upgrade to the current release to pick them up.
 
 Please **do not** open a public GitHub issue for security vulnerabilities.
 
-Instead, use [GitHub Security Advisories](https://github.com/mongo4s/mongo4s/security/advisories/new)
+Instead, use [GitHub Security Advisories](https://github.com/sendline-now/mongo4s/security/advisories/new)
 to report privately, or email **shadowsmind.dev@gmail.com** with details and, if possible, a minimal
 reproduction.
 

@@ -150,6 +150,15 @@ Three steps are easy to forget because nothing fails when they are missed:
 - **Add the release to [CHANGELOG.md](CHANGELOG.md)**, in Added / Changed / Fixed order. The GitHub release notes
   can be the same content in prose; the changelog is the version that stays with the source.
 
+The site at [oss.sendline.now/mongo4s](https://oss.sendline.now/mongo4s/) is built in its own repository from this
+README and the documents it links, so a change to the docs here is what the site picks up.
+
+`6.0.0` goes to Central twice, as two deployments. The first is the release itself under `now.sendline`
+(`publishSigned`). The second is a relocation under `org.mongo4s` (`publishRelocation`): it sets `relocated` for every
+module, publishes a `pom` naming `now.sendline` and no jars, and then unsets it. Both stage into `target/sona-staging`,
+which keeps whatever earlier releases left there, so empty it before each deployment. No later release publishes
+under `org.mongo4s`.
+
 ## Opening a pull request
 
 - Keep PRs focused - one runtime backend, one codec bridge, or one bug fix per PR is easier to review

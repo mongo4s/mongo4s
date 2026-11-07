@@ -1082,6 +1082,25 @@ the library's own sources resolves `->` to the new extension method. Only a modu
 fails exactly as a user did. The unit tests stay on the LTS, so both sides of the jar are compiled on every build.
 Inline and quoted code also writes a tuple rather than `->` from now on.
 
+## A new organization is a major version
+
+Moving from `org.mongo4s` to `now.sendline` changes no class, and MiMa agrees, so by the letter of semver it could
+have been `5.1.2`. It is `6.0.0` because a build tool sees a new organization as a new library: it will not evict
+`org.mongo4s` `5.1.1` in favour of `now.sendline` `5.1.2`, and with both in a graph the same classes come from two
+jars, in classpath order, with no warning. That is a change the user has to make by hand, in `build.sbt`, and a
+version bump that looks routine would hide it. A major release signals that the build needs editing; the migration
+guide then says the edit is one line.
+
+The package stays `mongo4s`. Renaming it to `now.sendline.mongo4s` would turn a one-line build change into an edit
+of every import, and buy nothing a short package name does not already have.
+
+The old coordinates are not left to rot. `org.mongo4s` `6.0.0` is a relocation: a `pom` per module with
+`<relocation>` naming `now.sendline`, which Maven and Coursier follow to the module of the same name and version, so
+a version bump, by hand or from Scala Steward, lands on the new organization. That was checked against sbt `2.0.11`
+by resolving `org.mongo4s:mongo4s-core_3:6.0.0` from a scratch repository and getting the `now.sendline` jars. A
+relocation cannot reach back, though: a build that pins `5.1.1` under `org.mongo4s` stays there until someone edits
+it, which is what the migration guide covers.
+
 ## Evolving the API
 
 Three commitments, and the mechanics that make each one keepable:

@@ -13,6 +13,32 @@
   `build.sbt`, so nothing is waived silently. A major release — `3.0.0`, `4.0.0`, `5.0.0` — has no such exceptions: its
   migration guide below is what the major version covers.
 
+## Upgrading from 5.1.x to 6.0.0
+
+Only the organization changes. The code is `5.1.1`'s, the package is still `mongo4s`, and MiMa checks every module of
+`6.0.0` against `org.mongo4s` `5.0.0` and `5.1.1` and finds nothing.
+
+```scala
+// before
+"org.mongo4s" %% "mongo4s-cats" % "5.1.1"
+// after
+"now.sendline" %% "mongo4s-cats" % "6.0.0"
+```
+
+A build tool treats a new organization as a new library, so it will not evict one in favour of the other. If anything
+in your graph still brings `org.mongo4s` `5.x` — an internal library not yet moved — both jars land on the classpath
+with the same classes, and which one loads depends on classpath order. Move that library too, or exclude the old
+organization where it comes in:
+
+```scala
+libraryDependencies += ("com.example" %% "internal-commons" % "1.2.3").excludeAll(ExclusionRule("org.mongo4s"))
+```
+
+`org.mongo4s` `6.0.0` exists as a relocation: each module is a `pom` whose `<relocation>` names `now.sendline`, with no
+jar of its own. Maven, and sbt through Coursier, resolve it to the `now.sendline` module of the same name and version,
+so a build — or Scala Steward — that only bumps the version lands on the new organization. Nothing is published under
+`org.mongo4s` after it.
+
 ## Upgrading from 5.1.0 to 5.1.1
 
 Binary compatible: MiMa checks `5.1.1` against `5.0.0` and `5.1.0` and finds nothing. Nothing to change in calling

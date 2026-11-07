@@ -9,8 +9,8 @@ Effect-agnostic `MongoDB` client and repository layer for `Scala 3`. No hardcode
 `calypso`) are
 independent modules, each wired in through a `given` import. `core` depends on neither.
 
-[![CI](https://github.com/mongo4s/mongo4s/actions/workflows/ci.yml/badge.svg)](https://github.com/mongo4s/mongo4s/actions/workflows/ci.yml)
-[![Maven Central](https://img.shields.io/maven-central/v/org.mongo4s/mongo4s-core_3?color=blue)](https://central.sonatype.com/search?q=mongo4s)
+[![CI](https://github.com/sendline-now/mongo4s/actions/workflows/ci.yml/badge.svg)](https://github.com/sendline-now/mongo4s/actions/workflows/ci.yml)
+[![Maven Central](https://img.shields.io/maven-central/v/now.sendline/mongo4s-core_3?color=blue)](https://central.sonatype.com/search?q=mongo4s)
 [![Scala 3](https://img.shields.io/badge/Scala-3-blue)](https://www.scala-lang.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
@@ -56,10 +56,10 @@ third-party codec library, nothing beyond `mongo4s-core`, which brings it in:
 
 ```scala
 libraryDependencies ++= Seq(
-  "org.mongo4s" %% "mongo4s-cats"           % "5.1.1", // mongo4s-core + cats-effect integration
-  "org.mongo4s" %% "mongo4s-bson-direct"    % "5.1.1", // ast-free bson codecs
-  "org.mongo4s" %% "mongo4s-bson-cats-data" % "5.1.1", // if you need NonEmptyList etc. codec instances
-  "org.mongo4s" %% "mongo4s-repositories"   % "5.1.1", // if you need auto-generated CRUD repository ops for your model
+  "now.sendline" %% "mongo4s-cats"           % "6.0.0", // mongo4s-core + cats-effect integration
+  "now.sendline" %% "mongo4s-bson-direct"    % "6.0.0", // ast-free bson codecs
+  "now.sendline" %% "mongo4s-bson-cats-data" % "6.0.0", // if you need NonEmptyList etc. codec instances
+  "now.sendline" %% "mongo4s-repositories"   % "6.0.0", // if you need auto-generated CRUD repository ops for your model
 )
 ```
 
@@ -1579,7 +1579,7 @@ Every codec ultimately produces a `mongo4s.bson.BsonDocumentCodec[A]` (entity �
 | `mongo4s-bson-medeia` | [medeia](https://github.com/medeia/medeia)                                     | `derives BsonDocumentCodec` |
 | `mongo4s-bson-zio` | [zio-bson](https://github.com/zio/zio-bson)                                    | `zio.bson.BsonCodec` (add `zio-schema-bson` yourself to derive one from a `Schema`) |
 | `mongo4s-bson-calypso` | [calypso](https://github.com/m2-oss/calypso)                                   | hand-written `forProductN` codecs |
-| `mongo4s-bson-direct` | [mongo4s itself](https://github.com/mongo4s/mongo4s/tree/main/bson/direct/src) | `WireCodec[A]`, AST-free — see below |
+| `mongo4s-bson-direct` | [mongo4s itself](https://github.com/sendline-now/mongo4s/tree/main/bson/direct/src) | `WireCodec[A]`, AST-free — see below |
 | `mongo4s-bson-cats-data` | [cats-core](https://typelevel.org/cats/) | `BsonEncoder`/`BsonDecoder`/`WireCodec` for `NonEmptyList`/`Chain`/`NonEmptyVector`/`NonEmptySet`/`NonEmptyMap`, `WireCodec` for `Ior` |
 
 ### `bson-direct` — AST-free `WireCodec`
@@ -2219,7 +2219,7 @@ a session, so a number can be drawn inside a transaction. `Counters[F]` is the t
 `FakeCounters` in the testkit is the real implementation over a `FakeMongoCollection`.
 
 For unit tests, `FakeMongoCollection` (in `mongo4s-testkit`, a published module — add it as
-`"org.mongo4s" %% "mongo4s-testkit" % "5.1.1" % Test`) implements `MongoCollection` in memory. The exact same
+`"now.sendline" %% "mongo4s-testkit" % "6.0.0" % Test`) implements `MongoCollection` in memory. The exact same
 `Filter`/`Update`/`Field` AST the real driver interprets is interpreted against an in-memory buffer instead, so
 repository logic is testable without a running MongoDB.
 
@@ -2443,10 +2443,10 @@ the other single-result publishers that it guards.
 
 ## Modules
 
-Published for `Scala 3.9 LTS` under `org.mongo4s`:
+Published for `Scala 3.9 LTS` under `now.sendline`:
 
 ```scala
-"org.mongo4s" %% "mongo4s-<module>" % "5.1.1"
+"now.sendline" %% "mongo4s-<module>" % "6.0.0"
 ```
 
 | | Module | Notes |
@@ -2481,6 +2481,13 @@ accumulators need 7.0, and the client-level `bulkWrite` and a `sort` on `updateO
 Binary compatibility within a major version is checked by [MiMa](https://github.com/lightbend/mima) on every build,
 new `Effect`/`RsBridge` methods carry default implementations, and deprecations get at least one minor release before
 removal. `mongo4s-kyo` sits outside the promise while kyo is on a release candidate.
+
+`6.0.0` moves mongo4s to the `now.sendline` organization and changes nothing else: the code is `5.1.1`'s, the package is
+still `mongo4s`, and MiMa checks it against `org.mongo4s` `5.0.0` and `5.1.1`. Swapping the organization in
+`build.sbt` is the whole upgrade. `org.mongo4s` `6.0.0` is published as a relocation, so a build that only bumps the
+version is moved to `now.sendline` by Maven and by sbt. The repository is
+[sendline-now/mongo4s](https://github.com/sendline-now/mongo4s), and the site is
+[oss.sendline.now/mongo4s](https://oss.sendline.now/mongo4s/).
 
 `5.0.0` is a breaking release, almost entirely in binary shape rather than in what a call says: most existing calls
 compile unchanged against it. `insertOne`/`insertMany` take options, `bulkWrite` takes `BulkWriteOptions` instead of

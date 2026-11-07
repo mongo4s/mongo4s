@@ -8,6 +8,20 @@ Notable changes per release. Breaking changes and how to migrate are in
 This file starts at `2.0.0`. `1.0.0` was released without one, and `1.1.0` was never published — its changes are
 part of `2.0.0` below.
 
+## 6.0.0
+
+Binary compatible with `org.mongo4s` `5.0.0` and `5.1.1`, checked by MiMa. Only the coordinates change; how to move is in
+[COMPATIBILITY.md](COMPATIBILITY.md).
+
+### Changed
+
+- **Published under `now.sendline`**: `"now.sendline" %% "mongo4s-core" % "6.0.0"`. The package is still `mongo4s`.
+- `org.mongo4s` `6.0.0` is a relocation to `now.sendline` for every module, so a version bump alone resolves to the new
+  organization in Maven and in sbt.
+- The repository moved to [sendline-now/mongo4s](https://github.com/sendline-now/mongo4s), and the site to
+  [oss.sendline.now/mongo4s](https://oss.sendline.now/mongo4s/), shared with the other Sendline libraries and built in
+  its own repository. `docs/` is gone from this one, and `ReadmeReferencesSpec` checks the README only.
+
 ## 5.1.1
 
 Binary compatible with `5.0.0` and `5.1.0`, checked by MiMa.

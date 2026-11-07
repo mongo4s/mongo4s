@@ -92,10 +92,6 @@ final class ReadmeReferencesSpec extends AnyWordSpec, Matchers:
     else definition.findAllMatchIn(Files.readString(file)).map(_.group(1)).toSet
 
   private val inlineCode = raw"`([^`\n]+)`".r
-  private val htmlCode   = raw"(?s)<code>(.*?)</code>".r
-
-  private def unescaped(html: String): String =
-    html.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&mdash;", "—").replace("&amp;", "&")
 
   private def undefined(snippets: List[String]): List[String] =
     (for
@@ -126,18 +122,16 @@ final class ReadmeReferencesSpec extends AnyWordSpec, Matchers:
     }
   }
 
-  "every mongo4s name the README's prose and the website mention" should {
+  "every mongo4s name the README's prose mentions" should {
 
     "exist in the code too" in {
-      val prose   = inlineCode.findAllMatchIn(Files.readString(Path.of("README.md"))).map(_.group(1)).toList
-      val website = htmlCode.findAllMatchIn(Files.readString(Path.of("docs/index.html"))).map(m => unescaped(m.group(1))).toList
+      val prose = inlineCode.findAllMatchIn(Files.readString(Path.of("README.md"))).map(_.group(1)).toList
 
       prose should not be empty
-      website should not be empty
 
-      val missing = undefined(prose ++ website)
+      val missing = undefined(prose)
 
-      withClue(s"named in the README's prose or on the website but not defined in the source that owns it: ${missing.mkString(", ")} — ") {
+      withClue(s"named in the README's prose but not defined in the source that owns it: ${missing.mkString(", ")} — ") {
         missing shouldBe empty
       }
     }
