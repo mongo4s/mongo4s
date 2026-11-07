@@ -14,6 +14,14 @@ Binary compatible with `5.0.0` and `5.1.0`, checked by MiMa.
 
 ### Fixed
 
+- **A large reply that reached the client in many small reads hung the call.** `mongodb-driver-reactivestreams`
+  `5.6.0` to `5.13.0` nest one callback per partial socket read of a reply and unwind them all at once when it is
+  complete; about 900 reads overflow the driver's I/O thread, and the `StackOverflowError` never reaches the caller,
+  so the `find` waits forever ([JAVA-6313](https://jira.mongodb.org/browse/JAVA-6313)). A link that hands the client
+  a few kilobytes at a time is enough — TLS, or Docker Desktop's `host.docker.internal`, where a 3.5 MB reply took
+  over 1,500 reads. The driver is `5.14.0` now, which runs those reads in a loop. `LargeReplyItSpec` reads a 3 MB
+  batch through a proxy that passes the server's answer on a kilobyte at a time; on `5.13.0` it times out with the
+  overflow in the log.
 - **On `kyo`, `guaranteeCase` reported a cancellation as an error.** kyo `1.0.0-RC7` does not resume a fiber
   interrupted while it waits — on the server, in a `sleep`, in `Async.never` — but abandons it, and closes what the
   fiber owed with `KyoException("fiber abandoned")` rather than the interrupt. The finalizer saw
@@ -22,6 +30,10 @@ Binary compatible with `5.0.0` and `5.1.0`, checked by MiMa.
   two apart — metrics, logging — counted every timeout as a failure. `guaranteeCase` now records how the body ended,
   and a scope that closes with nothing recorded is a cancellation, whatever kyo reports. `cats`, `zio` and `kyo` each
   have a spec that interrupts a body inside `guaranteeCase` now; none did.
+
+### Changed
+
+- `mongodb-driver-reactivestreams` `5.14.0`.
 
 ## 5.1.0
 

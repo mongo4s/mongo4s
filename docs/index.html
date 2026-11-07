@@ -551,7 +551,7 @@
         </nav>
 
         <div class="install">
-            <pre><code>libraryDependencies += "org.mongo4s" %% "mongo4s-cats" % "5.1.0"</code></pre>
+            <pre><code>libraryDependencies += "org.mongo4s" %% "mongo4s-cats" % "5.1.1"</code></pre>
             <p class="install-note">On another runtime, swap the module: <code>mongo4s-zio</code>,
                 <code>mongo4s-kyo</code> or <code>mongo4s-rapid</code>. Codecs and repositories are separate
                 modules — see <a href="#start">Quick start</a>.</p>
@@ -591,10 +591,10 @@
     <p>Pick a runtime. The default codec (<code>bson-direct</code>) derives straight from your case class — AST-free, no
         third-party codec library, no extra dependency beyond <code>mongo4s-core</code> itself:</p>
     <pre><code>libraryDependencies ++= Seq(
-    "org.mongo4s" %% "mongo4s-cats"           % "5.1.0", // mongo4s-core + cats-effect integration
-    "org.mongo4s" %% "mongo4s-bson-direct"    % "5.1.0", // ast-free bson codecs
-    "org.mongo4s" %% "mongo4s-bson-cats-data" % "5.1.0", // if you need NonEmptyList etc. codec instances
-    "org.mongo4s" %% "mongo4s-repositories"   % "5.1.0", // if you need auto-generated CRUD repository ops for your model
+    "org.mongo4s" %% "mongo4s-cats"           % "5.1.1", // mongo4s-core + cats-effect integration
+    "org.mongo4s" %% "mongo4s-bson-direct"    % "5.1.1", // ast-free bson codecs
+    "org.mongo4s" %% "mongo4s-bson-cats-data" % "5.1.1", // if you need NonEmptyList etc. codec instances
+    "org.mongo4s" %% "mongo4s-repositories"   % "5.1.1", // if you need auto-generated CRUD repository ops for your model
 )</code></pre>
     <pre><code>import cats.effect.{IO, IOApp}
 
@@ -1915,7 +1915,7 @@ yield number</code></pre>
     </p>
     <p>
         For unit tests, <code>FakeMongoCollection</code> (in <code>mongo4s-testkit</code>, a published module — add it
-        as <code>"org.mongo4s" %% "mongo4s-testkit" % "5.1.0" % Test</code>) implements
+        as <code>"org.mongo4s" %% "mongo4s-testkit" % "5.1.1" % Test</code>) implements
         <code>MongoCollection</code> in memory — the exact
         same <code>Filter</code>/<code>Update</code>/<code>Field</code> AST the real driver interprets is interpreted
         against an in-memory buffer instead, so repository logic is testable without a running MongoDB. Filters,
@@ -2053,7 +2053,7 @@ given RsBridgeConfig = RsBridgeConfig.default
 
     <h2 id="modules">Modules</h2>
     <p>Published for Scala 3 under <code>org.mongo4s</code>:</p>
-    <pre><code>"org.mongo4s" %% "mongo4s-&lt;module&gt;" % "5.1.0"</code></pre>
+    <pre><code>"org.mongo4s" %% "mongo4s-&lt;module&gt;" % "5.1.1"</code></pre>
     <table>
         <tr>
             <th>Kind</th>
@@ -2162,6 +2162,13 @@ given RsBridgeConfig = RsBridgeConfig.default
         <code>$in</code> on <code>_id</code>, refusals are raised in <code>F</code> rather than thrown where the call is
         built, and on zio a defect stays a defect. The upgrade notes are in
         <a href="https://github.com/mongo4s/mongo4s/blob/main/COMPATIBILITY.md">COMPATIBILITY.md</a>.
+    </p>
+    <p>
+        <strong>5.1.1</strong> is binary compatible with 5.0.0 and 5.1.0. It moves to MongoDB driver 5.14.0: on 5.13.0 a
+        large reply that reached the client in many small reads &mdash; over TLS, or through Docker Desktop's
+        <code>host.docker.internal</code> &mdash; overflowed the driver's I/O thread and left the call waiting forever.
+        On kyo, a finalizer given to <code>guaranteeCase</code> or <code>bracketCase</code> now sees an interrupted body
+        as <code>ExitCase.Canceled</code> rather than as an error.
     </p>
     <p>
         <strong>5.0.1</strong> is binary compatible with 5.0.0 and fixes code the library inlines into yours: a derived

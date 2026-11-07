@@ -56,10 +56,10 @@ third-party codec library, nothing beyond `mongo4s-core`, which brings it in:
 
 ```scala
 libraryDependencies ++= Seq(
-  "org.mongo4s" %% "mongo4s-cats"           % "5.1.0", // mongo4s-core + cats-effect integration
-  "org.mongo4s" %% "mongo4s-bson-direct"    % "5.1.0", // ast-free bson codecs
-  "org.mongo4s" %% "mongo4s-bson-cats-data" % "5.1.0", // if you need NonEmptyList etc. codec instances
-  "org.mongo4s" %% "mongo4s-repositories"   % "5.1.0", // if you need auto-generated CRUD repository ops for your model
+  "org.mongo4s" %% "mongo4s-cats"           % "5.1.1", // mongo4s-core + cats-effect integration
+  "org.mongo4s" %% "mongo4s-bson-direct"    % "5.1.1", // ast-free bson codecs
+  "org.mongo4s" %% "mongo4s-bson-cats-data" % "5.1.1", // if you need NonEmptyList etc. codec instances
+  "org.mongo4s" %% "mongo4s-repositories"   % "5.1.1", // if you need auto-generated CRUD repository ops for your model
 )
 ```
 
@@ -2219,7 +2219,7 @@ a session, so a number can be drawn inside a transaction. `Counters[F]` is the t
 `FakeCounters` in the testkit is the real implementation over a `FakeMongoCollection`.
 
 For unit tests, `FakeMongoCollection` (in `mongo4s-testkit`, a published module — add it as
-`"org.mongo4s" %% "mongo4s-testkit" % "5.1.0" % Test`) implements `MongoCollection` in memory. The exact same
+`"org.mongo4s" %% "mongo4s-testkit" % "5.1.1" % Test`) implements `MongoCollection` in memory. The exact same
 `Filter`/`Update`/`Field` AST the real driver interprets is interpreted against an in-memory buffer instead, so
 repository logic is testable without a running MongoDB.
 
@@ -2446,7 +2446,7 @@ the other single-result publishers that it guards.
 Published for `Scala 3.9 LTS` under `org.mongo4s`:
 
 ```scala
-"org.mongo4s" %% "mongo4s-<module>" % "5.1.0"
+"org.mongo4s" %% "mongo4s-<module>" % "5.1.1"
 ```
 
 | | Module | Notes |
@@ -2499,6 +2499,11 @@ fields, and `@stored`, named scalar representations, `Map` keys beyond `String` 
 `set(None)` renders `$unset`, a filter that matches nothing renders an empty `$in` on `_id`, refusals are raised in `F`
 rather than thrown where the call is built, and on `zio` a defect stays a defect. Each has a note in
 [COMPATIBILITY.md](COMPATIBILITY.md).
+
+`5.1.1` is binary compatible with `5.0.0` and `5.1.0`. It moves to MongoDB driver `5.14.0`: on `5.13.0` a large reply
+that reached the client in many small reads — over TLS, or through Docker Desktop's `host.docker.internal` — overflowed
+the driver's I/O thread and left the call waiting forever. On `kyo`, a finalizer given to `guaranteeCase` or
+`bracketCase` now sees an interrupted body as `ExitCase.Canceled` rather than as an error.
 
 `5.0.1` is binary compatible with `5.0.0` and fixes code the library inlines into yours: a derived `WireCodec` with
 a default parameter, and `PrimaryKey.compound`, carried Scala 3.10's deprecated `ArrowAssoc` into the calling code,

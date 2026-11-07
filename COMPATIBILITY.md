@@ -20,6 +20,9 @@ code. On `kyo`, a finalizer given to `guaranteeCase` or `bracketCase` sees an in
 where `5.1.0` handed it `ExitCase.Errored(KyoException("fiber abandoned"))`; code that matched that error to spot an
 interrupt matches `Canceled` instead.
 
+The MongoDB driver moves from `5.13.0` to `5.14.0`, for a fix to large replies read in many small pieces, which hung
+on `5.13.0`. A build that pins `org.mongodb` jars of its own should pin `5.14.0` or later, or keep the hang.
+
 ## Upgrading from 5.0.x to 5.1.0
 
 Binary compatible: MiMa checks `5.1.0` against `5.0.0` and finds nothing, and no exclusion was needed — a library
