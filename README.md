@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="logos/mongo4s.png" alt="mongo4s logo" width="240">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="logos/mongo4s-dark.svg">
+    <img src="logos/mongo4s-light.svg" alt="mongo4s" height="96">
+  </picture>
 </p>
 
 # mongo4s
